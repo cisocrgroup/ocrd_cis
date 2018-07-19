@@ -1,0 +1,22 @@
+{
+		"git_url": "https://github.com/cisocrgroup/cis-ocrd-py",
+		"version": "0.0.1",
+		"tools": {
+				"cis-ocrd-align": {
+						"executable": "cis-ocrd-align",
+						"categories": [
+								"Postcorrection"
+						],
+						"steps": [
+								"ocr/post-correction"
+						],
+						"description": "Align multiple OCRs and/or GTs",
+						"parameters": {
+								"cisOcrdJar": {
+										"type": "string",
+										"required": true
+								}
+						}
+				}
+		}
+}
