@@ -1,17 +1,15 @@
 from __future__ import absolute_import
-import json
-from pkg_resources import resource_string
 from ocrd import Processor
 from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
 from lib.javaprocess import JavaProcess
+from align.ocrd_tool import get_ocrd_tool
 #from ocrd import MIME_TYPE
 
 
 class Aligner(Processor):
     def __init__(self, *args, **kwargs):
-        ocrd_tool = json.loads(
-            resource_string(__name__, 'ocrd-tool.json').decode('utf8'))
+        ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-align']
         kwargs['version'] = ocrd_tool['version']
         super(Aligner, self).__init__(*args, **kwargs)
