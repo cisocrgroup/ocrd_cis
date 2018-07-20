@@ -1,8 +1,8 @@
 # ocrd-cli
 
-ocrd command line interface
+[OCR-D](http://ocr-d.de) command line tools
 
-## links
+## OCR-D nlinks
 
 - [OCR-D](https://ocr-d.github.io)
 - [Github](https://github.com/OCR-D)
