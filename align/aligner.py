@@ -1,10 +1,11 @@
 from __future__ import absolute_import
+import json
 from ocrd import Processor
 from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
 from lib.javaprocess import JavaProcess
 from align.ocrd_tool import get_ocrd_tool
-#from ocrd import MIME_TYPE
+##from ocrd import MIME_TYPE
 
 
 class Aligner(Processor):
@@ -17,15 +18,23 @@ class Aligner(Processor):
 
     def process(self):
         lines = self.zip_lines(self.input_file_grp.split(","))
-        output = self.run_ocrd_aligner(lines)
-        for o in output.split("\n"):
-            self.log.info("o: %s", o)
-
-    def run_ocrd_aligner(self, lines):
-        """Run the external java aligner over the zipped lines"""
         if not lines:
             return
         n = len(lines[0])
+        output = self.run_ocrd_aligner(lines, n)
+        alignments = self.get_alignments(output, n)
+        for a in alignments:
+            self.log.info("alignment: %s", a)
+
+    def get_alignments(self, output, n):
+        lines = output.split("\n")
+        alignments = list()
+        for i in range(0, len(lines), n):
+            alignments.append(Alignment(lines[i:i+n]))
+        return alignments
+
+    def run_ocrd_aligner(self, lines, n):
+        """Run the external java aligner over the zipped lines"""
         _input = [x for t in lines for x in t]
         p = JavaProcess(
             jar=self.parameter['cisOcrdJar'],
@@ -59,3 +68,20 @@ class Aligner(Processor):
                 for line in region.get_TextLine():
                     lines.append(line.get_TextEquiv()[0].Unicode)
         return lines
+
+
+class Alignment:
+    def __init__(self, lines):
+        n = len(lines)
+        self.pairwise = list()
+        for i in range(0, n-1):
+            self.pairwise.append(tuple(lines[i].split(",")))
+        self.tokens = list()
+        for ts in lines[n-1].split(","):
+            self.tokens.append(tuple(ts.split(":")))
+
+    def __str__(self):
+        data = {}
+        data['pairwise'] = self.pairwise
+        data['tokens'] = self.tokens
+        return json.dumps(data)
