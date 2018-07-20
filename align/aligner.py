@@ -16,56 +16,69 @@ class Aligner(Processor):
         self.log = getLogger('Processor.Aligner')
 
     def process(self):
-        lines = self.zip_lines(self.input_file_grp.split(","))
-        if not lines:
-            return
-        n = len(lines[0])
-        output = self.run_ocrd_aligner(lines, n)
-        alignments = self.get_alignments(output, n)
-        for a in alignments:
-            self.log.info("alignment: %s", a)
+        ifgs = self.input_file_grp.split(",")  # input file groups
+        ifts = self.zip_input_files(ifgs)  # input file tuples
+        page_alignments = list()
+        for ift in ifts:
+            page_alignments.append(
+                PageAlignment(
+                    self.workspace,
+                    self.parameter['cisOcrdJar'],
+                    ifgs,
+                    ift))
+        for pa in page_alignments:
+            for la in pa.line_alignments:
+                self.log.info("%s", la)
 
-    def get_alignments(self, output, n):
-        lines = output.split("\n")
-        alignments = list()
-        for i in range(0, len(lines), n):
-            alignments.append(LineAlignment(lines[i:i+n]))
-        return alignments
+    def zip_input_files(self, ifgs):
+        """Zip files of the given input file groups"""
+        files = list()
+        for ifg in ifgs:
+            self.log.info("input file group: %s", ifg)
+            ifiles = sorted(
+                self.workspace.mets.find_files(fileGrp=ifg),
+                key=lambda ifile: ifile.ID)
+            self.log.info("input files: %s", ifiles)
+            files.append(ifiles)
+        return zip(*files)
 
-    def run_ocrd_aligner(self, lines, n):
-        """Run the external java aligner over the zipped lines"""
+
+class PageAlignment:
+    """PageAlignment holds a list of LineAlignments."""
+    def __init__(self, ws, jar, ifgs, ifs):
+        """Create a page alignment form a list of input files."""
+        self.workspace = ws
+        self.jar = jar
+        self.ifgs = ifgs
+        self.ifs = ifs
+        self.log = getLogger('PageAlignment')
+        self.align_lines()
+
+    def align_lines(self):
+        lines = list()
+        for ifile in self.ifs:
+            lines.append(self.read_lines_from_input_file(ifile))
+        lines = zip(*lines)
         _input = [x for t in lines for x in t]
+        n = len(self.ifs)
         p = JavaProcess(
-            jar=self.parameter['cisOcrdJar'],
+            jar=self.jar,
             main="de.lmu.cis.ocrd.cli.Align",
             input_str="\n".join(_input),
             args=[str(n)])
         p.run()
-        return p.output
+        lines = p.output.split("\n")
+        self.line_alignments = list()
+        for i in range(0, len(lines), n):
+            self.line_alignments.append(LineAlignment(lines[i:i+n]))
 
-    def zip_lines(self, ifgs):
-        """
-        Read lines from input-file-groups.
-        Returns a list of the line-aligned tuples
-        """
+    def read_lines_from_input_file(self, ifile):
+        self.log.debug("reading input file: %s", ifile)
         lines = list()
-        for ifg in ifgs:
-            self.log.info("input file group: %s", ifg)
-            lines.append(self.read_lines(ifg))
-        return list(zip(*lines))
-
-    def read_lines(self, ifg):
-        """Read all lines from an input-file-group (sorted by ID)"""
-        ifiles = sorted(
-            self.workspace.mets.find_files(fileGrp=ifg),
-            key=lambda ifile: ifile.ID)
-        lines = list()
-        for ifile in ifiles:
-            self.log.info("input file: %s", ifile)
-            pcgts = from_file(self.workspace.download_file(ifile))
-            for region in pcgts.get_Page().get_TextRegion():
-                for line in region.get_TextLine():
-                    lines.append(line.get_TextEquiv()[0].Unicode)
+        pcgts = from_file(self.workspace.download_file(ifile))
+        for region in pcgts.get_Page().get_TextRegion():
+            for line in region.get_TextLine():
+                lines.append(line.get_TextEquiv()[0].Unicode)
         return lines
 
 
