@@ -7,13 +7,13 @@ from ocrd.model.ocrd_page import from_file
 from lib.javaprocess import JavaProcess
 #from ocrd import MIME_TYPE
 
-OCRD_TOOL = json.loads(
-    resource_string(__name__, 'ocrd-tool.json').decode('utf8'))
 
 class Aligner(Processor):
     def __init__(self, *args, **kwargs):
-        kwargs['ocrd_tool'] = OCRD_TOOL['tools']['ocrd-keraslm-rate']
-        kwargs['version'] = OCRD_TOOL['version']
+        ocrd_tool = json.loads(
+            resource_string(__name__, 'ocrd-tool.json').decode('utf8'))
+        kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-align']
+        kwargs['version'] = ocrd_tool['version']
         super(Aligner, self).__init__(*args, **kwargs)
         self.log = getLogger('Processor.Aligner')
 
