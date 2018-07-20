@@ -29,7 +29,7 @@ class Aligner(Processor):
         lines = output.split("\n")
         alignments = list()
         for i in range(0, len(lines), n):
-            alignments.append(Alignment(lines[i:i+n]))
+            alignments.append(LineAlignment(lines[i:i+n]))
         return alignments
 
     def run_ocrd_aligner(self, lines, n):
@@ -69,14 +69,27 @@ class Aligner(Processor):
         return lines
 
 
-class Alignment:
+class LineAlignment:
+    """
+    LineAlignment holds a line alignment.
+    A line alignment of n lines holds n-1 pairwise alignments
+    and a list of token alignments of n-tuples.
+
+    Each pairwise alignment represents the alignment of the
+    master line with another. Pairwise aligned lines have always
+    the same length. Underscores ('_') mark deletions or insertions.
+    """
     def __init__(self, lines):
-        n = len(lines)
+        """
+        Create a LineAlignment from n-1 pairwise
+        alignments an one token alignment at pos n-1.
+        """
+        self.n = len(lines)
         self.pairwise = list()
-        for i in range(0, n-1):
+        for i in range(0, self.n-1):
             self.pairwise.append(tuple(lines[i].split(",")))
         self.tokens = list()
-        for ts in lines[n-1].split(","):
+        for ts in lines[self.n-1].split(","):
             self.tokens.append(tuple(ts.split(":")))
 
     def __str__(self):
