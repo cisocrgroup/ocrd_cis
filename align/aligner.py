@@ -5,7 +5,6 @@ from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
 from lib.javaprocess import JavaProcess
 from align.ocrd_tool import get_ocrd_tool
-##from ocrd import MIME_TYPE
 
 
 class Aligner(Processor):
