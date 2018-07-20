@@ -22,8 +22,9 @@ class Aligner(Processor):
         for ift in ifts:
             page_alignments.append(
                 PageAlignment(
-                    self.workspace,
-                    self.parameter['cisOcrdJar'],
+                    self,
+                    # self.workspace,
+                    # self.parameter['cisOcrdJar'],
                     ifgs,
                     ift))
         for pa in page_alignments:
@@ -38,6 +39,8 @@ class Aligner(Processor):
             ifiles = sorted(
                 self.workspace.mets.find_files(fileGrp=ifg),
                 key=lambda ifile: ifile.ID)
+            for i in ifiles:
+                self.log.info("sorted file: %s %s", i.url, i.ID)
             self.log.info("input files: %s", ifiles)
             files.append(ifiles)
         return zip(*files)
@@ -45,10 +48,10 @@ class Aligner(Processor):
 
 class PageAlignment:
     """PageAlignment holds a list of LineAlignments."""
-    def __init__(self, ws, jar, ifgs, ifs):
+    def __init__(self, process, ifgs, ifs):
         """Create a page alignment form a list of input files."""
-        self.workspace = ws
-        self.jar = jar
+        self.process = process
+        # self.jar = jar
         self.ifgs = ifgs
         self.ifs = ifs
         self.log = getLogger('PageAlignment')
@@ -60,9 +63,11 @@ class PageAlignment:
             lines.append(self.read_lines_from_input_file(ifile))
         lines = zip(*lines)
         _input = [x for t in lines for x in t]
+        for i in _input:
+            self.log.info("input line: %s", i)
         n = len(self.ifs)
         p = JavaProcess(
-            jar=self.jar,
+            jar=self.process.parameter['cisOcrdJar'],
             main="de.lmu.cis.ocrd.cli.Align",
             input_str="\n".join(_input),
             args=[str(n)])
@@ -73,9 +78,9 @@ class PageAlignment:
             self.line_alignments.append(LineAlignment(lines[i:i+n]))
 
     def read_lines_from_input_file(self, ifile):
-        self.log.debug("reading input file: %s", ifile)
+        self.log.debug("reading input file: %s", ifile.url)
         lines = list()
-        pcgts = from_file(self.workspace.download_file(ifile))
+        pcgts = from_file(self.process.workspace.download_file(ifile))
         for region in pcgts.get_Page().get_TextRegion():
             for line in region.get_TextLine():
                 lines.append(line.get_TextEquiv()[0].Unicode)
