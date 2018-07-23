@@ -68,7 +68,7 @@ function download_ocrd_jar() {
 		wget_cached $url "ocrd-0.1.jar"
 }
 
-function setup_test() {
+function setup_ocrd_test_environment() {
 		download_and_unzip_ocrd_gt $1
 		download_ocrd_jar
 		activate_env
@@ -100,7 +100,7 @@ function setup_workspace() {
 }
 
 
-setup_test loeber_heuschrecken_1693.zip
+setup_ocrd_test_environment loeber_heuschrecken_1693.zip
 activate_env
 setup_workspace
 
