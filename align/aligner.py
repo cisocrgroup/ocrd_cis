@@ -20,13 +20,7 @@ class Aligner(Processor):
         ifts = self.zip_input_files(ifgs)  # input file tuples
         page_alignments = list()
         for ift in ifts:
-            page_alignments.append(
-                PageAlignment(
-                    self,
-                    # self.workspace,
-                    # self.parameter['cisOcrdJar'],
-                    ifgs,
-                    ift))
+            page_alignments.append(PageAlignment(self, ifgs, ift))
         for pa in page_alignments:
             for la in pa.line_alignments:
                 self.log.info("%s", la)
@@ -51,7 +45,6 @@ class PageAlignment:
     def __init__(self, process, ifgs, ifs):
         """Create a page alignment form a list of input files."""
         self.process = process
-        # self.jar = jar
         self.ifgs = ifgs
         self.ifs = ifs
         self.log = getLogger('PageAlignment')
