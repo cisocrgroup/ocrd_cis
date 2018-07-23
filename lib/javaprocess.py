@@ -18,7 +18,7 @@ class JavaProcess:
                 stdout=subprocess.PIPE,
                 stdin=subprocess.PIPE,
                 encoding='utf-8',
-                stderr=subprocess.DEVNULL,
+                # stderr=subprocess.DEVNULL,
         ) as p:
             self.output, err = p.communicate(input=self.input_str)
             self.output = self.output
