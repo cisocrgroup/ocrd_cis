@@ -4,10 +4,19 @@
 
 ## General usage
 
+### Virtualenv
+
 Use `virtualenv` to install dependencies:
 * `virutalenv -p python3 env-dir`
 * `source env-dir/bin/activate`
 * `pip install -e path/to/dir/containing/setup.py`
+
+### OCR-D workspace
+
+* Create a new (empty) workspace: `ocrd workspace init workspace-dir`
+* cd into `workspace-dir`
+* Add new file to workspace: `ocrd workspace add file -G group -i id
+  -m mimetype`
 
 ## Tools
 
