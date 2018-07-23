@@ -2,6 +2,13 @@
 
 [OCR-D](http://ocr-d.de) command line tools
 
+## General usage
+
+Use `virtualenv` to install dependencies:
+* `virutalenv -p python3 env-dir`
+* `source env-dir/bin/activate`
+* `pip install -e path/to/dir/containing/setup.py`
+
 ## Tools
 
 ### cis-ocrd-align
