@@ -1,6 +1,7 @@
 import subprocess
 from ocrd.utils import getLogger
 
+
 class JavaProcess:
     def __init__(self, jar, main, input_str, args):
         self.jar = jar
