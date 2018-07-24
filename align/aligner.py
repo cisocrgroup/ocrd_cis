@@ -27,7 +27,8 @@ class Aligner(Processor):
         for pa in page_alignments:
             for la in pa.line_alignments:
                 self.log.info("%s", la)
-            pa.write_alignment_to_xml()  # self.output_file_grp)
+            pa.write_alignment_to_xml()
+        self.workspace.save_mets()
 
     def zip_input_files(self, ifgs):
         """Zip files of the given input file groups"""
@@ -99,9 +100,9 @@ class PageAlignment:
                 current = next(ilist)
                 self.add_line_alignments(line, current)
                 self.add_word_alignments(line, current)
-
+        self.log.debug("master basename: %s", master.basename)
         self.process.add_output_file(
-            ID="{}-{}".format(master.ID, self.process.output_file_grp),
+            ID="{}_{}".format(master.ID, self.process.output_file_grp),
             mimetype=MIMETYPE_PAGE,
             content=to_xml(pcgts),
             file_grp=self.process.output_file_grp,

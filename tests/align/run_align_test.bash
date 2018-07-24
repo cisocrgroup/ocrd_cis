@@ -8,6 +8,7 @@ TMP_DIR=$(mktemp -d -t cis-ocrd-align-XXXXXXXXX)
 
 function rmtd() {
 		echo removing $TMP_DIR
+		cp -r $TMP_DIR .
 		rm -rf $TMP_DIR
 }
 trap rmtd EXIT
@@ -47,7 +48,7 @@ function download_and_unzip_ocrd_gt() {
 function get_gt_page_xml_files() {
 		page_xml_files=""
 		for d in $(find $TMP_DIR/downloads -type d -name page); do
-				for f in $(find $d -type f); do
+				for f in $(find $d -type f | sort); do
 						page_xml_files+=" $f"
 				done
 		done
@@ -77,28 +78,28 @@ function setup_ocrd_test_environment() {
 }
 
 function setup_workspace() {
-		old=$PWD
 		get_gt_page_xml_files
 		id=1
 		echo "{\"cisOcrdJar\":\"$TMP_DIR/downloads/ocrd-0.1.jar\"}" > $TMP_DIR/config.json
-		cd $TMP_DIR
+		pushd $TMP_DIR
 		ocrd workspace init $TMP_DIR
 		for f in $page_xml_files; do
+				echo file $f
 				id=$((id+1))
 				sid=$(printf '%x' $id)
 				ocrd workspace add $f -G gt -i gt_$sid -m $PAGE_XML_MIME_TYPE
 
 				id=$((id+1))
 				sid=$(printf '%x' $id)
-				cp $f $f.ocr1
+				sed -e 's/ſ/fl/' $f > $f.ocr1
 				ocrd workspace add $f.ocr1 -G ocr1 -i ocr1_$sid -m $PAGE_XML_MIME_TYPE
 
 				id=$((id+1))
 				sid=$(printf '%x' $id)
-				cp $f $f.ocr2
+				sed -e 's/ſ/j/' $f > $f.ocr2
 				ocrd workspace add $f.ocr2 -G ocr2 -i ocr2_$sid -m $PAGE_XML_MIME_TYPE
 		done
-		cd $old
+		popd
 }
 
 
@@ -111,3 +112,6 @@ cis-ocrd-align --mets $TMP_DIR/mets.xml \
 							 --input-file-grp 'ocr1,ocr2,gt' \
 							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json
+pushd $TMP_DIR
+ocrd workspace list-group #'ocr1+ocr2+gt'
+popd
