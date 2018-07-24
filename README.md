@@ -1,6 +1,6 @@
 # ocrd-cli
 
-[OCR-D](http://ocr-d.de) command line tools
+[CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line tools
 
 ## General usage
 
