@@ -1,5 +1,6 @@
 import subprocess
 from ocrd.utils import getLogger
+from pathlib import Path
 
 
 class JavaProcess:
@@ -9,6 +10,8 @@ class JavaProcess:
         self.input_str = input_str
         self.args = args
         self.log = getLogger('JavaProcess')
+        if not Path(jar).is_file():
+            raise Exception("no such file: {}".format(jar))
 
     def run(self):
         cmd = self.get_cmd()
