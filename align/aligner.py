@@ -1,8 +1,11 @@
 from __future__ import absolute_import
 import json
 from ocrd import Processor
+from ocrd import MIMETYPE_PAGE
 from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
+from ocrd.model.ocrd_page import to_xml
+from ocrd.model.ocrd_page_generateds import TextEquivType
 from lib.javaprocess import JavaProcess
 from align.ocrd_tool import get_ocrd_tool
 
@@ -24,6 +27,7 @@ class Aligner(Processor):
         for pa in page_alignments:
             for la in pa.line_alignments:
                 self.log.info("%s", la)
+            pa.write_alignment_to_xml()  # self.output_file_grp)
 
     def zip_input_files(self, ifgs):
         """Zip files of the given input file groups"""
@@ -57,7 +61,7 @@ class PageAlignment:
         lines = zip(*lines)
         _input = [x for t in lines for x in t]
         for i in _input:
-            self.log.info("input line: %s", i)
+            self.log.debug("input line: %s", i)
         n = len(self.ifs)
         p = JavaProcess(
             jar=self.process.parameter['cisOcrdJar'],
@@ -71,13 +75,82 @@ class PageAlignment:
             self.line_alignments.append(LineAlignment(lines[i:i+n]))
 
     def read_lines_from_input_file(self, ifile):
-        self.log.debug("reading input file: %s", ifile.url)
+        self.log.info("reading input file: %s", ifile.url)
         lines = list()
         pcgts = from_file(self.process.workspace.download_file(ifile))
         for region in pcgts.get_Page().get_TextRegion():
             for line in region.get_TextLine():
                 lines.append(line.get_TextEquiv()[0].Unicode)
         return lines
+
+    def write_alignment_to_xml(self):
+        """
+        Write the alignments into new output-file-group.
+        The alignment is done by the master file (first index)
+        """
+        self.log.info("writing alignment to %s", self.process.output_file_grp)
+        master = self.ifs[0]
+        pcgts = from_file(self.process.workspace.download_file(master))
+        ilist = iter(self.line_alignments)
+        for region in pcgts.get_Page().get_TextRegion():
+            for line in region.get_TextLine():
+                self.log.info("line: %s", line.get_TextEquiv()[0].Unicode)
+                line.get_TextEquiv()[0].set_index(0)
+                current = next(ilist)
+                self.add_line_alignments(line, current)
+                self.add_word_alignments(line, current)
+
+        self.process.add_output_file(
+            ID="{}-{}".format(master.ID, self.process.output_file_grp),
+            mimetype=MIMETYPE_PAGE,
+            content=to_xml(pcgts),
+            file_grp=self.process.output_file_grp,
+            basename=master.basename,
+        )
+
+    def add_word_alignments(self, page_xml_line, alignment_line):
+        """
+        Add word alignments to the words of the given page XML line.
+        We iterate over the master-OCR words, so the first word of the
+        tuple must be contained in the given page XML word.
+        """
+        k = 0
+        for word in page_xml_line.get_Word():
+            page_xml_word = word.get_TextEquiv()[0].Unicode
+            # skip words that do not contain current (e.g. ' §.')
+            if alignment_line.tokens[k][0] in page_xml_word:
+                self.log.debug("word: %s", page_xml_word)
+                for (i, w) in enumerate(alignment_line.tokens[k]):
+                    self.log.debug(" - word: %s (%s)", w, self.ifgs[i])
+                    eq = TextEquivType(
+                        index=i+1,
+                        dataType='alignment-token-{}'.format(self.ifgs[i]),
+                        Unicode=w,
+                    )
+                    word.add_TextEquiv(eq)
+                k += 1
+
+    def add_line_alignments(self, page_xml_line, alignment_line):
+        """
+        Add alignment TextEquivs to the given page XML line.
+        """
+        page_xml_line.get_TextEquiv()[0].set_index(0)
+        self.log.debug("line %s", page_xml_line.get_TextEquiv()[0].Unicode)
+        self.log.debug(" - line: %s (%s)", alignment_line.pairwise[0][0], self.ifgs[0])
+        eq = TextEquivType(
+            index=1,
+            dataType="alignment-line-{}".format(self.ifgs[0]),
+            Unicode=alignment_line.pairwise[0][0],
+        )
+        page_xml_line.add_TextEquiv(eq)
+        for i in range(1, len(alignment_line.pairwise)):
+            self.log.debug(" - line: %s (%s)", alignment_line.pairwise[i][1], self.ifgs[i])
+            eq = TextEquivType(
+                index=i+1,
+                dataType="alignment-line-{}".format(self.ifgs[i]),
+                Unicode=alignment_line.pairwise[i][1],
+            )
+            page_xml_line.add_TextEquiv(eq)
 
 
 class LineAlignment:
