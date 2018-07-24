@@ -17,4 +17,6 @@ deps:
 install:
 	pip install -e .
 
-.PHONY: deps, install
+test:
+	tests/align/run_align_test.bash
+.PHONY: deps, install, test
