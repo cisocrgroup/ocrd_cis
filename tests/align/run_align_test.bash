@@ -36,7 +36,7 @@ function download_ocrd_gt_zip() {
 function unzip_ocrd_gt() {
 		local zip="$TMP_DIR/downloads/$1"
 		echo unziping $zip
-		unzip -d $TMP_DIR/downloads ${zip/.zip/}
+		unzip -d $TMP_DIR/downloads ${zip/.zip/} >/dev/null
 }
 
 function download_and_unzip_ocrd_gt() {
@@ -57,10 +57,12 @@ function activate_env() {
 		local envdir=$CACHE_DIR/env
 		if test ! -d $envdir; then
 				virtualenv -p python3 $envdir
-				make deps
-				make install
+				source $envdir/bin/activate
+				pip install -r requirements.txt
+				pip install .
+		else
+				source $envdir/bin/activate
 		fi
-		source $envdir/bin/activate
 }
 
 function download_ocrd_jar() {
@@ -107,4 +109,5 @@ setup_workspace
 # align 3 file groups
 cis-ocrd-align --mets $TMP_DIR/mets.xml \
 							 --input-file-grp 'ocr1,ocr2,gt' \
+							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json
