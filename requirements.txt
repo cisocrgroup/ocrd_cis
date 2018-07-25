@@ -1,2 +1,2 @@
-ocrd >= 0.4.0
+ocrd >= 0.7.0
 click
