@@ -23,7 +23,8 @@ class Aligner(Processor):
         ifts = self.zip_input_files(ifgs)  # input file tuples
         page_alignments = list()
         for ift in ifts:
-            page_alignments.append(PageAlignment(self, ifgs, ift))
+            output = self.run_java_aligner(ift)
+            page_alignments.append(PageAlignment(self, ifgs, ift, output))
         for pa in page_alignments:
             for la in pa.line_alignments:
                 self.log.info("%s", la)
@@ -44,45 +45,45 @@ class Aligner(Processor):
             files.append(ifiles)
         return zip(*files)
 
-
-class PageAlignment:
-    """PageAlignment holds a list of LineAlignments."""
-    def __init__(self, process, ifgs, ifs):
-        """Create a page alignment form a list of input files."""
-        self.process = process
-        self.ifgs = ifgs
-        self.ifs = ifs
-        self.log = getLogger('PageAlignment')
-        self.align_lines()
-
-    def align_lines(self):
+    def read_lines_from_input_file(self, ifile):
+        self.log.info("reading input file: %s", ifile.url)
         lines = list()
-        for ifile in self.ifs:
+        pcgts = from_file(self.workspace.download_file(ifile))
+        for region in pcgts.get_Page().get_TextRegion():
+            for line in region.get_TextLine():
+                lines.append(line.get_TextEquiv()[0].Unicode)
+        return lines
+
+    def run_java_aligner(self, ifs):
+        lines = list()
+        for ifile in ifs:
             lines.append(self.read_lines_from_input_file(ifile))
         lines = zip(*lines)
         _input = [x for t in lines for x in t]
         for i in _input:
             self.log.debug("input line: %s", i)
-        n = len(self.ifs)
+        n = len(ifs)
         p = JavaProcess(
-            jar=self.process.parameter['cisOcrdJar'],
-            main="de.lmu.cis.ocrd.cli.Align",
-            input_str="\n".join(_input),
-            args=[str(n)])
-        p.run()
-        lines = p.output.split("\n")
+            jar=self.parameter['cisOcrdJar'],
+            args=[str(n)]
+        )
+        p.run_aligner("\n".join(_input))
+        return p.output
+
+
+class PageAlignment:
+    """PageAlignment holds a list of LineAlignments."""
+    def __init__(self, process, ifgs, ifs, process_output):
+        """Create a page alignment form a list of input files."""
+        self.process = process
+        self.ifgs = ifgs
+        self.ifs = ifs
+        self.log = getLogger('PageAlignment')
         self.line_alignments = list()
+        lines = process_output.split("\n")
+        n = len(self.ifs)
         for i in range(0, len(lines), n):
             self.line_alignments.append(LineAlignment(lines[i:i+n]))
-
-    def read_lines_from_input_file(self, ifile):
-        self.log.info("reading input file: %s", ifile.url)
-        lines = list()
-        pcgts = from_file(self.process.workspace.download_file(ifile))
-        for region in pcgts.get_Page().get_TextRegion():
-            for line in region.get_TextLine():
-                lines.append(line.get_TextEquiv()[0].Unicode)
-        return lines
 
     def write_alignment_to_xml(self):
         """
