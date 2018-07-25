@@ -8,7 +8,6 @@ TMP_DIR=$(mktemp -d -t cis-ocrd-align-XXXXXXXXX)
 
 function rmtd() {
 		echo removing $TMP_DIR
-		cp -r $TMP_DIR .
 		rm -rf $TMP_DIR
 }
 trap rmtd EXIT
@@ -91,12 +90,12 @@ function setup_workspace() {
 
 				id=$((id+1))
 				sid=$(printf '%x' $id)
-				sed -e 's/ſ/fl/' $f > $f.ocr1
+				sed -e 's/ſ/fl/g' -e 's/ey/ej/g' $f > $f.ocr1
 				ocrd workspace add $f.ocr1 -G ocr1 -i ocr1_$sid -m $PAGE_XML_MIME_TYPE
 
 				id=$((id+1))
 				sid=$(printf '%x' $id)
-				sed -e 's/ſ/j/' $f > $f.ocr2
+				sed -e 's/ſ/j/g' -e 's/ee/ӓ/g' $f > $f.ocr2
 				ocrd workspace add $f.ocr2 -G ocr2 -i ocr2_$sid -m $PAGE_XML_MIME_TYPE
 		done
 		popd
@@ -113,5 +112,5 @@ cis-ocrd-align --mets $TMP_DIR/mets.xml \
 							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json
 pushd $TMP_DIR
-ocrd workspace list-group #'ocr1+ocr2+gt'
+ocrd workspace list-group | grep 'ocr1+ocr2+gt' && true || exit 1
 popd
