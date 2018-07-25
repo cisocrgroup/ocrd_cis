@@ -108,7 +108,7 @@ activate_env
 setup_workspace
 
 # align 3 file groups
-cis-ocrd-align --mets $TMP_DIR/mets.xml \
+ocrd-cis-align --mets $TMP_DIR/mets.xml \
 							 --input-file-grp 'ocr1,ocr2,gt' \
 							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json

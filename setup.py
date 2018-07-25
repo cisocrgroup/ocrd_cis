@@ -1,6 +1,6 @@
 """
 Installs:
-    - cis-ocrd-align
+    - ocrd-cis-align
 """
 
 from setuptools import setup, find_packages
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'cis-ocrd-align=align.cli:cis_ocrd_align'
+            'ocrd-cis-align=align.cli:cis_ocrd_align'
         ]
     },
 )
