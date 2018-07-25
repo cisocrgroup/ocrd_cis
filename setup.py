@@ -16,7 +16,7 @@ setup(
     license='MIT',
     packages=find_packages(),
     install_requires=[
-        'ocrd >= 0.4.0',
+        'ocrd >= 0.7.0',
         'click',
     ],
     package_data={
