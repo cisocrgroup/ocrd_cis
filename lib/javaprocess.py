@@ -2,19 +2,22 @@ import subprocess
 from ocrd.utils import getLogger
 from pathlib import Path
 
+ALLIGNER = "de.lmu.cis.ocrd.cli.Align"
+
 
 class JavaProcess:
-    def __init__(self, jar, main, input_str, args):
+    def __init__(self, jar, args):
         self.jar = jar
-        self.main = main
-        self.input_str = input_str
         self.args = args
         self.log = getLogger('JavaProcess')
         if not Path(jar).is_file():
             raise Exception("no such file: {}".format(jar))
 
-    def run(self):
-        cmd = self.get_cmd()
+    def run_aligner(self, _input):
+        self.run(ALLIGNER, _input)
+
+    def run(self, main, _input):
+        cmd = self.get_cmd(main)
         self.log.info('command: %s', cmd)
         with subprocess.Popen(
                 cmd,
@@ -23,7 +26,7 @@ class JavaProcess:
                 encoding='utf-8',
                 # stderr=subprocess.DEVNULL,
         ) as p:
-            self.output, err = p.communicate(input=self.input_str)
+            self.output, err = p.communicate(input=_input)
             self.output = self.output
             retval = p.wait()
             self.log.info("retval: %i", retval)
@@ -32,7 +35,7 @@ class JavaProcess:
                     "cannot execute {}: {}\nreturned: {}"
                     .format(cmd, err, retval))
 
-    def get_cmd(self):
-        cmd = ['java', '-cp', self.jar, self.main]
+    def get_cmd(self, main):
+        cmd = ['java', '-cp', self.jar, main]
         cmd.extend(self.args)
         return cmd
