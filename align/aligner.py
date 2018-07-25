@@ -98,7 +98,12 @@ class Aligner(Processor):
 class PageAlignment:
     """PageAlignment holds a list of LineAlignments."""
     def __init__(self, ifgs, ifs, process_output):
-        """Create a page alignment from java-aligner's output."""
+        """
+        Create a page alignment from java-aligner's output.
+
+        It reads blocks of len(ifs) lines. Each block is assumed to be a
+        valid input for the LineAlignment constructor.
+        """
         self.ifgs = ifgs
         self.ifs = ifs
         self.log = getLogger('PageAlignment')
