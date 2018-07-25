@@ -48,7 +48,7 @@ class Aligner(Processor):
     def write_alignment_to_xml(self, pa):
         """
         Write the alignments into new output-file-group.
-        The alignment is done by the master file (first index)
+        The alignment is done by the master file (first index).
         """
         self.log.info("writing alignment to %s", self.output_file_grp)
         master = pa.ifs[0]  # master input file group
