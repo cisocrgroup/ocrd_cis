@@ -13,7 +13,7 @@ from align.ocrd_tool import get_ocrd_tool
 class Aligner(Processor):
     def __init__(self, *args, **kwargs):
         ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-align']
+        kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
         kwargs['version'] = ocrd_tool['version']
         super(Aligner, self).__init__(*args, **kwargs)
         self.log = getLogger('Processor.Aligner')

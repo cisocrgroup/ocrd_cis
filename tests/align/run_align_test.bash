@@ -56,7 +56,7 @@ function get_gt_page_xml_files() {
 function activate_env() {
 		local envdir=$CACHE_DIR/env
 		if test ! -d $envdir; then
-				virtualenv -p python3 $envdir
+				virtualenv -p python3.6 $envdir
 				source $envdir/bin/activate
 				pip install -r requirements.txt
 				pip install .
@@ -107,7 +107,7 @@ activate_env
 setup_workspace
 
 # align 3 file groups
-cis-ocrd-align --mets $TMP_DIR/mets.xml \
+ocrd-cis-align --mets $TMP_DIR/mets.xml \
 							 --input-file-grp 'ocr1,ocr2,gt' \
 							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json
