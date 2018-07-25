@@ -24,11 +24,11 @@ class Aligner(Processor):
         page_alignments = list()
         for ift in ifts:
             output = self.run_java_aligner(ift)
-            page_alignments.append(PageAlignment(self, ifgs, ift, output))
+            page_alignments.append(PageAlignment(ifgs, ift, output))
         for pa in page_alignments:
             for la in pa.line_alignments:
                 self.log.info("%s", la)
-            pa.write_alignment_to_xml()
+            self.write_alignment_to_xml(pa)
         self.workspace.save_mets()
 
     def zip_input_files(self, ifgs):
@@ -44,6 +44,30 @@ class Aligner(Processor):
             self.log.info("input files: %s", ifiles)
             files.append(ifiles)
         return zip(*files)
+
+    def write_alignment_to_xml(self, pa):
+        """
+        Write the alignments into new output-file-group.
+        The alignment is done by the master file (first index)
+        """
+        self.log.info("writing alignment to %s", self.output_file_grp)
+        master = pa.ifs[0]  # master input file group
+        pcgts = from_file(self.workspace.download_file(master))
+        ilist = iter(pa.line_alignments)
+        for region in pcgts.get_Page().get_TextRegion():
+            for line in region.get_TextLine():
+                self.log.info("line: %s", line.get_TextEquiv()[0].Unicode)
+                current = next(ilist)
+                pa.add_line_alignments(line, current)
+                pa.add_word_alignments(line, current)
+        self.log.debug("master basename: %s", master.basename)
+        self.add_output_file(
+            ID="{}_{}".format(master.ID, self.output_file_grp),
+            mimetype=MIMETYPE_PAGE,
+            content=to_xml(pcgts),
+            file_grp=self.output_file_grp,
+            basename=master.basename,
+        )
 
     def read_lines_from_input_file(self, ifile):
         self.log.info("reading input file: %s", ifile.url)
@@ -73,9 +97,8 @@ class Aligner(Processor):
 
 class PageAlignment:
     """PageAlignment holds a list of LineAlignments."""
-    def __init__(self, process, ifgs, ifs, process_output):
-        """Create a page alignment form a list of input files."""
-        self.process = process
+    def __init__(self, ifgs, ifs, process_output):
+        """Create a page alignment from java-aligner's output."""
         self.ifgs = ifgs
         self.ifs = ifs
         self.log = getLogger('PageAlignment')
@@ -84,30 +107,6 @@ class PageAlignment:
         n = len(self.ifs)
         for i in range(0, len(lines), n):
             self.line_alignments.append(LineAlignment(lines[i:i+n]))
-
-    def write_alignment_to_xml(self):
-        """
-        Write the alignments into new output-file-group.
-        The alignment is done by the master file (first index)
-        """
-        self.log.info("writing alignment to %s", self.process.output_file_grp)
-        master = self.ifs[0]
-        pcgts = from_file(self.process.workspace.download_file(master))
-        ilist = iter(self.line_alignments)
-        for region in pcgts.get_Page().get_TextRegion():
-            for line in region.get_TextLine():
-                self.log.info("line: %s", line.get_TextEquiv()[0].Unicode)
-                current = next(ilist)
-                self.add_line_alignments(line, current)
-                self.add_word_alignments(line, current)
-        self.log.debug("master basename: %s", master.basename)
-        self.process.add_output_file(
-            ID="{}_{}".format(master.ID, self.process.output_file_grp),
-            mimetype=MIMETYPE_PAGE,
-            content=to_xml(pcgts),
-            file_grp=self.process.output_file_grp,
-            basename=master.basename,
-        )
 
     def add_word_alignments(self, page_xml_line, alignment_line):
         """
