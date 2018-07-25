@@ -27,7 +27,8 @@ class Aligner(Processor):
         for pa in page_alignments:
             for la in pa.line_alignments:
                 self.log.info("%s", la)
-            pa.write_alignment_to_xml()  # self.output_file_grp)
+            pa.write_alignment_to_xml()
+        self.workspace.save_mets()
 
     def zip_input_files(self, ifgs):
         """Zip files of the given input file groups"""
@@ -95,13 +96,12 @@ class PageAlignment:
         for region in pcgts.get_Page().get_TextRegion():
             for line in region.get_TextLine():
                 self.log.info("line: %s", line.get_TextEquiv()[0].Unicode)
-                line.get_TextEquiv()[0].set_index(0)
                 current = next(ilist)
                 self.add_line_alignments(line, current)
                 self.add_word_alignments(line, current)
-
+        self.log.debug("master basename: %s", master.basename)
         self.process.add_output_file(
-            ID="{}-{}".format(master.ID, self.process.output_file_grp),
+            ID="{}_{}".format(master.ID, self.process.output_file_grp),
             mimetype=MIMETYPE_PAGE,
             content=to_xml(pcgts),
             file_grp=self.process.output_file_grp,
@@ -116,8 +116,8 @@ class PageAlignment:
         """
         k = 0
         for word in page_xml_line.get_Word():
+            word.get_TextEquiv()[0].set_dataType(self.ifgs[0])
             page_xml_word = word.get_TextEquiv()[0].Unicode
-            # skip words that do not contain current (e.g. ' §.')
             if alignment_line.tokens[k][0] in page_xml_word:
                 self.log.debug("word: %s", page_xml_word)
                 for (i, w) in enumerate(alignment_line.tokens[k]):
@@ -134,20 +134,20 @@ class PageAlignment:
         """
         Add alignment TextEquivs to the given page XML line.
         """
-        page_xml_line.get_TextEquiv()[0].set_index(0)
         self.log.debug("line %s", page_xml_line.get_TextEquiv()[0].Unicode)
-        self.log.debug(" - line: %s (%s)", alignment_line.pairwise[0][0], self.ifgs[0])
+        self.log.debug(" - line: %s (%s)",
+                       alignment_line.pairwise[0][0], self.ifgs[0])
+        page_xml_line.get_TextEquiv()[0].set_dataType(self.ifgs[0])
         eq = TextEquivType(
-            index=1,
             dataType="alignment-line-{}".format(self.ifgs[0]),
             Unicode=alignment_line.pairwise[0][0],
         )
         page_xml_line.add_TextEquiv(eq)
-        for i in range(1, len(alignment_line.pairwise)):
-            self.log.debug(" - line: %s (%s)", alignment_line.pairwise[i][1], self.ifgs[i])
+        for i in range(0, len(alignment_line.pairwise)):
+            self.log.debug(" - line: %s (%s)",
+                           alignment_line.pairwise[i][1], self.ifgs[i+1])
             eq = TextEquivType(
-                index=i+1,
-                dataType="alignment-line-{}".format(self.ifgs[i]),
+                dataType="alignment-line-{}".format(self.ifgs[i+1]),
                 Unicode=alignment_line.pairwise[i][1],
             )
             page_xml_line.add_TextEquiv(eq)
