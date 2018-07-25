@@ -57,7 +57,7 @@ function get_gt_page_xml_files() {
 function activate_env() {
 		local envdir=$CACHE_DIR/env
 		if test ! -d $envdir; then
-				virtualenv -p python3 $envdir
+				virtualenv -p python3.6 $envdir
 				source $envdir/bin/activate
 				pip install -r requirements.txt
 				pip install .
