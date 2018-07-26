@@ -20,6 +20,8 @@ class Aligner(Processor):
 
     def process(self):
         ifgs = self.input_file_grp.split(",")  # input file groups
+        if len(ifgs) < 2:
+            raise Exception("need at least two input file groups to align")
         ifts = self.zip_input_files(ifgs)  # input file tuples
         page_alignments = list()
         for ift in ifts:
