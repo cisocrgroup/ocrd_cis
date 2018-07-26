@@ -6,6 +6,7 @@ PAGE_XML_MIME_TYPE="application/vnd.prima.page+xml"
 CACHE_DIR="/tmp/cis-ocrd-py-cache"
 TMP_DIR=$(mktemp -d -t cis-ocrd-align-XXXXXXXXX)
 PAGE_XML_FILES=""
+JAR=""
 
 function rmtd() {
 		echo removing $TMP_DIR
@@ -71,6 +72,7 @@ function activate_env() {
 function download_ocrd_jar() {
 		local url='http://www.cis.lmu.de/~finkf'
 		wget_cached $url "ocrd-0.1.jar"
+		JAR="$TMP_DIR/downloads/ocrd-0.1.jar"
 }
 
 function setup_ocrd_test_environment() {
