@@ -44,7 +44,7 @@ function download_and_unzip_ocrd_gt() {
 		unzip_ocrd_gt $1
 }
 
-function get_gt_page_xml_files() {
+function get_page_xml_files() {
 		page_xml_files=""
 		for d in $(find $TMP_DIR/downloads -type d -name page); do
 				for f in $(find $d -type f | sort); do
@@ -77,7 +77,7 @@ function setup_ocrd_test_environment() {
 }
 
 function setup_workspace() {
-		get_gt_page_xml_files
+		get_page_xml_files
 		id=1
 		echo "{\"cisOcrdJar\":\"$TMP_DIR/downloads/ocrd-0.1.jar\"}" > $TMP_DIR/config.json
 		pushd $TMP_DIR
