@@ -5,6 +5,7 @@ set -e
 PAGE_XML_MIME_TYPE="application/vnd.prima.page+xml"
 CACHE_DIR="/tmp/cis-ocrd-py-cache"
 TMP_DIR=$(mktemp -d -t cis-ocrd-align-XXXXXXXXX)
+PAGE_XML_FILES=""
 
 function rmtd() {
 		echo removing $TMP_DIR
@@ -45,10 +46,10 @@ function download_and_unzip_ocrd_gt() {
 }
 
 function get_page_xml_files() {
-		page_xml_files=""
+		PAGE_XML_FILES=""
 		for d in $(find $TMP_DIR/downloads -type d -name page); do
 				for f in $(find $d -type f | sort); do
-						page_xml_files+=" $f"
+						PAGE_XML_FILES+=" $f"
 				done
 		done
 }
@@ -82,7 +83,7 @@ function setup_workspace() {
 		echo "{\"cisOcrdJar\":\"$TMP_DIR/downloads/ocrd-0.1.jar\"}" > $TMP_DIR/config.json
 		pushd $TMP_DIR
 		ocrd workspace init $TMP_DIR
-		for f in $page_xml_files; do
+		for f in $PAGE_XML_FILES; do
 				echo file $f
 				id=$((id+1))
 				sid=$(printf '%x' $id)
