@@ -15,15 +15,6 @@
 								"cisOcrdJar": {
 										"type": "string",
 										"required": true
-								},
-								"alignmentInputFileGroups": {
-										"type": "array",
-										"items": {
-												"type": "string"
-										},
-										"minItems": 1,
-										"uniqueItems": true,
-										"required": true
 								}
 						}
 				}
