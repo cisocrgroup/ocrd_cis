@@ -11,7 +11,7 @@ class JavaProcess:
         self.args = args
         self.log = getLogger('JavaProcess')
         if not Path(jar).is_file():
-            raise Exception("no such file: {}".format(jar))
+            raise FileNotFoundError("no such file: {}".format(jar))
 
     def run_aligner(self, _input):
         self.run(ALLIGNER, _input)
