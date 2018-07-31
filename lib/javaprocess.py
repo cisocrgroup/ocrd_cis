@@ -3,6 +3,7 @@ from ocrd.utils import getLogger
 from pathlib import Path
 
 ALLIGNER = "de.lmu.cis.ocrd.cli.Align"
+PROFILER = "de.lmu.cis.ocrd.cli.Profile"
 
 
 class JavaProcess:
@@ -15,6 +16,9 @@ class JavaProcess:
 
     def run_aligner(self, _input):
         self.run(ALLIGNER, _input)
+
+    def run_profiler(self, _input):
+        self.run(PROFILER, _input)
 
     def run(self, main, _input):
         cmd = self.get_cmd(main)
