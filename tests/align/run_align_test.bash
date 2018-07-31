@@ -5,7 +5,7 @@ set -e
 function setup_workspace() {
 		get_page_xml_files $TMD_DIR/downloads
 		id=1
-		echo "{\"cisOcrdJar\":\"$JAR\"}" > $TMP_DIR/config.json
+		JAR=$JAR envsubst < "tests/align/config.json" > $TMP_DIR/config.json
 		pushd $TMP_DIR
 		ocrd workspace init $TMP_DIR
 		for f in $PAGE_XML_FILES; do
