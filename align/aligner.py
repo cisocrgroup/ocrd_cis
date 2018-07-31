@@ -7,7 +7,7 @@ from ocrd.model.ocrd_page import from_file
 from ocrd.model.ocrd_page import to_xml
 from ocrd.model.ocrd_page_generateds import TextEquivType
 from lib import JavaProcess
-from align.ocrd_tool import get_ocrd_tool
+from lib.ocrd_tool import get_ocrd_tool
 
 
 class Aligner(Processor):
