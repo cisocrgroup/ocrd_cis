@@ -19,4 +19,6 @@ install:
 
 test:
 	tests/align/run_align_test.bash
+	tests/profile/run_profile_test.bash
+
 .PHONY: deps install test

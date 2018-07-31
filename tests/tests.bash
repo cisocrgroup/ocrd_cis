@@ -63,7 +63,7 @@ function activate_env() {
 				virtualenv -p python3.6 $envdir
 				source $envdir/bin/activate
 				pip install -r requirements.txt
-				pip install .
+				pip install -e .
 		else
 				source $envdir/bin/activate
 		fi

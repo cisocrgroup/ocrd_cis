@@ -1,7 +1,7 @@
 import click
 
 from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
-from align.aligner import Aligner
+from ocrd_cis.align.aligner import Aligner
 
 
 @click.command()
