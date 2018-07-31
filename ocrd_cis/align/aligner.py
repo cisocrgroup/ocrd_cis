@@ -58,7 +58,7 @@ class Aligner(Processor):
         ilist = iter(pa.line_alignments)
         for region in pcgts.get_Page().get_TextRegion():
             for line in region.get_TextLine():
-                self.log.info("line: %s", line.get_TextEquiv()[0].Unicode)
+                self.log.debug("line: %s", line.get_TextEquiv()[0].Unicode)
                 current = next(ilist)
                 pa.add_line_alignments(line, current)
                 pa.add_word_alignments(line, current)
