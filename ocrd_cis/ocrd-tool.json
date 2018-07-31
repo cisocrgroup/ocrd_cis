@@ -17,6 +17,34 @@
 										"required": true
 								}
 						}
+				},
+				"ocrd-cis-profile": {
+						"executable": "ocrd-cis-profile",
+						"categories": [
+								"Text recognition and optimization"
+						],
+						"steps": [
+								"postprocessing/alignment"
+						],
+						"description": "Add correction suggestions to suspicious tokens",
+						"parameters": {
+								"cisOcrdJar": {
+										"type": "string",
+										"required": true
+								},
+								"profilerExecutable": {
+										"type": "string",
+										"required": true
+								},
+								"profilerBackend": {
+										"type": "string",
+										"required": true
+								},
+								"profilerLanguage": {
+										"type": "string",
+										"required": true
+								}
+						}
 				}
 		}
 }
