@@ -21,6 +21,10 @@ class JavaProcess:
         self.run(PROFILER, _input)
 
     def run(self, main, _input):
+        """
+        Run the given main-class of the jar.
+        The process writes _input to stdin of the proces.
+        """
         cmd = self.get_cmd(main)
         self.log.info('command: %s', cmd)
         with subprocess.Popen(
