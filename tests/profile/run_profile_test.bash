@@ -23,7 +23,6 @@ function setup_workspace() {
 
 source tests/tests.bash
 setup_ocrd_test_environment loeber_heuschrecken_1693.zip
-activate_env
 setup_workspace
 
 # profile 3 files

@@ -57,18 +57,6 @@ function get_page_xml_files() {
 		done
 }
 
-function activate_env() {
-		local envdir=$CACHE_DIR/env
-		if test ! -d $envdir; then
-				virtualenv -p python3.6 $envdir
-				source $envdir/bin/activate
-				pip install -r requirements.txt
-				pip install -e .
-		else
-				source $envdir/bin/activate
-		fi
-}
-
 function download_ocrd_jar() {
 		local url='http://www.cis.lmu.de/~finkf'
 		wget_cached $url "ocrd-0.1.jar"
@@ -78,5 +66,4 @@ function download_ocrd_jar() {
 function setup_ocrd_test_environment() {
 		download_and_unzip_ocrd_gt $1
 		download_ocrd_jar
-		activate_env
 }
