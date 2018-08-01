@@ -63,7 +63,6 @@ class Profiler(Processor):
              ]
         )
         p.run_profiler("\n".join(_input))
-        self.log.debug("JSON: %s", p.output)
         return json.loads(p.output)
 
     def get_all_lines(self):
