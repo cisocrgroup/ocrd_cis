@@ -1,11 +1,13 @@
 import json
 import re
 from ocrd import Processor
+from ocrd import MIMETYPE_PAGE
 from ocrd_cis import get_ocrd_tool
 from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
 from ocrd_cis import JavaProcess
 from ocrd.model.ocrd_page_generateds import TextEquivType
+from ocrd.model.ocrd_page import to_xml
 
 
 class Profiler(Processor):
@@ -18,11 +20,26 @@ class Profiler(Processor):
 
     def process(self):
         profile = self.read_profile()
-        self.add_suggestions(profile)
+        files = self.add_suggestions(profile)
+        for (pcgts, ifile) in files:
+            self.add_output_file(
+                ID="{}_{}".format(ifile.ID, self.output_file_grp),
+                mimetype=MIMETYPE_PAGE,
+                content=to_xml(pcgts),
+                file_grp=self.output_file_grp,
+                basename=ifile.basename,
+            )
+        self.workspace.save_mets()
 
     def add_suggestions(self, profile):
-        for word in self.get_all_words():
+        files = []
+        ids = set()
+        for (word, pcgts, ifile) in self.get_all_words():
             self.add_candidates(profile, word)
+            if ifile.ID not in ids:
+                ids.add(ifile.ID)
+                files.append((pcgts, ifile))
+        return files
 
     def add_candidates(self, profile, word):
         _unicode = word.get_TextEquiv()[0].Unicode
@@ -52,7 +69,7 @@ class Profiler(Processor):
 
     def read_profile(self):
         _input = []
-        for line in self.get_all_lines():
+        for (line, pcgts, ifile) in self.get_all_lines():
             _input.append(line.get_TextEquiv()[0].Unicode)
         p = JavaProcess(
              jar=self.parameter['cisOcrdJar'],
@@ -66,6 +83,8 @@ class Profiler(Processor):
         return json.loads(p.output)
 
     def get_all_lines(self):
+        """Returns a list of tuples of lines, their parent and
+        their according workspace file."""
         lines = []
         ifs = sorted(
             self.workspace.mets.find_files(fileGrp=self.input_file_grp),
@@ -77,12 +96,12 @@ class Profiler(Processor):
             )
             for region in pcgts.get_Page().get_TextRegion():
                 for line in region.get_TextLine():
-                    lines.append(line)
+                    lines.append((line, pcgts, ifile))
         return lines
 
     def get_all_words(self):
         words = []
-        for line in self.get_all_lines():
+        for (line, pcgts, ifile) in self.get_all_lines():
             for word in line.get_Word():
-                words.append(word)
+                words.append((word, pcgts, ifile))
         return words
