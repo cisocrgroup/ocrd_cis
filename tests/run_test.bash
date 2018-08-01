@@ -26,10 +26,13 @@ for t in $@; do
 				if test $? -ne 0; then
 						exit 1
 				fi
+				echo $t OK
 		else
 				$t &> $TMP_LOG
 				if test $? -ne 0; then
+						cat $TMP_LOG
 						exit 1
 				fi
+				echo $t OK
 		fi
 done
