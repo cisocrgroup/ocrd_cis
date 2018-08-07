@@ -37,7 +37,7 @@ class JavaProcess:
             self.output, err = p.communicate(input=_input)
             self.output = self.output
             retval = p.wait()
-            self.log.info("retval: %i", retval)
+            self.log.info("%s: %i", cmd, retval)
             if retval != 0:
                 raise ValueError(
                     "cannot execute {}: {}\nreturned: {}"
