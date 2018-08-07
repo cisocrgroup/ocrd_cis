@@ -4,7 +4,7 @@ set -e
 
 PAGE_XML_MIME_TYPE="application/vnd.prima.page+xml"
 CACHE_DIR="/tmp/cis-ocrd-py-cache"
-TMP_DIR=$(mktemp -d -t cis-ocrd-align-XXXXXXXXX)
+TMP_DIR=$(mktemp -d -t cis-ocrd-tmp-XXXXXXXXX)
 PAGE_XML_FILES=""
 JAR=""
 
