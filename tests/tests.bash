@@ -67,3 +67,9 @@ function setup_ocrd_test_environment() {
 		download_and_unzip_ocrd_gt $1
 		download_ocrd_jar
 }
+
+function assert_file_group_exists() {
+		pushd $TMP_DIR
+		ocrd workspace list-group | grep "$1" && true || exit 1
+		popd
+}

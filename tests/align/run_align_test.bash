@@ -38,6 +38,4 @@ ocrd-cis-align --mets $TMP_DIR/mets.xml \
 							 --input-file-grp 'ocr1,ocr2,gt' \
 							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json
-pushd $TMP_DIR
-ocrd workspace list-group | grep 'ocr1+ocr2+gt' && true || exit 1
-popd
+assert_file_group_exists 'ocr1+ocr2+gt'

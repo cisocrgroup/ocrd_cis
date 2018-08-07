@@ -30,6 +30,4 @@ ocrd-cis-profile --mets $TMP_DIR/mets.xml \
 								 --input-file-grp 'gt' \
 								 --output-file-grp 'profiled-gt' \
 								 --parameter file://$TMP_DIR/config.json
-pushd $TMP_DIR
-ocrd workspace list-group | grep 'profiled-gt' && true || exit 1
-popd
+assert_file_group_exists 'profiled-gt'
