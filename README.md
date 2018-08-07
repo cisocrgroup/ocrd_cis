@@ -19,6 +19,14 @@ Use `virtualenv` to install dependencies:
 * Add new file to workspace: `ocrd workspace add file -G group -i id
   -m mimetype`
 
+### Tests
+
+Issue `make test` to run the automated test suite. The tests depend on
+the following tools:
+
+* [wget](https://www.gnu.org/software/wget/)
+* [envsubst](https://linux.die.net/man/1/envsubst)
+
 ## Tools
 
 ### ocrd-cis-align
