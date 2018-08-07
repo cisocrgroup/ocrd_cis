@@ -7,7 +7,7 @@
 ### Virtualenv
 
 Use `virtualenv` to install dependencies:
-* `virtualenv -p python3.6 env-dir`
+* `virtualenv -p python3.6 env`
 * `source env-dir/bin/activate`
 * `pip install -r requirements.txt`
 * `pip install -e path/to/dir/containing/setup.py`

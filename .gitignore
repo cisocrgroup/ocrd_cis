@@ -3,4 +3,5 @@ __pycache__
 .mypy_cache
 *.egg-info*
 env/*
+env-dir/*
 .envrc
