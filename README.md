@@ -2,6 +2,17 @@
 
 [CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line tools
 
+## Essential system packages
+```sh
+sudo apt-get install \
+  git \
+  build-essential \
+  python python-pip \
+  python3 python3-pip \
+  libimage-exiftool-perl libxml2-utils \
+  default-jdk
+```
+
 ## General usage
 
 ### Virtualenv
