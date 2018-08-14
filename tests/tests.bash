@@ -67,6 +67,7 @@ function download_ocrd_jar() {
 		JAR="$TMP_DIR/downloads/ocrd-0.1.jar"
 }
 
+# sets PERSISTENT and ARG variables
 function parse_cmd_line_args() {
 		PERSISTENT=no
 		for arg in "$@"; do
@@ -74,6 +75,8 @@ function parse_cmd_line_args() {
 						-p|--persistent)
 								PERSISTENT=yes
 								;;
+						*)
+								ARG=$arg
 				esac
 		done
 }
