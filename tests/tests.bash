@@ -67,8 +67,8 @@ function download_ocrd_jar() {
 		JAR="$TMP_DIR/downloads/ocrd-0.1.jar"
 }
 
-PERSISTENT=no
 function parse_cmd_line_args() {
+		PERSISTENT=no
 		for arg in "$@"; do
 				case $arg in
 						-p|--persistent)
