@@ -1,3 +1,0 @@
-ocrd>=0.7.2
-click
-pathlib
