@@ -31,17 +31,17 @@ class JavaProcess:
                 cmd,
                 stdout=subprocess.PIPE,
                 stdin=subprocess.PIPE,
-                encoding='utf-8',
+                # only since 3.6: encoding='utf-8',
                 # stderr=subprocess.DEVNULL,
         ) as p:
-            self.output, err = p.communicate(input=_input)
-            self.output = self.output
+            self.output, err = p.communicate(input=_input.encode('utf-8'))
+            self.output = self.output.decode('utf-8')
             retval = p.wait()
             self.log.info("%s: %i", cmd, retval)
             if retval != 0:
                 raise ValueError(
                     "cannot execute {}: {}\nreturned: {}"
-                    .format(cmd, err, retval))
+                    .format(cmd, err.decode('utf-8') if err else u'', retval))
 
     def get_cmd(self, main):
         cmd = ['java', '-cp', self.jar, main]
