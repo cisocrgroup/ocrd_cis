@@ -9,16 +9,14 @@ help:
 
 # END-EVAL
 
-# pip install -r requirements.txt
 deps:
 	pip install -r requirements.txt
 
-# pip install -e .
 install:
 	pip install -e .
 
 test:
 	tests/align/run_align_test.bash
-	tests/profile/run_profile_test.bash
+#	tests/profile/run_profile_test.bash
 
 .PHONY: deps install test
