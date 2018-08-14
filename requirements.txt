@@ -1,2 +1,3 @@
-ocrd==0.7.0
+ocrd>=0.7.0
 click
+pathlib
