@@ -9,11 +9,9 @@ help:
 
 # END-EVAL
 
-# pip install -r requirements.txt
 deps:
 	pip install -r requirements.txt
 
-# pip install -e .
 install:
 	pip install -e .
 
