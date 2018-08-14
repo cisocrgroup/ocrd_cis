@@ -5,12 +5,11 @@ python:
   - "3.6"
   - "3.7-dev"
 # install xmllint
-before_install:
-   - sudo apt-get -qq update
-   - sudo apt-get install -y libxml2-dev libxslt-dev python-dev libxml2-utils
+# before_install:
+#    - sudo apt-get -qq update
+#    - sudo apt-get install -y libxml2-dev libxslt-dev python-dev libxml2-utils
 # command to install dependencies
 install:
-#  - STATIC_DEPS=true pip install lxml
   - pip install -r requirements.txt
   - pip install .
 # command to run tests
