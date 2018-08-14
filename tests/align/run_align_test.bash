@@ -30,6 +30,7 @@ function setup_workspace() {
 }
 
 source tests/tests.bash
+parse_cmd_line_args $@
 setup_ocrd_test_environment loeber_heuschrecken_1693.zip
 setup_workspace
 
