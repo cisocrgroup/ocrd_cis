@@ -125,7 +125,8 @@ class PageAlignment:
         for word in page_xml_line.get_Word():
             word.get_TextEquiv()[0].set_dataType(self.ifgs[0])
             page_xml_word = word.get_TextEquiv()[0].Unicode
-            if alignment_line.tokens[k][0] in page_xml_word:
+            if (k < len(alignment_line.tokens) and
+                    alignment_line.tokens[k][0] in page_xml_word):
                 self.log.debug("word: %s", page_xml_word)
                 for (i, w) in enumerate(alignment_line.tokens[k]):
                     self.log.debug(" - word: %s (%s)", w, self.ifgs[i])
