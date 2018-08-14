@@ -1,4 +1,4 @@
-![build status](https://travis-ci.org/finkf/cis-ocrd-py.svg?branch=devel)
+![build status](https://travis-ci.org/finkf/cis-ocrd-py.svg?branch=dev)
 
 # cis-ocrd-py
 
