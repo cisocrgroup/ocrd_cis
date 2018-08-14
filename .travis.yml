@@ -10,7 +10,7 @@ python:
 # install xmllint
 before_install:
    - sudo apt-get -qq update
-   - sudo apt-get install -y libxml2-dev libxslt-dev python-dev
+   - sudo apt-get install -y libxml2-dev libxslt-dev python-dev libxml2-utils
 # command to install dependencies
 install:
   - STATIC_DEPS=true pip install lxml
