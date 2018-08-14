@@ -4,9 +4,9 @@ python:
   - "3.5"
   - "3.6"
   - "3.7-dev"
-jdk:
-  - oraclejdk8
-  - openjdk8
+# jdk:
+#   - oraclejdk8
+#   - openjdk8
 # install xmllint
 before_install:
    - sudo apt-get -qq update
