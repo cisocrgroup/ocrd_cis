@@ -40,6 +40,10 @@ the following tools:
 * [wget](https://www.gnu.org/software/wget/)
 * [envsubst](https://linux.die.net/man/1/envsubst)
 
+You can run individual testcases using the run_*_test.bash scripts in
+the tests directory. Use the `--persistent` or `-p` flag to keep
+temporary directories.
+
 ## Tools
 
 ### ocrd-cis-align
