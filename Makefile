@@ -16,7 +16,7 @@ install:
 	pip install -e .
 
 test:
-	tests/align/run_align_test.bash
-#	tests/profile/run_profile_test.bash
+	tests/align/run_align_test.bash loeber_heuschrecken_1693.zip
+	tests/align/run_align_test.bash kant_aufklaerung_1784.zip
 
 .PHONY: deps install test
