@@ -8,11 +8,15 @@ TMP_DIR=$(mktemp -d -t cis-ocrd-tmp-XXXXXXXXX)
 PAGE_XML_FILES=""
 JAR=""
 
-function rmtd() {
-		echo removing $TMP_DIR
-		rm -rf $TMP_DIR
+function maybe_rmtd() {
+		if test "$PERSISTENT" = "yes"; then
+				echo tmp dir = $TMP_DIR
+		else
+				echo removing $TMP_DIR
+				rm -rf $TMP_DIR
+		fi
 }
-trap rmtd EXIT
+trap maybe_rmtd EXIT
 
 function wget_cached() {
 		local url=$1
@@ -61,6 +65,17 @@ function download_ocrd_jar() {
 		local url='http://www.cis.lmu.de/~finkf'
 		wget_cached $url "ocrd-0.1.jar"
 		JAR="$TMP_DIR/downloads/ocrd-0.1.jar"
+}
+
+PERSISTENT=no
+function parse_cmd_line_args() {
+		for arg in "$@"; do
+				case $arg in
+						-p|--persistent)
+								PERSISTENT=yes
+								;;
+				esac
+		done
 }
 
 function setup_ocrd_test_environment() {
