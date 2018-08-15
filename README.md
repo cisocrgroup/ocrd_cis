@@ -6,14 +6,13 @@
 ## General usage
 
 ### Essential system packages
+
 ```sh
 sudo apt-get install \
   git \
   build-essential \
-  python python-pip \
   python3 python3-pip \
-  libimage-exiftool-perl \
-  libxml2-utils \
+  libxml2-dev \
   default-jdk
 ```
 
