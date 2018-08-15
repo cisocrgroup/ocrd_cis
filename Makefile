@@ -4,19 +4,21 @@ help:
 	@echo ""
 	@echo "  Targets"
 	@echo ""
-	@echo "    deps     pip install -r requirements.txt"
 	@echo "    install  pip install -e ."
+	@echo "    test     Run align tests"
+	@echo ""
+	@echo "  Variables"
+	@echo ""
 
 # END-EVAL
 
-deps:
-	pip install -r requirements.txt
-
+# pip install -e .
 install:
 	pip install -e .
 
+# Run align tests
 test:
-	tests/align/run_align_test.bash loeber_heuschrecken_1693.zip
-	tests/align/run_align_test.bash kant_aufklaerung_1784.zip
+	tests/align/run_align_test.bash $(TEST_ARGS) loeber_heuschrecken_1693.zip
+	tests/align/run_align_test.bash $(TEST_ARGS) kant_aufklaerung_1784.zip
 
-.PHONY: deps install test
+.PHONY: install test
