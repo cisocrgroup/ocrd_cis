@@ -21,7 +21,7 @@ sudo apt-get install \
 
 Use `virtualenv` to install dependencies:
 * `virtualenv -p python3.6 env`
-* `source env-dir/bin/activate`
+* `source env/bin/activate`
 * `pip install -e path/to/dir/containing/setup.py`
 
 ### OCR-D workspace
