@@ -71,7 +71,7 @@ class Profiler(Processor):
         _input = []
         for (line, pcgts, ifile) in self.get_all_lines():
             _input.append(line.get_TextEquiv()[0].Unicode)
-        p = JavaProcess(
+        p = JavaProcess.profiler(
              jar=self.parameter['cisOcrdJar'],
              args=[
                  self.parameter['profilerExecutable'],
@@ -79,8 +79,7 @@ class Profiler(Processor):
                  self.parameter['profilerLanguage'],
              ]
         )
-        p.run_profiler("\n".join(_input))
-        return json.loads(p.output)
+        return p.run("\n".join(_input))
 
     def get_all_lines(self):
         """Returns a list of tuples of lines, their parent and

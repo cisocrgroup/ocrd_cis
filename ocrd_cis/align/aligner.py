@@ -89,12 +89,11 @@ class Aligner(Processor):
         for i in _input:
             self.log.debug("input line: %s", i)
         n = len(ifs)
-        p = JavaProcess(
+        p = JavaProcess.aligner(
             jar=self.parameter['cisOcrdJar'],
             args=[str(n)]
         )
-        p.run_aligner("\n".join(_input))
-        return p.output
+        return p.run("\n".join(_input))
 
 
 class PageAlignment:
