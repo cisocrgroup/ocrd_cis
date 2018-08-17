@@ -1,3 +1,8 @@
+# Whether temporary directories should be kept
+PERSISTENT = no
+
+export
+
 # BEGIN-EVAL makefile-parser --make-help Makefile
 
 help:
@@ -9,6 +14,7 @@ help:
 	@echo ""
 	@echo "  Variables"
 	@echo ""
+	@echo "    PERSISTENT  Whether temporary directories should be kept"
 
 # END-EVAL
 
