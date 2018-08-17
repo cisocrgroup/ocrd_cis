@@ -10,7 +10,7 @@ class JavaProcess:
     def __init__(self, jar, args):
         self.jar = jar
         self.args = args
-        self.log = getLogger('JavaProcess')
+        self.log = getLogger('cis.JavaProcess')
         if not Path(jar).is_file():
             raise FileNotFoundError("no such file: {}".format(jar))
 

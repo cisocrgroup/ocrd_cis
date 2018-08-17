@@ -16,7 +16,7 @@ class Profiler(Processor):
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-profile']
         kwargs['version'] = ocrd_tool['version']
         super(Profiler, self).__init__(*args, **kwargs)
-        self.log = getLogger('Processor.Profiler')
+        self.log = getLogger('cis.Processor.Profiler')
 
     def process(self):
         profile = self.read_profile()
