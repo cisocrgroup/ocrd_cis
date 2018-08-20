@@ -1,3 +1,6 @@
+# Log level
+LOGLEVEL = DEBUG
+
 # Whether temporary directories should be kept
 PERSISTENT = no
 
@@ -14,6 +17,7 @@ help:
 	@echo ""
 	@echo "  Variables"
 	@echo ""
+	@echo "    LOGLEVEL    Log level"
 	@echo "    PERSISTENT  Whether temporary directories should be kept"
 
 # END-EVAL
