@@ -4,12 +4,13 @@ set -e
 
 PAGE_XML_MIME_TYPE="application/vnd.prima.page+xml"
 CACHE_DIR="/tmp/cis-ocrd-py-cache"
-TMP_DIR=$(mktemp -d -t cis-ocrd-tmp-XXXXXXXXX)
+TMP_DIR=${TMP_DIR:-$(mktemp -d -t cis-ocrd-tmp-XXXXXXXXX)}
 PAGE_XML_FILES=""
+PERSISTENT=${PERSISTENT:-no}
 JAR=""
 
 function maybe_rmtd() {
-		if test "$PERSISTENT" = "yes"; then
+		if [[ "$PERSISTENT" = "yes" ]]; then
 				echo tmp dir = $TMP_DIR
 		else
 				echo removing $TMP_DIR
@@ -69,7 +70,6 @@ function download_ocrd_jar() {
 
 # sets PERSISTENT and ARG variables
 function parse_cmd_line_args() {
-		PERSISTENT=no
 		for arg in "$@"; do
 				case $arg in
 						-p|--persistent)

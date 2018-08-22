@@ -6,14 +6,13 @@
 ## General usage
 
 ### Essential system packages
+
 ```sh
 sudo apt-get install \
   git \
   build-essential \
-  python python-pip \
   python3 python3-pip \
-  libimage-exiftool-perl \
-  libxml2-utils \
+  libxml2-dev \
   default-jdk
 ```
 
@@ -39,9 +38,12 @@ the following tools:
 * [wget](https://www.gnu.org/software/wget/)
 * [envsubst](https://linux.die.net/man/1/envsubst)
 
-You can run individual testcases using the run_*_test.bash scripts in
+You can run individual testcases using the `run_*_test.bash` scripts in
 the tests directory. Use the `--persistent` or `-p` flag to keep
 temporary directories.
+
+You can override the temporary directory by setting the `TMP_DIR` environment
+variable.
 
 ## Tools
 

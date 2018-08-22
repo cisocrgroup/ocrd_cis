@@ -16,7 +16,7 @@ class Aligner(Processor):
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
         kwargs['version'] = ocrd_tool['version']
         super(Aligner, self).__init__(*args, **kwargs)
-        self.log = getLogger('Processor.Aligner')
+        self.log = getLogger('cis.Processor.Aligner')
 
     def process(self):
         ifgs = self.input_file_grp.split(",")  # input file groups
@@ -108,7 +108,7 @@ class PageAlignment:
         """
         self.ifgs = ifgs
         self.ifs = ifs
-        self.log = getLogger('PageAlignment')
+        self.log = getLogger('cis.PageAlignment')
         self.line_alignments = list()
         lines = process_output.split("\n")
         n = len(self.ifs)

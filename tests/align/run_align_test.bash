@@ -1,5 +1,7 @@
 #!/bin/bash
 
+LOGLEVEL=${LOGLEVEL:-DEBUG}
+
 set -e
 
 function setup_workspace() {
@@ -36,6 +38,7 @@ setup_workspace
 
 # align 3 file groups
 ocrd-cis-align --mets $TMP_DIR/mets.xml \
+							 --log-level $LOGLEVEL \
 							 --input-file-grp 'ocr1,ocr2,gt' \
 							 --output-file-grp 'ocr1+ocr2+gt' \
 							 --parameter file://$TMP_DIR/config.json

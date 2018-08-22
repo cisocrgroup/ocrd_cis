@@ -11,8 +11,7 @@ class JavaProcess:
         self.jar = jar
         self.args = args
         self.main = main
-
-        self.log = getLogger('JavaProcess')
+        self.log = getLogger('cis.JavaProcess')
         if not Path(jar).is_file():
             raise FileNotFoundError("no such file: {}".format(jar))
 
