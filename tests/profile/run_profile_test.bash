@@ -21,7 +21,7 @@ function setup_workspace() {
 		popd
 }
 
-source tests/tests.bash
+source bashlib/ocrd_cis.bash
 parse_cmd_line_args $@
 setup_ocrd_test_environment loeber_heuschrecken_1693.zip
 setup_workspace
