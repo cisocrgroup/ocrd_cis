@@ -18,6 +18,27 @@
 								}
 						}
 				},
+				"cis-ocrd-ocropy-recognize": {
+					"executable": "cis-ocrd-ocropy-recognize",
+					"categories": [
+							"Text recognition and optimization"
+					],
+					"steps": [
+							"postprocessing/alignment"
+					],
+					"description": "Recognize text in lines with ocropy",
+					"parameters": {
+						"textequiv_level": {
+							"type": "string",
+							"enum": ["page", "region", "line", "word", "glyph"],
+							"default": "line"
+						  },
+						  "model": {
+							"type": "string",
+							"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+						  }
+					}
+			},
 				"ocrd-cis-profile": {
 						"executable": "ocrd-cis-profile",
 						"categories": [
