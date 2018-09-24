@@ -1,17 +1,22 @@
 from __future__ import absolute_import
 
+import sys, numpy, re, traceback, codecs, os.path
+import numpy as np
+from multiprocessing import Pool
+from PIL import Image, ImageOps
+from scipy.ndimage import measurements
+
+
 from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
 from ocrd.model.ocrd_page import from_file, to_xml, TextEquivType, CoordsType, GlyphType
 from ocrd import Processor, MIMETYPE_PAGE
 
 from ocrd_cis import get_ocrd_tool
 
-import sys, os, numpy, subprocess, re
-
-
-from PIL import Image
-from PIL import ImageOps
-from scipy.ndimage import measurements
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from ocrd_cis.ocropy import ocrolib
+from ocrd_cis.ocropy.ocrolib import lstm
+from ocrd_cis.ocropy.ocrolib.exceptions import FileNotFound, OcropusException
 
 
 
@@ -32,10 +37,26 @@ def binarize_array(numpy_array, threshold=130):
 
 
 
-def subprocess_cmd(command):
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True) #, executable='/bin/bash')
-    out, err = process.communicate(command.encode('utf-8'))
-    return out.decode('utf-8')
+
+
+def process1(arg):
+    fname,parallel,pad,lnorm,network = arg
+    base,_ = ocrolib.allsplitext(fname)
+    line = ocrolib.read_image_gray(fname)
+    raw_line = line.copy()
+    if np.prod(line.shape)==0: return None
+    if np.amax(line)==np.amin(line): return None
+
+    temp = np.amax(line)-line
+    temp = temp*1.0/np.amax(temp)
+    lnorm.measure(temp)
+    line = lnorm.normalize(line,cval=np.amax(line))
+
+    line = lstm.prepare_line(line,pad)
+    pred = network.predictString(line)
+    return str(pred)
+
+
 
 
 class OcropyRecognize(Processor):
@@ -45,27 +66,44 @@ class OcropyRecognize(Processor):
         kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-ocropy-recognize']
         kwargs['version'] = ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
-        self.log = getLogger('Processor.OcropyRecognize')
+        self.log = getLogger('OcropyRecognize')
 
 
     def process(self):
         """
         Performs the (text) recognition.
         """
-        print(self.parameter)
+        #print(self.parameter)
         if self.parameter['textequiv_level'] not in ['line', 'glyph']:
             raise Exception("currently only implemented at the line/glyph level")
         
         filepath = os.path.dirname(os.path.abspath(__file__))
         model = 'fraktur.pyrnn.gz' # default model
-        modelpath = filepath + '/models/' + model + '.gz'
+        modelpath = os.path.join(filepath,'models',model)
+
         
+        #checks if model is in default path and loads it
         if 'model' in self.parameter:
             model = self.parameter['model']
             modelpath = filepath + '/models/' + model + '.gz'
             if os.path.isfile(modelpath) == False:
                 raise Exception("configured model " + model + " is not in models folder")
+                sys.exit(1)
 
+            else:
+                network = ocrolib.load_object(modelpath,verbose=1)
+                for x in network.walk(): x.postLoad()
+                for x in network.walk():
+                    if isinstance(x,lstm.LSTM):
+                        x.allocate(5000)
+
+        lnorm = getattr(network,"lnorm",None)
+
+        pad=16
+        parallel=0
+        #height=48
+        # if height>0:
+        #     lnorm.setHeight(height)
 
         #self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
@@ -95,24 +133,13 @@ class OcropyRecognize(Processor):
                     #crop word from page
                     croped_image = pil_image.crop(box=box)
 
-                    imgpath = filepath + '/temp/temp.png'
+                    imgpath = os.path.join(filepath, 'temp/temp.png')
                     croped_image.save(imgpath)
 
-                    #use ocropy to recognize word
-                    ocropyfile = filepath + '/ocropus-rpred.py'
+                    ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
 
-                    ocropycmd = '''
-                    python2.7 {ocropyfile} -Q 4 -m {modelpath} '{imgpath}'
-                    '''.format(ocropyfile=ocropyfile, modelpath=modelpath, imgpath=imgpath)
-
-                    ocropyoutput = subprocess_cmd(ocropycmd)
-
-                    matchObj = re.match( r'<ocropy>(.*?)</ocropy>', ocropyoutput)
-                    if matchObj:
-                        linepred = matchObj.group(1)
-
-                    line.add_TextEquiv(TextEquivType(Unicode=linepred))
-                    print(linepred)
+                    line.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
+                    print(ocropyoutput)
 
 
 
@@ -126,24 +153,14 @@ class OcropyRecognize(Processor):
                             #crop word from page
                             croped_image = pil_image.crop(box=box)
 
-                            imgpath = filepath + '/temp/temp.png'
+                            imgpath = os.path.join(filepath, 'temp/temp.png')
+
                             croped_image.save(imgpath)
 
-                            #use ocropy to recognize word
-                            ocropyfile = filepath + '/ocropus-rpred.py'
+                            ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
 
-                            ocropycmd = '''
-                            python2.7 {ocropyfile} -Q 4 -m {modelpath} '{imgpath}'
-                            '''.format(ocropyfile=ocropyfile, modelpath=modelpath, imgpath=imgpath)
-
-                            ocropyoutput = subprocess_cmd(ocropycmd)
-
-                            matchObj = re.match( r'<ocropy>(.*?)</ocropy>', ocropyoutput)
-                            if matchObj:
-                                wordpred = matchObj.group(1)
-
-                            word.add_TextEquiv(TextEquivType(Unicode=wordpred))
-                            print(wordpred)
+                            word.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
+                            print(ocropyoutput)
 
                 
 

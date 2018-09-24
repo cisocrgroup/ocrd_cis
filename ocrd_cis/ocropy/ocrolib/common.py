@@ -3,7 +3,7 @@
 ### common functions for data structures, file name manipulation, etc.
 ################################################################
 
-from __future__ import print_function
+
 
 import os
 import os.path
@@ -13,8 +13,10 @@ import sysconfig
 import unicodedata
 import inspect
 import glob
+import six
+import gzip
 import pickle
-from ocrolib.exceptions import (BadClassLabel, BadInput, FileNotFound,
+from .exceptions import (BadClassLabel, BadInput, FileNotFound,
                                 OcropusException)
 
 import numpy
@@ -26,16 +28,16 @@ from scipy.ndimage import morphology, measurements
 import PIL
 
 from . import default
-from default import getlocal
-from toplevel import (checks, ABINARY2, AINT2, AINT3, BOOL, DARKSEG, GRAYSCALE,
+from .default import getlocal
+from .toplevel import (checks, ABINARY2, AINT2, AINT3, BOOL, DARKSEG, GRAYSCALE,
                       LIGHTSEG, LINESEG, PAGESEG)
-import chars
+from . import chars
 import codecs
-import ligatures
-import lstm
-import morph
+from . import ligatures
+from . import lstm
+from . import morph
 import multiprocessing
-import sl
+from . import sl
 
 pickle_mode = 2
 
@@ -48,22 +50,22 @@ def normalize_text(s):
     """Apply standard Unicode normalizations for OCR.
     This eliminates common ambiguities and weird unicode
     characters."""
-    s = unicode(s)
+    s = str(s)
     s = unicodedata.normalize('NFC',s)
     s = re.sub(r'\s+(?u)',' ',s)
     s = re.sub(r'\n(?u)','',s)
     s = re.sub(r'^\s+(?u)','',s)
     s = re.sub(r'\s+$(?u)','',s)
     for m,r in chars.replacements:
-        s = re.sub(unicode(m),unicode(r),s)
+        s = re.sub(str(m),str(r),s)
     return s
 
 def project_text(s,kind="exact"):
     """Project text onto a smaller subset of characters
     for comparison."""
     s = normalize_text(s)
-    s = re.sub(r'( *[.] *){4,}',u'....',s) # dot rows
-    s = re.sub(r'[~_]',u'',s) # dot rows
+    s = re.sub(r'( *[.] *){4,}','....',s) # dot rows
+    s = re.sub(r'[~_]','',s) # dot rows
     if kind=="exact":
         return s
     if kind=="nospace":
@@ -424,7 +426,7 @@ def save_object(fname,obj,zip=0):
 def unpickle_find_global(mname,cname):
     if mname=="lstm.lstm":
         return getattr(lstm,cname)
-    if not mname in sys.modules.keys():
+    if not mname in list(sys.modules.keys()):
         exec("import "+mname)
     return getattr(sys.modules[mname],cname)
 
@@ -439,15 +441,15 @@ def load_object(fname,zip=0,nofind=0,verbose=0):
     if zip==0 and fname.endswith(".gz"):
         zip = 1
     if zip>0:
-        # with gzip.GzipFile(fname,"rb") as stream:
-        with os.popen("gunzip < '%s'"%fname,"rb") as stream:
-            unpickler = pickle.Unpickler(stream)
-            unpickler.find_global = unpickle_find_global
-            return unpickler.load()
+        with gzip.GzipFile(fname,"rb") as stream:
+        #with os.popen("gunzip < '%s'"%fname,"rb") as stream:
+            #unpickler = pickle.Unpickler(stream)
+            #unpickler.find_global = unpickle_find_global
+            return pickle.load(stream, encoding='latin1')
     else:
         with open(fname,"rb") as stream:
             unpickler = pickle.Unpickler(stream)
-            unpickler.find_global = unpickle_find_global
+            #unpickler.find_global = unpickle_find_global
             return unpickler.load()
 
 
@@ -475,7 +477,7 @@ def chist(l):
     counts = {}
     for c in l:
         counts[c] = counts.get(c,0)+1
-    hist = [(v,k) for k,v in counts.items()]
+    hist = [(v,k) for k,v in list(counts.items())]
     return sorted(hist,reverse=1)
 
 ################################################################
@@ -505,7 +507,7 @@ def parallel_map(fun,jobs,parallel=0,chunksize=1):
 def check_valid_class_label(s):
     """Determines whether the given character is a valid class label.
     Control characters and spaces are not permitted."""
-    if type(s)==unicode:
+    if type(s)==str:
         if re.search(r'[\0-\x20]',s):
             raise BadClassLabel(s)
     elif type(s)==str:
@@ -552,11 +554,11 @@ def allsplitext(path):
 def base(path):
     return allsplitext(path)[0]
 
-@checks(str,{str,unicode})
+@checks(str,{str,str})
 def write_text_simple(file,s):
     """Write the given string s to the output file."""
     with open(file,"w") as stream:
-        if type(s)==unicode: s = s.encode("utf-8")
+        if type(s)==str: s = s.encode("utf-8")
         stream.write(s)
 
 @checks([str])
@@ -695,7 +697,7 @@ def set_params(object,kw,warn=1):
     without the key,value pairs that have been used.  If
     all keywords have been used, afterwards, len(kw)==0."""
     kw = kw.copy()
-    for k,v in kw.items():
+    for k,v in list(kw.items()):
         if hasattr(object,k):
             setattr(object,k,v)
             del kw[k]
@@ -864,7 +866,7 @@ def remove_noise(line,minsize=8):
     if minsize==0: return line
     bin = (line>0.5*amax(line))
     labels,n = morph.label(bin)
-    sums = measurements.sum(bin,labels,range(n+1))
+    sums = measurements.sum(bin,labels,list(range(n+1)))
     sums = sums[labels]
     good = minimum(bin,1-(sums>0)*(sums<minsize))
     return good

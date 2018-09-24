@@ -26,7 +26,7 @@ d" f" l"
 
 """ " """
 
-common_chars = [ u'„', u'“' ]
+common_chars = [ '„', '“' ]
 
 def common_ligatures(s):
     if len(s)>=2 and s[:2] in common_ligature_table:
@@ -50,15 +50,15 @@ class LigatureTable:
         # note that "_" and "~" always have a special meaning
         # but are treated like other ASCII characters
         for i in range(32,1024):
-            self.add(unichr(i),i)
+            self.add(chr(i),i)
         for c in common_chars:
             self.add(c,ord(c))
     def add(self,name,code,override=1):
-        assert type(name)==unicode or not re.search(r'[\x80-\xff]',name)
+        assert type(name)==str or not re.search(r'[\x80-\xff]',name)
         if not override and self.lig2code.get(name) is not None:
             raise Exception("character '%s' (%d) already in ligature table"%(name,self.ord(name)))
         self.lig2code[name] = code
-        self.code2lig[code] = unicode(name)
+        self.code2lig[code] = str(name)
     def ord(self,name):
         if name=="": return 0 # epsilon
         result = self.lig2code.get(name,-1)
@@ -67,12 +67,12 @@ class LigatureTable:
         return result
     def chr(self,code):
         result = self.code2lig.get(code,None)
-        if code<0: return u"~"
-        if code<0x10000 and result is None: return unichr(code)
+        if code<0: return "~"
+        if code<0x10000 and result is None: return chr(code)
         return result
     def writeText(self,name):
         with open(name,"w") as stream:
-            for name,code in self.lig2code.items():
+            for name,code in list(self.lig2code.items()):
                 stream.write("%s %d\n"%(name,uint32(code)))
                     
 lig = LigatureTable()
@@ -109,7 +109,7 @@ for c1 in doubles:
 
 # add German and additional German ligatures (DO NOT CHANGE THIS)
         
-german = u"ÄÖÜäöüß"
+german = "ÄÖÜäöüß"
 
 for c in german:
     lig.add(c,ord(c))
