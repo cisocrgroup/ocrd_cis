@@ -1,10 +1,8 @@
 from __future__ import absolute_import
 
-import sys, numpy, re, traceback, codecs, os.path
+import sys, os.path, cv2
 import numpy as np
-from multiprocessing import Pool
-from PIL import Image, ImageOps
-from scipy.ndimage import measurements
+from PIL import Image
 
 
 from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
@@ -16,7 +14,6 @@ from ocrd_cis import get_ocrd_tool
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from ocrd_cis.ocropy import ocrolib
 from ocrd_cis.ocropy.ocrolib import lstm
-from ocrd_cis.ocropy.ocrolib.exceptions import FileNotFound, OcropusException
 
 
 
@@ -25,17 +22,23 @@ def bounding_box(coord_points):
     x_coordinates, y_coordinates = zip(*point_list)
     return (min(x_coordinates), min(y_coordinates), max(x_coordinates), max(y_coordinates))
 
-def binarize_array(numpy_array, threshold=130):
-    """Binarize a numpy array."""
-    for i in range(len(numpy_array)):
-        for j in range(len(numpy_array[0])):
-            if numpy_array[i][j] > threshold:
-                numpy_array[i][j] = 255
-            else:
-                numpy_array[i][j] = 0
-    return numpy_array
 
+def binarize(pil_image):
+    # Convert RGB to OpenCV
+    img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
 
+    # global thresholding
+    #ret1,th1 = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
+
+    # Otsu's thresholding
+    #ret2,th2 = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+
+    # Otsu's thresholding after Gaussian filtering
+    blur = cv2.GaussianBlur(img,(5,5),0)
+    ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+
+    bin_img = Image.fromarray(th3)
+    return bin_img
 
 
 
@@ -109,14 +112,7 @@ class OcropyRecognize(Processor):
         for (n, input_file) in enumerate(self.input_files):
             #self.log.info("INPUT FILE %i / %s", n, input_file)
             pcgts = from_file(self.workspace.download_file(input_file))
-            # TODO use binarized / gray
             pil_image = self.workspace.resolve_image_as_pil(pcgts.get_Page().imageFilename)
-
-            #binarize
-            pil_image = pil_image.convert('L')
-            pil_image = numpy.array(pil_image)
-            pil_image = binarize_array(pil_image,130)
-            pil_image = Image.fromarray(pil_image, 'L')
 
 
             self.log.info("page %s", pcgts)
@@ -126,37 +122,44 @@ class OcropyRecognize(Processor):
                 for line in textlines:
                     self.log.debug("Recognizing text in line '%s'", line.id)
                     
-
                     #get box from points
                     box = bounding_box(line.get_Coords().points)
                         
                     #crop word from page
                     croped_image = pil_image.crop(box=box)
 
-                    imgpath = os.path.join(filepath, 'temp/temp.png')
-                    croped_image.save(imgpath)
+                    #binarize with Otsu's thresholding after Gaussian filtering
+                    bin_image = binarize(croped_image)
 
+                    #save temp image
+                    imgpath = os.path.join(filepath, 'temp/temp.png')
+                    bin_image.save(imgpath)
+
+                    #process ocropy
                     ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
 
                     line.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
                     print(ocropyoutput)
 
 
-
                     if self.parameter['textequiv_level'] == 'glyph':
                         for word in line.get_Word():
                             self.log.debug("Recognizing text in word '%s'", word.id)
 
-                            #get box
+                            #get box from points
                             box = bounding_box(word.get_Coords().points)
                             
                             #crop word from page
                             croped_image = pil_image.crop(box=box)
 
+                            #binarize with Otsu's thresholding after Gaussian filtering
+                            bin_image = binarize(croped_image)
+
+                            #save temp image
                             imgpath = os.path.join(filepath, 'temp/temp.png')
+                            bin_image.save(imgpath)
 
-                            croped_image.save(imgpath)
-
+                            #process ocropy
                             ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
 
                             word.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
