@@ -38,7 +38,28 @@
 							"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
 						  }
 					}
-			},
+				},
+				"cis-ocrd-ocropy-train": {
+					"executable": "cis-ocrd-ocropy-train",
+					"categories": [
+							"lstm ocropy model training"
+					],
+					"steps": [
+							"training"
+					],
+					"description": "train model with ground truth from mets data",
+					"parameters": {
+						"textequiv_level": {
+							"type": "string",
+							"enum": ["page", "region", "line", "word", "glyph"],
+							"default": "line"
+						  },
+						  "model": {
+							"type": "string",
+							"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+						  }
+					}
+				},
 				"ocrd-cis-profile": {
 						"executable": "ocrd-cis-profile",
 						"categories": [

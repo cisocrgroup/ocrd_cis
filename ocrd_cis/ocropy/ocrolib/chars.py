@@ -16,8 +16,12 @@ turkish = "ĞğŞşıſ"
 greek = "ΑαΒβΓγΔδΕεΖζΗηΘθΙιΚκΛλΜμΝνΞξΟοΠπΡρΣσςΤτΥυΦφΧχΨψΩω"
 portuguese = "ÁÃÌÍÒÓÕÚáãìíòóõú"
 telugu = " ఁంఃఅఆఇఈఉఊఋఌఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరఱలళవశషసహఽాిీుూృౄెేైొోౌ్ౘౙౠౡౢౣ౦౧౨౩౪౫౬౭౮౯"
+fraktur = "ƞ̃ẽĩõũāēīōūſʒꝛ ͤ ͦ "  
 
-default = ascii+xsymbols+german+french+portuguese
+
+
+
+default = ascii+xsymbols+german+french+portuguese+fraktur
 
 european = default+turkish+greek
 

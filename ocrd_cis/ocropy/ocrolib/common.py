@@ -91,10 +91,10 @@ def read_text(fname,nonl=1,normalize=1):
     """Read text. This assumes files are in unicode.
     By default, it removes newlines and normalizes the
     text for OCR processing with `normalize_text`"""
-    with codecs.open(fname,"r","utf-8") as stream:
+    with open(fname,"r", encoding="utf-8") as stream:
         result = stream.read()
     if nonl and len(result)>0 and result[-1]=='\n':
-        result = result[:-1]
+        result = result.strip('\n')
     if normalize:
         result = normalize_text(result)
     return result
@@ -105,7 +105,7 @@ def write_text(fname,text,nonl=0,normalize=1):
     text for OCR processing with `normalize_text`"""
     if normalize:
         text = normalize_text(text)
-    with codecs.open(fname,"w","utf-8") as stream:
+    with open(fname,"w", encoding="utf-8") as stream:
         stream.write(text)
         if not nonl and (len(text) == 0 or text[-1] != '\n'):
             stream.write('\n')
@@ -416,8 +416,8 @@ def save_object(fname,obj,zip=0):
     if zip==0 and fname.endswith(".gz"):
         zip = 1
     if zip>0:
-        # with gzip.GzipFile(fname,"wb") as stream:
-        with os.popen("gzip -9 > '%s'"%fname,"wb") as stream:
+        with gzip.GzipFile(fname,"wb") as stream:
+        #with os.popen("gzip -9 > '%s'"%fname,"wb") as stream:
             pickle.dump(obj,stream,2)
     else:
         with open(fname,"wb") as stream:

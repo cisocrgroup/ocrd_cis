@@ -1,8 +1,6 @@
 from __future__ import absolute_import
 
 import sys, os.path, cv2
-import numpy as np
-from PIL import Image
 
 
 from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
@@ -12,8 +10,12 @@ from ocrd import Processor, MIMETYPE_PAGE
 from ocrd_cis import get_ocrd_tool
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from ocrd_cis.ocropy import ocrolib
-from ocrd_cis.ocropy.ocrolib import lstm
+
+
+from .ocropus_rtrain import *
+
+np.seterr(divide='raise',over='raise',invalid='raise',under='ignore')
+
 
 
 
@@ -22,6 +24,13 @@ def bounding_box(coord_points):
     x_coordinates, y_coordinates = zip(*point_list)
     return (min(x_coordinates), min(y_coordinates), max(x_coordinates), max(y_coordinates))
 
+
+def deletefiles(filelist):
+    for file in filelist:
+        if os.path.exists(file):
+            os.remove(file)
+        if os.path.exists(file[:-3]+'gt.txt'):
+            os.remove(file[:-3]+'gt.txt')
 
 def resize_keep_ratio(image, baseheight=48):
     hpercent = (baseheight / float(image.size[1]))
@@ -47,75 +56,42 @@ def binarize(pil_image):
     bin_img = Image.fromarray(th3)
     return bin_img
 
-def deletefile(file):
-    if os.path.exists(file):
-        os.remove(file)
-
-def process1(arg):
-    fname,parallel,pad,lnorm,network = arg
-    base,_ = ocrolib.allsplitext(fname)
-    line = ocrolib.read_image_gray(fname)
-    raw_line = line.copy()
-    if np.prod(line.shape)==0: return None
-    if np.amax(line)==np.amin(line): return None
-
-    temp = np.amax(line)-line
-    temp = temp*1.0/np.amax(temp)
-    lnorm.measure(temp)
-    line = lnorm.normalize(line,cval=np.amax(line))
-
-    line = lstm.prepare_line(line,pad)
-    pred = network.predictString(line)
-    return str(pred)
 
 
-
-
-class OcropyRecognize(Processor):
+class OcropyTrain(Processor):
 
     def __init__(self, *args, **kwargs):
         ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-ocropy-recognize']
+        kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-ocropy-train']
         kwargs['version'] = ocrd_tool['version']
-        super(OcropyRecognize, self).__init__(*args, **kwargs)
-        self.log = getLogger('OcropyRecognize')
+        super(OcropyTrain, self).__init__(*args, **kwargs)
+        self.log = getLogger('OcropyTrain')
 
 
     def process(self):
         """
-        Performs the (text) recognition.
+        Performs the training
         """
         #print(self.parameter)
         if self.parameter['textequiv_level'] not in ['line', 'glyph']:
             raise Exception("currently only implemented at the line/glyph level")
         
         filepath = os.path.dirname(os.path.abspath(__file__))
-        model = 'fraktur.pyrnn.gz' # default model
-        modelpath = os.path.join(filepath,'models',model)
 
-        
-        #checks if model is in default path and loads it
+
         if 'model' in self.parameter:
             model = self.parameter['model']
             modelpath = filepath + '/models/' + model + '.gz'
+            outputpath = filepath + '/output/' + model
             if os.path.isfile(modelpath) == False:
                 raise Exception("configured model " + model + " is not in models folder")
                 sys.exit(1)
+        else:
+            modelpath = None
+            outputpath = filepath + '/output/' + 'output'
 
-            else:
-                network = ocrolib.load_object(modelpath,verbose=1)
-                for x in network.walk(): x.postLoad()
-                for x in network.walk():
-                    if isinstance(x,lstm.LSTM):
-                        x.allocate(5000)
 
-        lnorm = getattr(network,"lnorm",None)
-
-        pad=16   #default: 16
-        parallel=0
-        # height=48
-        # if height>0:
-        #     lnorm.setHeight(height)
+        filelist = []
 
         #self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
@@ -144,15 +120,18 @@ class OcropyRecognize(Processor):
                     final_img = resize_keep_ratio(bin_image)
 
                     #save temp image
-                    imgpath = os.path.join(filepath, 'temp/temp.png')
+                    path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id))
+                    imgpath = path + '.png'
                     final_img.save(imgpath)
 
-                    #process ocropy
-                    ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
+                    filelist.append(imgpath)
 
-                    line.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
-                    print(ocropyoutput)
-                    deletefile(imgpath)        
+                    #ground truth
+                    gt = line.get_TextEquiv()[0].Unicode.strip()
+                    gtpath = path + '.gt.txt'
+                    with open(gtpath, "w", encoding='utf-8') as f:
+                        f.write(gt) 
+
 
 
                     if self.parameter['textequiv_level'] == 'glyph':
@@ -172,21 +151,16 @@ class OcropyRecognize(Processor):
                             final_img = resize_keep_ratio(bin_image)
 
                             #save temp image
-                            imgpath = os.path.join(filepath, 'temp/temp.png')
+                            imgpath = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id) + str(word.id) +'.png')
                             final_img.save(imgpath)
 
-                            #process ocropy
-                            ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
+                            filelist.append(imgpath)
 
-                            word.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
-                            print(ocropyoutput)
+                            #ground truth
+                            gt = word.get_TextEquiv()[0].Unicode.strip()
+                            with open(gtpath, "w", encoding='utf-8') as f:
+                                f.write(gt) 
+        
 
-
-            ID = concat_padded(self.output_file_grp, n)
-            self.add_output_file(
-                ID=ID,
-                file_grp=self.output_file_grp,
-                basename=ID + '.xml',
-                mimetype=MIMETYPE_PAGE,
-                content=to_xml(pcgts),
-            )
+        rtrain(filelist, modelpath, outputpath)
+        deletefiles(filelist)
