@@ -27,7 +27,7 @@
 
 
 from collections import defaultdict
-import unicodedata
+import unicodedata, sys
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -718,10 +718,14 @@ def make_target(cs,nc):
     a `1` in each column and time step corresponding to the
     target class."""
     result = np.zeros((2*len(cs)+1,nc))
-    for i,j in enumerate(cs):
-        result[2*i,0] = 1.0
-        result[2*i+1,j] = 1.0
-    result[-1,0] = 1.0
+    try:
+        for i,j in enumerate(cs):
+            result[2*i,0] = 1.0
+            result[2*i+1,j] = 1.0
+        result[-1,0] = 1.0
+    except(IndexError):
+        print('\n!!! Uuups, something went wrong !!!\nDid you import a model that was trained on less characters then needed for this operation?')
+        sys.exit(1)
     return result
 
 def translate_back0(outputs,threshold=0.25):
