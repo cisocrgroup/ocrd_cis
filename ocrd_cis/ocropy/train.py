@@ -73,22 +73,32 @@ class OcropyTrain(Processor):
         Performs the training
         """
         #print(self.parameter)
-        if self.parameter['textequiv_level'] not in ['line', 'glyph']:
+        if self.parameter['textequiv_level'] not in ['line', 'word', 'glyph']:
             raise Exception("currently only implemented at the line/glyph level")
         
         filepath = os.path.dirname(os.path.abspath(__file__))
 
 
+            
+
         if 'model' in self.parameter:
             model = self.parameter['model']
             modelpath = filepath + '/models/' + model + '.gz'
             outputpath = filepath + '/output/' + model
+            if 'outputpath' in self.parameter:
+                outputpath = self.parameter + '/' + model
             if os.path.isfile(modelpath) == False:
                 raise Exception("configured model " + model + " is not in models folder")
                 sys.exit(1)
         else:
             modelpath = None
-            outputpath = filepath + '/output/' + 'output'
+            outputpath = filepath + '/output/' + 'lstm'
+            if 'outputpath' in self.parameter:
+                outputpath = self.parameter + '/' +'lstm'
+
+        if 'ntrain' in self.parameter:
+            ntrain = self.parameter['ntrain']
+
 
 
         filelist = []
@@ -105,62 +115,97 @@ class OcropyTrain(Processor):
                 textlines = region.get_TextLine()
                 self.log.info("About to recognize text in %i lines of region '%s'", len(textlines), region.id)
                 for line in textlines:
-                    self.log.debug("Recognizing text in line '%s'", line.id)
-                    
-                    #get box from points
-                    box = bounding_box(line.get_Coords().points)
+
+                    if self.parameter['textequiv_level'] == 'line':
+                        self.log.debug("Recognizing text in line '%s'", line.id)
                         
-                    #crop word from page
-                    croped_image = pil_image.crop(box=box)
-
-                    #binarize with Otsu's thresholding after Gaussian filtering
-                    bin_image = binarize(croped_image)
-
-                    #resize image to 48 pixel height
-                    final_img = resize_keep_ratio(bin_image)
-
-                    #save temp image
-                    path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id))
-                    imgpath = path + '.png'
-                    final_img.save(imgpath)
-
-                    filelist.append(imgpath)
-
-                    #ground truth
-                    gt = line.get_TextEquiv()[0].Unicode.strip()
-                    gtpath = path + '.gt.txt'
-                    with open(gtpath, "w", encoding='utf-8') as f:
-                        f.write(gt) 
-
-
-
-                    if self.parameter['textequiv_level'] == 'glyph':
-                        for word in line.get_Word():
-                            self.log.debug("Recognizing text in word '%s'", word.id)
-
-                            #get box from points
-                            box = bounding_box(word.get_Coords().points)
+                        #get box from points
+                        box = bounding_box(line.get_Coords().points)
                             
-                            #crop word from page
-                            croped_image = pil_image.crop(box=box)
+                        #crop word from page
+                        croped_image = pil_image.crop(box=box)
 
-                            #binarize with Otsu's thresholding after Gaussian filtering
-                            bin_image = binarize(croped_image)
+                        #binarize with Otsu's thresholding after Gaussian filtering
+                        bin_image = binarize(croped_image)
 
-                            #resize image to 48 pixel height
-                            final_img = resize_keep_ratio(bin_image)
+                        #resize image to 48 pixel height
+                        final_img = resize_keep_ratio(bin_image)
 
-                            #save temp image
-                            imgpath = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id) + str(word.id) +'.png')
-                            final_img.save(imgpath)
+                        #save temp image
+                        path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id))
+                        imgpath = path + '.png'
+                        final_img.save(imgpath)
 
-                            filelist.append(imgpath)
+                        filelist.append(imgpath)
 
-                            #ground truth
-                            gt = word.get_TextEquiv()[0].Unicode.strip()
-                            with open(gtpath, "w", encoding='utf-8') as f:
-                                f.write(gt) 
+                        #ground truth
+                        gt = line.get_TextEquiv()[0].Unicode.strip()
+                        gtpath = path + '.gt.txt'
+                        with open(gtpath, "w", encoding='utf-8') as f:
+                            f.write(gt) 
+
+
+
+                    if self.parameter['textequiv_level'] == 'word' or 'glyph':
+                        for word in line.get_Word():
+
+                            if self.parameter['textequiv_level'] == 'word':
+                                self.log.debug("Recognizing text in word '%s'", word.id)
+
+                                #get box from points
+                                box = bounding_box(word.get_Coords().points)
+                                
+                                #crop word from page
+                                croped_image = pil_image.crop(box=box)
+
+                                #binarize with Otsu's thresholding after Gaussian filtering
+                                bin_image = binarize(croped_image)
+
+                                #resize image to 48 pixel height
+                                final_img = resize_keep_ratio(bin_image)
+
+                                #save temp image
+                                path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id) + str(word.id))
+                                imgpath = path + '.png'
+                                final_img.save(imgpath)
+
+                                filelist.append(imgpath)
+
+                                #ground truth
+                                gt = word.get_TextEquiv()[0].Unicode.strip()
+                                gtpath = path + '.gt.txt'
+
+                                with open(gtpath, "w", encoding='utf-8') as f:
+                                    f.write(gt)
+
+                            else:
+                                for glyph in word.get_Glyph():
+                                    self.log.debug("Recognizing text in glyph '%s'", glyph.id)
+
+                                    #get box from points
+                                    box = bounding_box(glyph.get_Coords().points)
+                                    
+                                    #crop word from page
+                                    croped_image = pil_image.crop(box=box)
+
+                                    #binarize with Otsu's thresholding after Gaussian filtering
+                                    bin_image = binarize(croped_image)
+
+                                    #resize image to 48 pixel height
+                                    final_img = resize_keep_ratio(bin_image)
+
+                                    #save temp image
+                                    path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id) + str(word.id) + str(glyph.id))
+                                    imgpath = path + '.png'
+                                    final_img.save(imgpath)
+
+                                    filelist.append(imgpath)
+
+                                    #ground truth
+                                    gt = glyph.get_TextEquiv()[0].Unicode.strip()
+                                    with open(gtpath, "w", encoding='utf-8') as f:
+                                        f.write(gt)
         
 
-        rtrain(filelist, modelpath, outputpath)
+        rtrain(filelist, modelpath, outputpath, ntrain)
         deletefiles(filelist)

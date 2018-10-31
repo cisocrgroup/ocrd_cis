@@ -60,6 +60,30 @@ ocrd-cis-align \
   --parameter file:///path/to/config.json
 ```
 
+
+### ocrd-cis-ocropy-train
+The ocropy-train tool can be used to train lstm models.
+The tool takes the ground truth from a workspace and safes the snippets from the corresponding page.
+Then the model is trained on all snippets for 1 million randomized iterations or the given number from the parameter file.
+```sh
+ocrd-cis-ocropy-train \
+  --input-file-grp 'OCR-D-XML' \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
+### ocrd-cis-ocropy-recognize
+The ocropy-recognize tool can be used to recognize lines / words / glyphs from pages of a workspace.
+The tool runs the ocropy optical character recognition for each "region" given in the XML file of the workspace.
+```sh
+ocrd-cis-ocropy-recognize \
+  --input-file-grp 'OCR-D-XML' \
+  --ouput-file-grp 'OCR-D-OCROPY' \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
+
 ## OCR-D links
 
 - [OCR-D](https://ocr-d.github.io)

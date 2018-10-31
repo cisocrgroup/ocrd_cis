@@ -30,7 +30,7 @@
 					"parameters": {
 						"textequiv_level": {
 							"type": "string",
-							"enum": ["page", "region", "line", "word", "glyph"],
+							"enum": ["line", "word", "glyph"],
 							"default": "line"
 						  },
 						  "model": {
@@ -51,12 +51,21 @@
 					"parameters": {
 						"textequiv_level": {
 							"type": "string",
-							"enum": ["page", "region", "line", "word", "glyph"],
+							"enum": ["line", "word", "glyph"],
 							"default": "line"
 						  },
 						  "model": {
 							"type": "string",
 							"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+						  },
+						  "ntrain": {
+							"type": "integer",
+							"description": "lines to train before stopping",
+							"default": 1000000
+						  },
+						  "outputpath": {
+							"type": "string",
+							"description": "(existing) path for the trained model" 
 						  }
 					}
 				},

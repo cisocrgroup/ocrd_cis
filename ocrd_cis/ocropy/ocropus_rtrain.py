@@ -15,7 +15,7 @@ from ocrd_cis.ocropy.ocrolib import lstm, lineest
 
 
 
-def rtrain(inputs, load, output):
+def rtrain(inputs, load, output, ntrain):
 
     #defaultvalues
     #extra blank padding to the left and right of text line, default: 16
@@ -29,9 +29,6 @@ def rtrain(inputs, load, output):
 
     #LSTM learning rate, default: 1e-4
     lrate=0.0001
-
-    # Number of lines to train before stopping, default: 1000000
-    ntrain=1000000
     
     quiet=False
 

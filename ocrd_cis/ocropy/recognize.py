@@ -66,8 +66,20 @@ def process1(arg):
 
     line = lstm.prepare_line(line,pad)
     pred = network.predictString(line)
-    return str(pred)
 
+
+    # getting confidence
+    result = lstm.translate_back(network.outputs,pos=1)
+    scale = len(raw_line.T)*1.0/(len(network.outputs)-2*pad)
+    for r,c in result:
+        if c == 0:
+            confid = network.outputs[r,c]
+            c = network.l2s([c])
+            r = (r-pad)*scale
+        else:
+            confid = 0
+
+    return str(pred), confid
 
 
 
@@ -86,7 +98,7 @@ class OcropyRecognize(Processor):
         Performs the (text) recognition.
         """
         #print(self.parameter)
-        if self.parameter['textequiv_level'] not in ['line', 'glyph']:
+        if self.parameter['textequiv_level'] not in ['line', 'word', 'glyph']:
             raise Exception("currently only implemented at the line/glyph level")
         
         filepath = os.path.dirname(os.path.abspath(__file__))
@@ -113,9 +125,6 @@ class OcropyRecognize(Processor):
 
         pad=16   #default: 16
         parallel=0
-        # height=48
-        # if height>0:
-        #     lnorm.setHeight(height)
 
         #self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
@@ -128,6 +137,8 @@ class OcropyRecognize(Processor):
             for region in pcgts.get_Page().get_TextRegion():
                 textlines = region.get_TextLine()
                 self.log.info("About to recognize text in %i lines of region '%s'", len(textlines), region.id)
+
+
                 for line in textlines:
                     self.log.debug("Recognizing text in line '%s'", line.id)
                     
@@ -147,16 +158,18 @@ class OcropyRecognize(Processor):
                     imgpath = os.path.join(filepath, 'temp/temp.png')
                     final_img.save(imgpath)
 
-                    #process ocropy
-                    ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
+                     #process ocropy
+                    ocropyoutput, confidence = process1([imgpath,parallel,pad,lnorm,network])
 
                     line.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
                     print(ocropyoutput)
                     deletefile(imgpath)        
+                    
+                    wordconflist = []
+                    linewords = line.get_Word()
 
-
-                    if self.parameter['textequiv_level'] == 'glyph':
-                        for word in line.get_Word():
+                    for wnum, word in enumerate(linewords):
+                        if self.parameter['textequiv_level'] == 'word':
                             self.log.debug("Recognizing text in word '%s'", word.id)
 
                             #get box from points
@@ -176,10 +189,59 @@ class OcropyRecognize(Processor):
                             final_img.save(imgpath)
 
                             #process ocropy
-                            ocropyoutput = process1([imgpath,parallel,pad,lnorm,network])
+                            ocropyoutput, confidence = process1([imgpath,parallel,pad,lnorm,network])
 
                             word.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
+
                             print(ocropyoutput)
+
+
+                        glyphconflist = []
+                        wordglyphs = word.get_Glyph()
+
+
+                        for gnum, glyph in enumerate(wordglyphs):
+                            if self.parameter['textequiv_level'] == 'glyph':
+                                self.log.debug("Recognizing text in glyph '%s'", glyph.id)
+
+                            #get box from points
+                            box = bounding_box(glyph.get_Coords().points)
+                            
+                            #crop word from page
+                            croped_image = pil_image.crop(box=box)
+
+                            #binarize with Otsu's thresholding after Gaussian filtering
+                            bin_image = binarize(croped_image)
+
+                            #resize image to 48 pixel height
+                            final_img = resize_keep_ratio(bin_image)
+
+                            #save temp image
+                            imgpath = os.path.join(filepath, 'temp/temp.png')
+                            final_img.save(imgpath)
+
+                            #process ocropy
+                            ocropyoutput, confidence = process1([imgpath,parallel,pad,lnorm,network])
+
+                            if self.parameter['textequiv_level'] == 'glyph':
+
+                                glyph.add_TextEquiv(TextEquivType(Unicode=ocropyoutput))
+                                glyph.add_TextEquiv(TextEquivType(conf=confidence))
+
+                            glyphconflist.append(confidence)
+
+                            if gnum == len(wordglyphs)-1 and glyphconflist != []:
+                                wordconf = (min(glyphconflist) + max(glyphconflist))/2
+                                word.add_TextEquiv(TextEquivType(conf=wordconf))
+                                wordconflist.append(wordconf)
+
+                            if wnum == len(linewords)-1 and wordconflist != []:
+                                lineconf = (min(wordconflist) + max(wordconflist))/2
+                                line.add_TextEquiv(TextEquivType(conf=lineconf))
+
+
+                            print(ocropyoutput)
+
 
 
             ID = concat_padded(self.output_file_grp, n)
