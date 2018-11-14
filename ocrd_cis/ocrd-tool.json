@@ -2,6 +2,16 @@
 		"git_url": "https://github.com/cisocrgroup/cis-ocrd-py",
 		"version": "0.0.1",
 		"tools": {
+				"ocrd-cis-aio": {
+					"executable": "ocrd-cis-aio",
+					"categories": [
+							"Text recognition and optimization"
+					],
+					"steps": [
+							"postprocessing/alignment/recognition"
+					],
+					"description": "All in One Tool"
+				},
 				"ocrd-cis-align": {
 						"executable": "ocrd-cis-align",
 						"categories": [
