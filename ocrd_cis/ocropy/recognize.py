@@ -225,13 +225,18 @@ class OcropyRecognize(Processor):
                     word_conf_list[w_no].append(confidlist[i])
                     word_r_list[w_no].append(rlist[i])
 
-                if c == ' ' and i+1<= len(clist)+1 and clist[i+1] != ' ':    
+                if c == ' ' and i+1<= len(clist)+1 and clist[i+1] != ' ' and i!=0:    
                     word_conf_list.append([])
                     word_r_list.append([rlist[i]])
                     w_no += 1
+                
+                if c == ' ' and i==0:
+                    word_r_list[0][0] = rlist[i]
 
             #conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]
+
+
 
 
             #conf for the line

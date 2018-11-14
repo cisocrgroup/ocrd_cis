@@ -56,7 +56,8 @@ according output file group and the url of the configuration file:
 ```sh
 ocrd-cis-align \
   --input-file-grp 'ocr1,ocr2,gt' \
-  --ouput-file-grp 'ocr1+ocr2+gt' \
+  --output-file-grp 'ocr1+ocr2+gt' \
+  --mets mets.xml \
   --parameter file:///path/to/config.json
 ```
 
@@ -78,7 +79,7 @@ The tool runs the ocropy optical character recognition for each "region" given i
 ```sh
 ocrd-cis-ocropy-recognize \
   --input-file-grp 'OCR-D-XML' \
-  --ouput-file-grp 'OCR-D-OCROPY' \
+  --output-file-grp 'OCR-D-OCROPY' \
   --mets mets.xml
   --parameter file:///path/to/config.json
 ```

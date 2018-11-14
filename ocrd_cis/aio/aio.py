@@ -205,8 +205,3 @@ class AllInOne():
     configdir = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/config/align.json'
     runalligner(workspacepath,configdir,model1,model2)
 
-ocrd-cis-align \
---input-file-grp 'OCR-D-TESSER,OCR-D-OCROPY-en-default.pyrnn,OCR-D-OCROPY-fraktur.pyrnn,OCR-D-GT' \
---output-file-grp 'OCR-D-TESSER+OCR-D-OCROPY-en-default.pyrnn+OCR-D-OCROPY-fraktur.pyrnn+OCR-D-GT' \
---mets {mets}/mets.xml \
---parameter {parameter}
