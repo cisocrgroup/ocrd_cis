@@ -142,15 +142,15 @@ class OcropyRecognize(Processor):
             pcgts = from_file(self.workspace.download_file(input_file))
             pil_image = self.workspace.resolve_image_as_pil(pcgts.get_Page().imageFilename)
 
-            metadata = pcgts.get_Metadata() # ensured by from_file()
-            metadata.add_MetadataItem(
-                MetadataItemType(type_="processingStep",
-                                    name=self.ocrd_tool['tools']['cis-ocrd-ocropy-recognize']['steps'][0],
-                                    value='ocrd-cis-ocropy-recognize',
-                                    Labels=[LabelsType(externalRef="parameters",
-                                                    Label=[LabelType(type_=name,
-                                                                        value=self.parameter[name])
-                                                            for name in self.parameter.keys()])]))
+            # metadata = pcgts.get_Metadata() # ensured by from_file()
+            # metadata.add_MetadataItem(
+            #     MetadataItemType(type_="processingStep",
+            #                         name=self.ocrd_tool['tools']['cis-ocrd-ocropy-recognize']['steps'][0],
+            #                         value='ocrd-cis-ocropy-recognize',
+            #                         Labels=[LabelsType(externalRef="parameters",
+            #                                         Label=[LabelType(type_=name,
+            #                                                             value=self.parameter[name])
+            #                                                 for name in self.parameter.keys()])]))
 
 
             self.log.info("Recognizing text in page '%s'", pcgts.get_pcGtsId())

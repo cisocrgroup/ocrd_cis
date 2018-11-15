@@ -34,7 +34,7 @@
 							"Text recognition and optimization"
 					],
 					"steps": [
-							"postprocessing/alignment"
+							"recognition/text-recognition"
 					],
 					"description": "Recognize text in lines with ocropy",
 					"parameters": {

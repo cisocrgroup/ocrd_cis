@@ -147,8 +147,8 @@ def runalligner(wsdir,configdir,model1,model2):
     print('run aligner')
     allingercmd = '''
     ocrd-cis-align \
-    --input-file-grp 'OCR-D-TESSER,OCR-D-OCROPY-{model1},OCR-D-OCROPY-{model2},OCR-D-GT' \
-    --output-file-grp 'OCR-D-TESSER+OCR-D-OCROPY-{model1}+OCR-D-OCROPY-{model2}+OCR-D-GT' \
+    --input-file-grp 'OCR-D-GT,OCR-D-TESSER,OCR-D-OCROPY-{model1},OCR-D-OCROPY-{model2}' \
+    --output-file-grp 'OCR-D-GT+OCR-D-TESSER+OCR-D-OCROPY-{model1}+OCR-D-OCROPY-{model2}' \
     --mets {mets}/mets.xml \
     --parameter {parameter}
     '''.format(model1 = model1, model2=model2, mets = wsdir, parameter = configdir)
@@ -203,5 +203,32 @@ class AllInOne():
 
 
     configdir = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/config/align.json'
-    runalligner(workspacepath,configdir,model1,model2)
 
+
+    #rename filepaths in xml into file-urls
+    # import re
+
+    # newText = ''
+    # with open(workspacepath+'/mets.xml', 'rt') as f:
+    
+    #     text=f.read()
+    #     newText = text
+    #     filepath = ''
+
+    #     for line in text:
+    #         idline = re.match(r".*ID=\"(?P<fileid>OCR-D-GT.+)\">", line)
+    #         replaceline = re.match(r"(?P<first>.*xlink:href=\".+workspace/)(?P<middle>.+OCR.D.GT.*)(?P<end>.xml.+)", line)
+
+    #         if idline:
+    #             filepath = idline.group('fileid')
+    #             print(filepath)
+    #         if replaceline:
+    #             newline = replaceline.group('first') + filepath + replaceline.group('end')
+    #             print(newline)
+    #             newtext = newText.replace(line, newline)
+    
+    # with open(workspacepath+'/mets.xml', "w") as f:
+    #     f.write(newText)
+
+    
+    runalligner(workspacepath,configdir,model1,model2)
