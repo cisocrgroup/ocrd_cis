@@ -10,7 +10,25 @@
 					"steps": [
 							"postprocessing/alignment/recognition"
 					],
-					"description": "All in One Tool"
+					"description": "All in One Tool",
+					"parameters": {
+						"tesserparampath": {
+								"type": "string",
+								"required": true
+						},
+						"ocropyparampath1": {
+							"type": "string",
+							"required": true
+						},
+						"ocropyparampath2": {
+							"type": "string",
+							"required": true
+						},
+						"alignparampath": {
+							"type": "string",
+							"required": true
+						}
+				}
 				},
 				"ocrd-cis-align": {
 						"executable": "ocrd-cis-align",

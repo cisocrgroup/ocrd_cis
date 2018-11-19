@@ -1,4 +1,4 @@
-import os, json
+import os, json, sys
 import shutil
 import subprocess
 from zipfile import ZipFile
@@ -28,7 +28,27 @@ def subprocess_cmd(command):
     out, err = process.communicate(command.encode('utf-8'))
     print(out.decode('utf-8'))
 
+def wgetGT():
+    print('updating zip file into current folder')
+    gtlink = 'http://www.ocr-d.de/sites/all/GTDaten/IndexGT.html'
+    wgetcmd = '''
+    wget -r -np -l1 -nd -N -A zip -erobots=off {link}
+    '''.format(link = gtlink)
+    subprocess_cmd(wgetcmd)
 
+def printStats(gtdir):
+    path, dirs, files = os.walk(gtdir).__next__()
+    books, pages = 0, 0
+    for file in files:
+        if '.zip' in file:
+            books += 1
+            with ZipFile(file, 'r') as zip: 
+                zipinfo = zip.namelist()
+                for elem in zipinfo:
+                    if '.tif' in elem:
+                        pages +=1
+
+    print('files: ' + str(books) + ' - pages: ' + str(pages))
 
 
 def addtoworkspace(wsdir, gtdir):
@@ -156,79 +176,51 @@ def runalligner(wsdir,configdir,model1,model2):
 
 
 
-def getValidInput(actualfolder):
-    inp = input()
-    if inp == 'y':
-        return actualfolder + '/workspace'
-    elif inp == 'n':
-        print('enter a valid path for your workspace')
-        return input()
-    else:
-        print('y/n ?')
-        return getValidInput(actualfolder)
 
 
 
+def AllInOne(actualfolder, parameterfile):
+
+    if parameterfile == None:
+        print('A Parameterfile is mandatory')
+    with open(parameterfile) as f:
+        parameter = json.load(f)
+    
+    try:
+        tesserpar = parameter['tesserparampath']
+        ocropar1 = parameter['ocropyparampath1']
+        ocropar2 = parameter['ocropyparampath2']
+        alignpar = parameter['alignparampath']    
+    except(KeyError):
+        print('The parameter file is not complete')
+        sys.exit(1)
 
 
-class AllInOne():
+    #wget gt zip files (only downloads new zip files)
+    wgetGT()
 
-    actualfolder = os.getcwd()
-    print(actualfolder)
-    print('create workspace in same path? y/n:')
-    workspacepath = getValidInput(actualfolder)
+    printStats(actualfolder)
+
+    workspacepath = actualfolder + '/workspace'
 
     #create Workspace
     addtoworkspace(workspacepath, actualfolder)
 
 
     #recognize Text with Tesserocr
-    configdir = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/config/deu-frak.json'
-    runtesserocr(workspacepath, configdir)
+    runtesserocr(workspacepath, tesserpar)
 
 
     #recognize Text with Ocropy model 1
-    configdir = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/config/ocropy2.json'
-    with open(configdir) as f:
+    with open(ocropar1) as f:
         config = json.load(f)
     model1 = config['model']    
-    runocropy(workspacepath, configdir)
+    runocropy(workspacepath, ocropar1)
 
     #recognize Text with Ocropy model 2
-    configdir = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/config/ocropy.json'
-    with open(configdir) as f:
+    with open(ocropar2) as f:
         config = json.load(f)
     model2 = config['model']    
-    runocropy(workspacepath, configdir)
+    runocropy(workspacepath, ocropar2)
 
-
-    configdir = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/config/align.json'
-
-
-    #rename filepaths in xml into file-urls
-    # import re
-
-    # newText = ''
-    # with open(workspacepath+'/mets.xml', 'rt') as f:
-    
-    #     text=f.read()
-    #     newText = text
-    #     filepath = ''
-
-    #     for line in text:
-    #         idline = re.match(r".*ID=\"(?P<fileid>OCR-D-GT.+)\">", line)
-    #         replaceline = re.match(r"(?P<first>.*xlink:href=\".+workspace/)(?P<middle>.+OCR.D.GT.*)(?P<end>.xml.+)", line)
-
-    #         if idline:
-    #             filepath = idline.group('fileid')
-    #             print(filepath)
-    #         if replaceline:
-    #             newline = replaceline.group('first') + filepath + replaceline.group('end')
-    #             print(newline)
-    #             newtext = newText.replace(line, newline)
-    
-    # with open(workspacepath+'/mets.xml', "w") as f:
-    #     f.write(newText)
-
-    
-    runalligner(workspacepath,configdir,model1,model2)
+    runalligner(workspacepath,alignpar,model1,model2)
