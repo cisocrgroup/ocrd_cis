@@ -97,7 +97,7 @@ class OcropyRecognize(Processor):
 
     def __init__(self, *args, **kwargs):
         self.ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = self.ocrd_tool['tools']['cis-ocrd-ocropy-recognize']
+        kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-recognize']
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
         self.log = getLogger('OcropyRecognize')
@@ -178,7 +178,7 @@ class OcropyRecognize(Processor):
 
     def process_regions(self, regions, maxlevel, args):
         for region in regions:
-            self.log.debug("Recognizing text in region '%s'", region.id)
+            self.log.info("Recognizing text in region '%s'", region.id)
 
 
             textlines = region.get_TextLine()
@@ -192,7 +192,7 @@ class OcropyRecognize(Processor):
         lnorm, network, pil_image, filepath, pad = args
 
         for line in textlines:
-            self.log.debug("Recognizing text in line '%s'", line.id)
+            self.log.info("Recognizing text in line '%s'", line.id)
             
             #get box from points
             box = bounding_box(line.get_Coords().points)
@@ -225,13 +225,16 @@ class OcropyRecognize(Processor):
                     word_conf_list[w_no].append(confidlist[i])
                     word_r_list[w_no].append(rlist[i])
 
-                if c == ' ' and i+1<= len(clist)+1 and clist[i+1] != ' ' and i!=0:    
-                    word_conf_list.append([])
-                    word_r_list.append([rlist[i]])
-                    w_no += 1
+                if c == ' ':
+                    if i==0:
+                        word_r_list[0][0] = rlist[i]
+
+                    elif i+1<= len(clist)-1 and clist[i+1] != ' ':    
+                        word_conf_list.append([])
+                        word_r_list.append([rlist[i]])
+                        w_no += 1
                 
-                if c == ' ' and i==0:
-                    word_r_list[0][0] = rlist[i]
+
 
             #conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]

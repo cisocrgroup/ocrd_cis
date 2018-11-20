@@ -18,9 +18,11 @@ def unpack(fromdir, todir):
 
     path, dirs, files = os.walk(fromdir).__next__()
     for file in files:
-        filedir = os.path.join(fromdir, file)
-        with ZipFile(filedir, 'r') as myzip:
-            myzip.extractall(todir)
+        if '.zip' in file:
+            filedir = os.path.join(fromdir, file)
+            with ZipFile(filedir, 'r') as myzip:
+                myzip.extractall(todir)
+
 
 
 def subprocess_cmd(command):
@@ -61,7 +63,7 @@ def addtoworkspace(wsdir, gtdir):
     #workspace id (optional)
     #wsid = argv[3]
 
-    tempdir = gtdir + 'temp'
+    tempdir = gtdir + '/temp'
     fileprefix = 'file://'
 
 
@@ -69,6 +71,7 @@ def addtoworkspace(wsdir, gtdir):
     unpack(gtdir, tempdir)
 
     os.chdir(wsdir)
+
 
     initcmd = 'ocrd workspace init {}'.format(wsdir)
     subprocess_cmd(initcmd)
@@ -80,7 +83,11 @@ def addtoworkspace(wsdir, gtdir):
     #walk through unpacked zipfiles and add tifs and xmls to workspace
     path, dirs, files = os.walk(tempdir).__next__()
     for d in dirs:
+
         filedir = os.path.join(tempdir, d, d)
+        if not os.path.exists(filedir):
+            filedir = os.path.join(tempdir, d)
+
         path2, dirs2, tiffiles = os.walk(filedir).__next__()
 
         for tif in tiffiles:
@@ -180,6 +187,8 @@ def runalligner(wsdir,configdir,model1,model2):
 
 
 def AllInOne(actualfolder, parameterfile):
+
+    os.chdir(actualfolder)
 
     if parameterfile == None:
         print('A Parameterfile is mandatory')

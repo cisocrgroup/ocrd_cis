@@ -62,7 +62,7 @@ class OcropyTrain(Processor):
 
     def __init__(self, *args, **kwargs):
         ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = ocrd_tool['tools']['cis-ocrd-ocropy-train']
+        kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-ocropy-train']
         kwargs['version'] = ocrd_tool['version']
         super(OcropyTrain, self).__init__(*args, **kwargs)
         self.log = getLogger('OcropyTrain')
