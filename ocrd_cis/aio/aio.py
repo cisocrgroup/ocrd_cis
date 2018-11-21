@@ -1,6 +1,7 @@
 import os, json, sys
 import shutil
 import subprocess
+from ocrd.utils import getLogger
 from zipfile import ZipFile
 
 '''
@@ -12,6 +13,7 @@ All in One Tool for:
 '''
 
 
+log = getLogger('cis.Processor.AIO')
 
 def unpack(fromdir, todir):
     #extract all zips into temp dir
@@ -31,11 +33,12 @@ def subprocess_cmd(command):
     print(out.decode('utf-8'))
 
 def wgetGT():
-    print('updating zip file into current folder')
+    log.info('updating zip file into current folder')
     gtlink = 'http://www.ocr-d.de/sites/all/GTDaten/IndexGT.html'
     wgetcmd = '''
     wget -r -np -l1 -nd -N -A zip -erobots=off {link}
     '''.format(link = gtlink)
+    log.debug('running: ' + wgetcmd)
     subprocess_cmd(wgetcmd)
 
 def printStats(gtdir):
@@ -44,13 +47,13 @@ def printStats(gtdir):
     for file in files:
         if '.zip' in file:
             books += 1
-            with ZipFile(file, 'r') as zip: 
+            with ZipFile(file, 'r') as zip:
                 zipinfo = zip.namelist()
                 for elem in zipinfo:
                     if '.tif' in elem:
                         pages +=1
 
-    print('files: ' + str(books) + ' - pages: ' + str(pages))
+    log.info('files: ' + str(books) + ' - pages: ' + str(pages))
 
 
 def addtoworkspace(wsdir, gtdir):
@@ -93,9 +96,9 @@ def addtoworkspace(wsdir, gtdir):
         for tif in tiffiles:
             if tif[-4:] == '.tif':
                 filename = tif[:-4]
-                
+
                 tifdir = os.path.join(filedir, tif)
-                xmldir = os.path.join(filedir, 'page', filename + '.xml') 
+                xmldir = os.path.join(filedir, 'page', filename + '.xml')
 
 
                 #add tif image to workspace
@@ -138,7 +141,7 @@ def addtoworkspace(wsdir, gtdir):
 
 
 def runtesserocr(wsdir,configdir):
-
+    logger
     #add xml to workspace
     filegrp = 'OCR-D-GT'
     tesserocrcmd = '''
@@ -171,7 +174,7 @@ def runocropy(wsdir,configdir):
 
 
 def runalligner(wsdir,configdir,model1,model2):
-    print('run aligner')
+    log.info('run aligner')
     allingercmd = '''
     ocrd-cis-align \
     --input-file-grp 'OCR-D-GT,OCR-D-TESSER,OCR-D-OCROPY-{model1},OCR-D-OCROPY-{model2}' \
@@ -191,17 +194,17 @@ def AllInOne(actualfolder, parameterfile):
     os.chdir(actualfolder)
 
     if parameterfile == None:
-        print('A Parameterfile is mandatory')
+        log.error('A Parameterfile is mandatory')
     with open(parameterfile) as f:
         parameter = json.load(f)
-    
+
     try:
         tesserpar = parameter['tesserparampath']
         ocropar1 = parameter['ocropyparampath1']
         ocropar2 = parameter['ocropyparampath2']
-        alignpar = parameter['alignparampath']    
+        alignpar = parameter['alignparampath']
     except(KeyError):
-        print('The parameter file is not complete')
+        log.error('The parameter file is not complete')
         sys.exit(1)
 
 
@@ -223,13 +226,13 @@ def AllInOne(actualfolder, parameterfile):
     #recognize Text with Ocropy model 1
     with open(ocropar1) as f:
         config = json.load(f)
-    model1 = config['model']    
+    model1 = config['model']
     runocropy(workspacepath, ocropar1)
 
     #recognize Text with Ocropy model 2
     with open(ocropar2) as f:
         config = json.load(f)
-    model2 = config['model']    
+    model2 = config['model']
     runocropy(workspacepath, ocropar2)
 
     runalligner(workspacepath,alignpar,model1,model2)
