@@ -1,0 +1,71 @@
+\begin{NoHyper}
+
+\begin{LARGE}
+\textbf{Planung:} OCRD Modulprojekt 3:
+\glqq Automatische Nachkorrektur historischer OCR-erfasster Drucke 
+mit integrierter optionaler interaktiver Nachkorrektur\grqq{} 
+\end{LARGE}
+
+\tableofcontents
+\end{NoHyper}
+
+\section{Stand der Implementierungen}
+
+\section{Meetings}
+\subsection {Kick-Off-Treffen 05.3 - 06.3 (Wolfenbüttel)}
+
+\begin{itemize}
+  \item \href{https://wiki.de.dariah.eu/pages/viewpage.action?pageId=64949522}{Offizielles Protokoll}
+  \item Schwerpunkt: Gemeinsame Datenformate (METS + PAGE) für Eingabe und Ausgabe.
+\end{itemize}
+
+\subsection {Videokonferenz  20.4}
+
+\begin{itemize}
+\item \href{https://wiki.de.dariah.eu/display/OCR/2018-04-20+Besprechungsnotizen}{Offizielles Protokoll
+}
+\item Stand des Modulprojekts erläutert.
+\item Vorstellung der OCRD-CLI Schnittstelle.
+\end{itemize}
+
+
+\subsection {1. Entwicklertreffen 26.6 - 27.6 (Berlin)}
+\begin{itemize}
+  \item \href{https://wiki.de.dariah.eu/display/OCR/1.+Entwickler-Workshop}{Offizielles Protokoll}
+  \item Schwerpunkt: Integration des Modulprojekts in OCRD Workflow / Workspace-Umgebung.
+  \item Diskussion mit Leipzig:  
+  \begin{itemize}
+    \item Wie können Alignierungsergebnisse gemeinsam genutzt werden ?
+      \begin{itemize}
+    \item PAGE.xml als Austauschformat für Alignierungen multipler OCR mit GT.
+    \item \texttt{Textequiv} zur Speicherung alternativer Alignierungen?
+    \end{itemize}
+	\item Gemeinsame Nutzung des neuronalen Sprachemodell
+    \item Verständigung auf baldiges Treffen in München zur weiteren gemeinsamen Abstimmung.
+  \end{itemize}
+  \item Gespräch mit Kay:
+  \begin{itemize}
+    \item Frage nach der Erstellung von (multipler) OCR zu Testzwecken.
+    \item Zeilenalignierung wird nicht benötigt, man kann davon ausgehen, dass Zeilen korrekt
+    zueinander aligniert sind.
+  \end{itemize}
+  
+\end{itemize}
+
+\subsection {Treffen mit Robert und Lena 07.8 - 08.8 (München)}
+\begin{itemize}
+\item \href{https://git.informatik.uni-leipzig.de/ls36hiqo/ocr-d/wikis/planung#7-8-august-2018-am-cis-in-m%C3%BCnchen-mit-florian-und-tobias}{Protokoll}
+
+\item Absprachen zum Format des PAGE.XMLs für Alignierung.
+\item Gemeinsame Nutzung PAGE-Adapters.
+\item Gemeinsame Nutzung der RNN Sprachmodelle.
+\end{itemize}
+\subsection {Videokonferenz  18.9}
+\begin{itemize}
+  \item \href{https://wiki.de.dariah.eu/display/OCR/2018-09-18+Besprechungsnotizen}{Offizielles Protokoll}
+  \item Vorstellung Stand + Rückmeldung über positive Erfahrungen mit OCRD-Core Anbindung.
+  \item Ansprechen der Problematik fehlender OCR-Beispieldaten für die Nachkorrektur.
+  
+\end{itemize}
+
+

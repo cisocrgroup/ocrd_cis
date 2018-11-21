@@ -2,6 +2,34 @@
 		"git_url": "https://github.com/cisocrgroup/cis-ocrd-py",
 		"version": "0.0.1",
 		"tools": {
+				"ocrd-cis-aio": {
+					"executable": "ocrd-cis-aio",
+					"categories": [
+							"Text recognition and optimization"
+					],
+					"steps": [
+							"postprocessing/alignment/recognition"
+					],
+					"description": "All in One Tool",
+					"parameters": {
+						"tesserparampath": {
+								"type": "string",
+								"required": true
+						},
+						"ocropyparampath1": {
+							"type": "string",
+							"required": true
+						},
+						"ocropyparampath2": {
+							"type": "string",
+							"required": true
+						},
+						"alignparampath": {
+							"type": "string",
+							"required": true
+						}
+				}
+				},
 				"ocrd-cis-align": {
 						"executable": "ocrd-cis-align",
 						"categories": [
@@ -17,6 +45,57 @@
 										"required": true
 								}
 						}
+				},
+				"ocrd-cis-ocropy-recognize": {
+					"executable": "ocrd-cis-ocropy-recognize",
+					"categories": [
+							"Text recognition and optimization"
+					],
+					"steps": [
+							"recognition/text-recognition"
+					],
+					"description": "Recognize text in lines with ocropy",
+					"parameters": {
+						"textequiv_level": {
+							"type": "string",
+							"enum": ["line", "word", "glyph"],
+							"default": "line"
+						  },
+						  "model": {
+							"type": "string",
+							"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+						  }
+					}
+				},
+				"cis-ocrd-ocropy-train": {
+					"executable": "ocrd-cis-ocropy-train",
+					"categories": [
+							"lstm ocropy model training"
+					],
+					"steps": [
+							"training"
+					],
+					"description": "train model with ground truth from mets data",
+					"parameters": {
+						"textequiv_level": {
+							"type": "string",
+							"enum": ["line", "word", "glyph"],
+							"default": "line"
+						  },
+						  "model": {
+							"type": "string",
+							"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+						  },
+						  "ntrain": {
+							"type": "integer",
+							"description": "lines to train before stopping",
+							"default": 1000000
+						  },
+						  "outputpath": {
+							"type": "string",
+							"description": "(existing) path for the trained model" 
+						  }
+					}
 				},
 				"ocrd-cis-profile": {
 						"executable": "ocrd-cis-profile",
@@ -45,6 +124,21 @@
 										"required": true
 								}
 						}
+				},
+				"ocrd-cis-stats": {
+					"executable": "ocrd-cis-stats",
+					"categories": [
+							"Text recognition and optimization"
+					],
+					"steps": [
+							"postprocessing/alignment"
+					],
+					"description": "Get Precision of aligned ocrs",
+					"parameters": {
+							"none": {
+									"type": "string"
+							}
+					}
 				}
 		}
 }
