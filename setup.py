@@ -5,6 +5,7 @@ Installs:
     - ocrd-cis-ocropy-recognize
     - ocrd-cis-ocropy-train
     - ocrd-cis-aio
+    - ocrd-cis-stats
 """
 
 from setuptools import setup
@@ -34,6 +35,7 @@ setup(
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_recognize',
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
             'ocrd-cis-aio=ocrd_cis.aio.cli:cis_ocrd_aio',
+            'ocrd-cis-stats=ocrd_cis.stats.cli:cis_ocrd_stats',
         ]
     },
 )

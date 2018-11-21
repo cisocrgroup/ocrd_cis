@@ -124,6 +124,21 @@
 										"required": true
 								}
 						}
+				},
+				"ocrd-cis-stats": {
+					"executable": "ocrd-cis-stats",
+					"categories": [
+							"Text recognition and optimization"
+					],
+					"steps": [
+							"postprocessing/alignment"
+					],
+					"description": "Get Precision of aligned ocrs",
+					"parameters": {
+							"none": {
+									"type": "string"
+							}
+					}
 				}
 		}
 }
