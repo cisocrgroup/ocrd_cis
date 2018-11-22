@@ -35,7 +35,7 @@ def subprocess_cmd(command):
               .format(cmd=command, c=returncode))
 
 
-    def wgetGT():
+def wgetGT():
     print('updating zip file into current folder')
     gtlink = 'http://www.ocr-d.de/sites/all/GTDaten/IndexGT.html'
     wgetcmd = '''
