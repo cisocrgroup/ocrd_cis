@@ -1,4 +1,6 @@
-import os, json, sys
+import os
+import json
+import sys
 import shutil
 import subprocess
 from zipfile import ZipFile
@@ -13,24 +15,28 @@ All in One Tool for:
 
 
 def unpack(fromdir, todir):
-    #extract all zips into temp dir
+    '''extract all zips into temp dir'''
     path, dirs, files = os.walk(fromdir).__next__()
     for file in files:
         if '.zip' in file:
             filedir = os.path.join(fromdir, file)
+            resdir = os.path.join(todir, file)
+            if os.path.isdir(resdir[0:-4]):
+                print("{dir} exists - skipping...".format(dir=resdir[0:-4]))
+                continue
             with ZipFile(filedir, 'r') as myzip:
                 print("unpacking {file} to {todir}"
                       .format(file=file, todir=todir))
                 myzip.extractall(todir)
 
 
-def subprocess_cmd(command):
+def subprocess_cmd(command, want=0):
     print("running {command}".format(command=command))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
     out, err = process.communicate(command.encode('utf-8'))
     print(out.decode('utf-8'))
     returncode = process.wait()
-    if returncode != 0:
+    if returncode != want:
         raise Exception("invalid returncode for {cmd}: {c}"
                         .format(cmd=command, c=returncode))
 
@@ -41,7 +47,7 @@ def wgetGT():
     wgetcmd = '''
     wget -r -np -l1 -nd -N -A zip -erobots=off {link}
     '''.format(link=gtlink)
-    subprocess_cmd(wgetcmd)
+    subprocess_cmd(wgetcmd, want=8)
 
 
 def printStats(gtdir):
@@ -59,33 +65,31 @@ def printStats(gtdir):
 
 
 def addtoworkspace(wsdir, gtdir):
-    #path to workspace
-    if wsdir[-1] != '/': wsdir += '/'
+    # path to workspace
+    if wsdir[-1] != '/':
+        wsdir += '/'
 
     if not os.path.exists(wsdir):
         os.makedirs(wsdir)
 
-    #workspace id (optional)
-    #wsid = argv[3]
+    # workspace id (optional)
+    # wsid = argv[3]
 
     tempdir = gtdir + '/temp'
     fileprefix = 'file://'
 
-
-    #unpack zip files into temp file
+    # unpack zip files into temp file
     unpack(gtdir, tempdir)
 
     os.chdir(wsdir)
 
-
     initcmd = 'ocrd workspace init {}'.format(wsdir)
     subprocess_cmd(initcmd)
 
-    #setidcmd = 'ocrd workspace set-id {}'.format(wsid)
-    #subprocess_cmd(setidcmd)
+    # setidcmd = 'ocrd workspace set-id {}'.format(wsid)
+    # subprocess_cmd(setidcmd)
 
-
-    #walk through unpacked zipfiles and add tifs and xmls to workspace
+    # walk through unpacked zipfiles and add tifs and xmls to workspace
     path, dirs, files = os.walk(tempdir).__next__()
     for d in dirs:
 
@@ -102,8 +106,7 @@ def addtoworkspace(wsdir, gtdir):
                 tifdir = os.path.join(filedir, tif)
                 xmldir = os.path.join(filedir, 'page', filename + '.xml')
 
-
-                #add tif image to workspace
+                # add tif image to workspace
                 filegrp = 'OCR-D-IMG'
                 mimetype = 'image/tif'
                 fileid = filegrp + '-' + filename
@@ -117,8 +120,7 @@ def addtoworkspace(wsdir, gtdir):
                                  mimetype=mimetype, fdir=tifdir)
                 subprocess_cmd(imgcmd)
 
-
-                #add xml to workspace
+                # add xml to workspace
                 filegrp = 'OCR-D-GT'
                 mimetype = 'application/vnd.prima.page+xml'
                 fileid = filegrp + '-' + filename
