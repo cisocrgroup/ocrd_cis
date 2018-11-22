@@ -1,7 +1,6 @@
 import os, json, sys
 import shutil
 import subprocess
-from ocrd.utils import getLogger
 from zipfile import ZipFile
 
 '''
@@ -13,32 +12,37 @@ All in One Tool for:
 '''
 
 
-log = getLogger('cis.Processor.AIO')
-
 def unpack(fromdir, todir):
     #extract all zips into temp dir
-    log.debug("unpacking {from} {to}".format(form=fromdir, to=todir))
     path, dirs, files = os.walk(fromdir).__next__()
     for file in files:
         if '.zip' in file:
             filedir = os.path.join(fromdir, file)
             with ZipFile(filedir, 'r') as myzip:
+                print("unpacking {file} to {todir}"
+                      .format(file=file, todir=todir))
                 myzip.extractall(todir)
 
 
 def subprocess_cmd(command):
-    log.debug("running {command}".format(command=command))
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True) #, executable='/bin/bash')
+    print("running {command}".format(command=command))
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
     out, err = process.communicate(command.encode('utf-8'))
-    log.info(out.decode('utf-8'))
+    print(out.decode('utf-8'))
+    returncode = process.wait()
+    if returncode != 0:
+        raise("invalid returncode for {cmd}: {c}"
+              .format(cmd=command, c=returncode))
 
-def wgetGT():
-    log.info('updating zip file into current folder')
+
+    def wgetGT():
+    print('updating zip file into current folder')
     gtlink = 'http://www.ocr-d.de/sites/all/GTDaten/IndexGT.html'
     wgetcmd = '''
     wget -r -np -l1 -nd -N -A zip -erobots=off {link}
-    '''.format(link = gtlink)
+    '''.format(link=gtlink)
     subprocess_cmd(wgetcmd)
+
 
 def printStats(gtdir):
     path, dirs, files = os.walk(gtdir).__next__()
@@ -51,7 +55,8 @@ def printStats(gtdir):
                 for elem in zipinfo:
                     if '.tif' in elem:
                         pages +=1
-    log.info('files: ' + str(books) + ' - pages: ' + str(pages))
+    print('files: ' + str(books) + ' - pages: ' + str(pages))
+
 
 def addtoworkspace(wsdir, gtdir):
     #path to workspace
@@ -108,8 +113,8 @@ def addtoworkspace(wsdir, gtdir):
                 --file-id {fileid} \
                 --group-id {grpid} \
                 --mimetype {mimetype} \
-                {fdir}'''.format(filegrp=filegrp, fileid=fileid, grpid=grpid, mimetype=mimetype, fdir=tifdir)
-
+                {fdir}'''.format(filegrp=filegrp, fileid=fileid, grpid=grpid,
+                                 mimetype=mimetype, fdir=tifdir)
                 subprocess_cmd(imgcmd)
 
 
@@ -123,22 +128,22 @@ def addtoworkspace(wsdir, gtdir):
                 --file-id {fileid} \
                 --group-id {grpid} \
                 --mimetype {mimetype} \
-                {fdir}'''.format(filegrp=filegrp, fileid=fileid, grpid=grpid, mimetype=mimetype, fdir=xmldir)
+                {fdir}'''.format(filegrp=filegrp, fileid=fileid, grpid=grpid,
+                                 mimetype=mimetype, fdir=xmldir)
                 subprocess_cmd(xmlcmd)
 
 
                 #rename filepaths in xml into file-urls
                 sedcmd = '''
                 sed -i {fname}.xml -e 's#imageFilename="{tif}"#imageFilename="{fdir}"#'
-                '''.format(fname=wsdir+'OCR-D-GT/'+filename, tif=tif, fdir=fileprefix+wsdir+'OCR-D-IMG/'+tif)
+                '''.format(fname=wsdir+'OCR-D-GT/'+filename, tif=tif,
+                           fdir=fileprefix+wsdir+'OCR-D-IMG/'+tif)
                 subprocess_cmd(sedcmd)
-
 
     shutil.rmtree(tempdir)
 
 
-def runtesserocr(wsdir,configdir):
-    logger
+def runtesserocr(wsdir, configdir):
     #add xml to workspace
     filegrp = 'OCR-D-GT'
     tesserocrcmd = '''
@@ -169,7 +174,7 @@ def runocropy(wsdir,configdir):
     subprocess_cmd(ocropycmd)
 
 def runalligner(wsdir,configdir,model1,model2):
-    log.info('run aligner')
+    print('run aligner')
     allingercmd = '''
     ocrd-cis-align \
     --input-file-grp 'OCR-D-GT,OCR-D-TESSER,OCR-D-OCROPY-{model1},OCR-D-OCROPY-{model2}' \
@@ -184,7 +189,7 @@ def AllInOne(actualfolder, parameterfile):
     os.chdir(actualfolder)
 
     if parameterfile == None:
-        log.error('A Parameterfile is mandatory')
+        print('A Parameterfile is mandatory')
     with open(parameterfile) as f:
         parameter = json.load(f)
 
@@ -194,7 +199,7 @@ def AllInOne(actualfolder, parameterfile):
         ocropar2 = parameter['ocropyparampath2']
         alignpar = parameter['alignparampath']
     except(KeyError):
-        log.error('The parameter file is not complete')
+        print('parameter file is not complete')
         sys.exit(1)
 
 
