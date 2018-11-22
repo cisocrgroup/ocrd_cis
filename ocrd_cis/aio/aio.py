@@ -17,7 +17,7 @@ log = getLogger('cis.Processor.AIO')
 
 def unpack(fromdir, todir):
     #extract all zips into temp dir
-
+    log.debug("unpacking {from} {to}".format(form=fromdir, to=todir))
     path, dirs, files = os.walk(fromdir).__next__()
     for file in files:
         if '.zip' in file:
@@ -26,11 +26,11 @@ def unpack(fromdir, todir):
                 myzip.extractall(todir)
 
 
-
 def subprocess_cmd(command):
+    log.debug("running {command}".format(command=command))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True) #, executable='/bin/bash')
     out, err = process.communicate(command.encode('utf-8'))
-    print(out.decode('utf-8'))
+    log.info(out.decode('utf-8'))
 
 def wgetGT():
     log.info('updating zip file into current folder')
@@ -38,7 +38,6 @@ def wgetGT():
     wgetcmd = '''
     wget -r -np -l1 -nd -N -A zip -erobots=off {link}
     '''.format(link = gtlink)
-    log.debug('running: ' + wgetcmd)
     subprocess_cmd(wgetcmd)
 
 def printStats(gtdir):
@@ -52,9 +51,7 @@ def printStats(gtdir):
                 for elem in zipinfo:
                     if '.tif' in elem:
                         pages +=1
-
     log.info('files: ' + str(books) + ' - pages: ' + str(pages))
-
 
 def addtoworkspace(wsdir, gtdir):
     #path to workspace
@@ -169,9 +166,7 @@ def runocropy(wsdir,configdir):
     --mets {mets}/mets.xml \
     --parameter {parameter}
     '''.format(model = model, mets = wsdir, parameter = configdir)
-
     subprocess_cmd(ocropycmd)
-
 
 def runalligner(wsdir,configdir,model1,model2):
     log.info('run aligner')
@@ -183,11 +178,6 @@ def runalligner(wsdir,configdir,model1,model2):
     --parameter {parameter}
     '''.format(model1 = model1, model2=model2, mets = wsdir, parameter = configdir)
     subprocess_cmd(allingercmd)
-
-
-
-
-
 
 def AllInOne(actualfolder, parameterfile):
 
