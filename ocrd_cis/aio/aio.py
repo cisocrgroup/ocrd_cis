@@ -54,7 +54,7 @@ def printStats(gtdir):
                 zipinfo = zip.namelist()
                 for elem in zipinfo:
                     if '.tif' in elem:
-                        pages +=1
+                        pages += 1
     print('files: ' + str(books) + ' - pages: ' + str(pages))
 
 
