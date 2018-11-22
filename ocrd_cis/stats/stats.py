@@ -31,8 +31,9 @@ class Stats(Processor):
         inputfiles = self.input_files
         for input_file in inputfiles:
 
-            index = input_file.url.rfind('/')
-            alignurl = input_file.url[:index] + '/' + self.input_file_grp + input_file.url[index:]
+            #index = input_file.url.rfind('/')
+            #alignurl = input_file.url[:index] + '/' + self.input_file_grp + input_file.url[index:]
+            alignurl = input_file.url
 
             pcgts = parse(alignurl, True)
 

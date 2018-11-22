@@ -44,7 +44,7 @@ def wgetGT():
     subprocess_cmd(wgetcmd)
 
 
-def printStats(gtdir):
+def getbaseStats(gtdir):
     path, dirs, files = os.walk(gtdir).__next__()
     books, pages = 0, 0
     for file in files:
@@ -55,7 +55,7 @@ def printStats(gtdir):
                 for elem in zipinfo:
                     if '.tif' in elem:
                         pages += 1
-    print('files: ' + str(books) + ' - pages: ' + str(pages))
+    return('files: ' + str(books) + ' - pages: ' + str(pages))
 
 
 def addtoworkspace(wsdir, gtdir):
@@ -179,11 +179,21 @@ def runalligner(wsdir, configdir, model1, model2):
     allingercmd = '''
     ocrd-cis-align \
     --input-file-grp 'OCR-D-GT,OCR-D-TESSER,OCR-D-OCROPY-{model1},OCR-D-OCROPY-{model2}' \
-    --output-file-grp 'OCR-D-GT+OCR-D-TESSER+OCR-D-OCROPY-{model1}+OCR-D-OCROPY-{model2}' \
+    --output-file-grp 'OCR-D-ALIGN' \
     --mets {mets}/mets.xml \
     --parameter {parameter}
     '''.format(model1=model1, model2=model2, mets=wsdir, parameter=configdir)
     subprocess_cmd(allingercmd)
+
+
+def getstats(wsdir):
+    inputfilegrp = 'OCR-D-ALIGN'
+    statscmd = '''
+    ocrd-cis-stats \
+    --input-file-grp '{inpgrp}' \
+    --mets {mets}/mets.xml
+    '''.format(inpgrp=inputfilegrp, mets=wsdir)
+    subprocess_cmd(statscmd)
 
 
 def AllInOne(actualfolder, parameterfile):
@@ -208,7 +218,7 @@ def AllInOne(actualfolder, parameterfile):
     #wget gt zip files (only downloads new zip files)
     wgetGT()
 
-    printStats(actualfolder)
+    basestats = getbaseStats(actualfolder)
 
     workspacepath = actualfolder + '/workspace'
 
@@ -233,3 +243,6 @@ def AllInOne(actualfolder, parameterfile):
     runocropy(workspacepath, ocropar2)
 
     runalligner(workspacepath, alignpar, model1, model2)
+
+    print(basestats)
+    getstats(workspacepath)
