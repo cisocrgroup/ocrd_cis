@@ -31,8 +31,8 @@ def subprocess_cmd(command):
     print(out.decode('utf-8'))
     returncode = process.wait()
     if returncode != 0:
-        raise("invalid returncode for {cmd}: {c}"
-              .format(cmd=command, c=returncode))
+        raise Exception("invalid returncode for {cmd}: {c}"
+                        .format(cmd=command, c=returncode))
 
 
 def wgetGT():
