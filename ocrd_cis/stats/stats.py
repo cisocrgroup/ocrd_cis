@@ -1,16 +1,9 @@
 from __future__ import absolute_import
-
-import sys, os.path, cv2
-
-
 from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd.model.ocrd_page import from_file, to_xml, TextEquivType, CoordsType, GlyphType, WordType
-from ocrd.model.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
 from ocrd import Processor, MIMETYPE_PAGE
-
 from ocrd_cis import get_ocrd_tool
-
-
+from ocrd.model.ocrd_page_generateds import parse, parsexml_, parsexmlstring_
+from difflib import SequenceMatcher
 
 
 
@@ -20,6 +13,7 @@ class Stats(Processor):
         self.ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-stats']
         kwargs['version'] = self.ocrd_tool['version']
+        self.input_file_grp = kwargs['input_file_grp']
         super(Stats, self).__init__(*args, **kwargs)
         self.log = getLogger('Stats')
 
@@ -28,43 +22,56 @@ class Stats(Processor):
         """
         Performs the (text) recognition.
         """
-        #print(self.parameter)
 
-        maxlevel = 'line' #self.parameter['textequiv_level']
- 
-        
-        for (n, input_file) in enumerate(self.input_files):
+        cnum = 0
+        tess_err = 0
+        ocro1_err = 0
+        ocro2_err = 0
 
-            pcgts = from_file(self.workspace.download_file(input_file))
+        inputfiles = self.input_files
+        for input_file in inputfiles:
+
+            index = input_file.url.rfind('/')
+            alignurl = input_file.url[:index] + '/' + self.input_file_grp + input_file.url[index:]
+
+            pcgts = parse(alignurl, True)
 
             page = pcgts.get_Page()
-
             regions = page.get_TextRegion()
 
-            self.process_regions(regions, maxlevel, self.input_files)
+
+            for region in regions:
+                lines = region.get_TextLine()
+
+                for line in lines:
+                    gtline = line.get_TextEquiv()[1].Unicode
+                    cnum += len(gtline)
+
+                    tessline = line.get_TextEquiv()[2].Unicode
+                    ocroline1 = line.get_TextEquiv()[3].Unicode
+                    ocroline2 = line.get_TextEquiv()[4].Unicode
+
+                    s = SequenceMatcher(None, gtline, tessline)
+                    tess_err += (1-s.ratio())*len(gtline)
+
+                    s = SequenceMatcher(None, gtline, ocroline1)
+                    ocro1_err += (1-s.ratio())*len(gtline)
+
+                    s = SequenceMatcher(None, gtline, ocroline2)
+                    ocro2_err += (1-s.ratio())*len(gtline)
 
 
-            
-
-    def process_regions(self, regions, maxlevel, inputfile):
-        for region in regions:
-
-            textlines = region.get_TextLine()
-
-            self.process_lines(textlines, maxlevel, inputfile)
+                    # words = line.get_Word()
+                    # for word in words:
+                    #     for ocr in word.get_TextEquiv():
+                    #         print(ocr.Unicode)
 
 
-            
+        tessac = 1-tess_err/cnum
+        ocro1ac = 1-ocro1_err/cnum
+        ocro2ac = 1-ocro2_err/cnum
 
-    def process_lines(self, textlines, maxlevel, inputfile):
-
-        for line in textlines:
-
-            words = line.get_Word()
-            for word in words:
-                print(word.get_TextEquiv()[0].Unicode)
-                print(type(word.get_TextEquiv()))
-                for elem in word.get_TextEquiv():
-                    print(elem.Unicode)
-                    print(inputfile)
+        print('tesserocr accuracy:    ', tessac)
+        print('ocropy model1 accuracy:', ocro1ac)
+        print('ocropy model2 accuracy:', ocro2ac)
 
