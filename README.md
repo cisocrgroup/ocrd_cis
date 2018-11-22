@@ -16,12 +16,19 @@ sudo apt-get install \
   default-jdk
 ```
 
+
+
 ### Virtualenv
 
 Use `virtualenv` to install dependencies:
 * `virtualenv -p python3.6 env`
 * `source env/bin/activate`
 * `pip install -e path/to/dir/containing/setup.py`
+
+
+
+
+
 
 ### OCR-D workspace
 
@@ -85,6 +92,35 @@ ocrd-cis-ocropy-recognize \
   --mets mets.xml
   --parameter file:///path/to/config.json
 ```
+
+## All in One Tool
+For the all in One Tool install all above tools and Tesserocr as explained below.
+Then use it like:
+```sh
+ocrd-cis-aio --parameter file:///path/to/config.json
+```
+
+
+### Tesserocr
+Install essential system packages for Tesserocr
+```sh
+sudo apt-get install python3-tk \
+  tesseract-ocr libtesseract-dev libleptonica-dev \
+  libimage-exiftool-perl libxml2-utils
+```
+
+Then install Tesserocr from: https://github.com/OCR-D/ocrd_tesserocr
+```sh
+pip install -r requirements.txt
+pip install .
+```
+
+Download and move tesseract models from: 
+https://github.com/tesseract-ocr/tesseract/wiki/Data-Files
+or use your own models
+place them into: /usr/share/tesseract-ocr/4.00/tessdata
+
+
 
 
 ## OCR-D links
