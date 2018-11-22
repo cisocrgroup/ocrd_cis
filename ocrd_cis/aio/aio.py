@@ -152,12 +152,12 @@ def runtesserocr(wsdir, configdir):
     --output-file-grp OCR-D-TESSER \
     --mets {mets}/mets.xml \
     --parameter {parameter}
-    '''.format(mets = wsdir, parameter = configdir)
+    '''.format(mets=wsdir, parameter=configdir)
 
     subprocess_cmd(tesserocrcmd)
 
 
-def runocropy(wsdir,configdir):
+def runocropy(wsdir, configdir):
 
     with open(configdir) as f:
         config = json.load(f)
@@ -170,10 +170,11 @@ def runocropy(wsdir,configdir):
     --output-file-grp OCR-D-OCROPY-{model} \
     --mets {mets}/mets.xml \
     --parameter {parameter}
-    '''.format(model = model, mets = wsdir, parameter = configdir)
+    '''.format(model=model, mets=wsdir, parameter=configdir)
     subprocess_cmd(ocropycmd)
 
-def runalligner(wsdir,configdir,model1,model2):
+
+def runalligner(wsdir, configdir, model1, model2):
     print('run aligner')
     allingercmd = '''
     ocrd-cis-align \
@@ -181,14 +182,15 @@ def runalligner(wsdir,configdir,model1,model2):
     --output-file-grp 'OCR-D-GT+OCR-D-TESSER+OCR-D-OCROPY-{model1}+OCR-D-OCROPY-{model2}' \
     --mets {mets}/mets.xml \
     --parameter {parameter}
-    '''.format(model1 = model1, model2=model2, mets = wsdir, parameter = configdir)
+    '''.format(model1=model1, model2=model2, mets=wsdir, parameter=configdir)
     subprocess_cmd(allingercmd)
+
 
 def AllInOne(actualfolder, parameterfile):
 
     os.chdir(actualfolder)
 
-    if parameterfile == None:
+    if parameterfile is None:
         print('A Parameterfile is mandatory')
     with open(parameterfile) as f:
         parameter = json.load(f)
@@ -230,4 +232,4 @@ def AllInOne(actualfolder, parameterfile):
     model2 = config['model']
     runocropy(workspacepath, ocropar2)
 
-    runalligner(workspacepath,alignpar,model1,model2)
+    runalligner(workspacepath, alignpar, model1, model2)
