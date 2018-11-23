@@ -1,3 +1,4 @@
+import re
 import os
 import json
 import sys
@@ -31,7 +32,7 @@ def unpack(fromdir, todir):
 
 
 def subprocess_cmd(command, want=0):
-    print("running {command}".format(command=command))
+    print(re.sub("""\\s+""", " ", "running {command}".format(command=command)))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
     out, err = process.communicate(command.encode('utf-8'))
     print(out.decode('utf-8'))
@@ -62,6 +63,22 @@ def getbaseStats(gtdir):
                     if '.tif' in elem:
                         pages += 1
     return('files: ' + str(books) + ' - pages: ' + str(pages))
+
+
+def find_page_xml_file(bdir, img):
+    """search for a matching xml file in bdir"""
+    for root, dirs, files in os.walk(bdir):
+        if "alto" in root:
+            continue
+        if "page" not in root:
+            continue
+        for file in files:
+            if file[-4:] != '.xml':
+                print("not an xml file: continue")
+                continue
+            if img in file:
+                return os.path.join(bdir, root, file)
+    return None
 
 
 def addtoworkspace(wsdir, gtdir):
@@ -104,7 +121,12 @@ def addtoworkspace(wsdir, gtdir):
                 filename = tif[:-4]
 
                 tifdir = os.path.join(filedir, tif)
-                xmldir = os.path.join(filedir, 'page', filename + '.xml')
+                xmldir = find_page_xml_file(filedir, filename)
+                if xmldir is None or not os.path.exists(xmldir):
+                    raise Exception("cannot find page xml for {tif}".
+                                    format(tif=tif))
+
+                # xmldir = os.path.join(filedir, 'page', filename + '.xml')
 
                 # add tif image to workspace
                 filegrp = 'OCR-D-IMG'
