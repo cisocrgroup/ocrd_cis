@@ -93,7 +93,7 @@
 						  },
 						  "outputpath": {
 							"type": "string",
-							"description": "(existing) path for the trained model" 
+							"description": "(existing) path for the trained model"
 						  }
 					}
 				},

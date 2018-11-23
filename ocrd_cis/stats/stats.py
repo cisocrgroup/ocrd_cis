@@ -31,8 +31,8 @@ class Stats(Processor):
         #print(self.parameter)
 
         maxlevel = 'line' #self.parameter['textequiv_level']
- 
-        
+
+
         for (n, input_file) in enumerate(self.input_files):
 
             pcgts = from_file(self.workspace.download_file(input_file))
@@ -44,7 +44,7 @@ class Stats(Processor):
             self.process_regions(regions, maxlevel, self.input_files)
 
 
-            
+
 
     def process_regions(self, regions, maxlevel, inputfile):
         for region in regions:
@@ -54,7 +54,7 @@ class Stats(Processor):
             self.process_lines(textlines, maxlevel, inputfile)
 
 
-            
+
 
     def process_lines(self, textlines, maxlevel, inputfile):
 
@@ -67,4 +67,3 @@ class Stats(Processor):
                 for elem in word.get_TextEquiv():
                     print(elem.Unicode)
                     print(inputfile)
-
