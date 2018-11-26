@@ -167,46 +167,57 @@ def addtoworkspace(wsdir, gtdir):
     shutil.rmtree(tempdir)
 
 
+def get_ocrd_model(configfile):
+    """Read model parameter from configfile and return it."""
+    with open(configfile) as f:
+        config = json.load(f)
+    return config['model']
+
+
 def runtesserocr(wsdir, configdir):
-    #add xml to workspace
-    filegrp = 'OCR-D-GT'
+    """ Run tesseract with a model and return the new output-file-grp"""
+    model = get_ocrd_model(configdir)
+    output_file_group = 'OCRD-D-TESSER-{model}'.format(model)
     tesserocrcmd = '''
     ocrd-tesserocr-recognize \
     --input-file-grp OCR-D-GT \
-    --output-file-grp OCR-D-TESSER \
+    --output-file-grp {ofg} \
     --mets {mets}/mets.xml \
     --parameter {parameter}
-    '''.format(mets=wsdir, parameter=configdir)
-
+    '''.format(mets=wsdir, parameter=configdir, ofg=output_file_group)
     subprocess_cmd(tesserocrcmd)
+    return output_file_group
 
 
 def runocropy(wsdir, configdir):
-
-    with open(configdir) as f:
-        config = json.load(f)
-
-    model = config['model']
-
+    """ Run ocropy with a model and return the new output-file-grp"""
+    model = get_ocrd_model(configdir)
+    output_file_group = 'OCRD-D-OCORPY-{model}'.format(model)
     ocropycmd = '''
     ocrd-cis-ocropy-recognize \
     --input-file-grp OCR-D-GT \
-    --output-file-grp OCR-D-OCROPY-{model} \
+    --output-file-grp {ofg} \
     --mets {mets}/mets.xml \
     --parameter {parameter}
-    '''.format(model=model, mets=wsdir, parameter=configdir)
+    '''.format(mets=wsdir, parameter=configdir, ofg=output_file_group)
     subprocess_cmd(ocropycmd)
+    return output_file_group
 
 
-def runalligner(wsdir, configdir, model1, model2):
+def runprofiler(wsdir, configdir, masterocr):
+    pass
+
+
+def runalligner(wsdir, configdir, models):
+    input_file_group = 'OCR-D-GT,' + ','.join(models)
     print('run aligner')
     allingercmd = '''
     ocrd-cis-align \
-    --input-file-grp 'OCR-D-GT,OCR-D-TESSER,OCR-D-OCROPY-{model1},OCR-D-OCROPY-{model2}' \
+    --input-file-grp '{ifg}' \
     --output-file-grp 'OCR-D-ALIGN' \
     --mets {mets}/mets.xml \
     --parameter {parameter}
-    '''.format(model1=model1, model2=model2, mets=wsdir, parameter=configdir)
+    '''.format(ifg=input_file_group, mets=wsdir, parameter=configdir)
     subprocess_cmd(allingercmd)
 
 
@@ -229,44 +240,36 @@ def AllInOne(actualfolder, parameterfile):
     with open(parameterfile) as f:
         parameter = json.load(f)
 
-    try:
-        tesserpar = parameter['tesserparampath']
-        ocropar1 = parameter['ocropyparampath1']
-        ocropar2 = parameter['ocropyparampath2']
-        alignpar = parameter['alignparampath']
-    except(KeyError):
-        print('parameter file is not complete')
-        sys.exit(1)
-
-
-    #wget gt zip files (only downloads new zip files)
+    # try:
+    #     tesserpar = parameter['tesserparampath']
+    #     ocropar1 = parameter['ocropyparampath1']
+    #     ocropar2 = parameter['ocropyparampath2']
+    #     alignpar = parameter['alignparampath']
+    # except(KeyError):
+    #     print('parameter file is not complete')
+    #     sys.exit(1)
+    # wget gt zip files (only downloads new zip files)
     wgetGT()
 
     basestats = getbaseStats(actualfolder)
 
     workspacepath = actualfolder + '/workspace'
 
-    #create Workspace
+    # create Workspace
     addtoworkspace(workspacepath, actualfolder)
 
+    models = list()
+    for ocr in parameter['ocr']:
+        if ocr['type'] == 'tesseract':
+            ofg = runtesserocr(workspacepath, ocr['path'])
+            models.append(ofg)
+        elif ocr['type'] == 'ocorpy':
+            ofg = runocropy(workspacepath, ocr['path'])
+            models.append(ofg)
+        else:
+            raise Exception('invalid ocr type: {typ}'.format(typ=ocr['type']))
 
-    #recognize Text with Tesserocr
-    runtesserocr(workspacepath, tesserpar)
-
-
-    #recognize Text with Ocropy model 1
-    with open(ocropar1) as f:
-        config = json.load(f)
-    model1 = config['model']
-    runocropy(workspacepath, ocropar1)
-
-    #recognize Text with Ocropy model 2
-    with open(ocropar2) as f:
-        config = json.load(f)
-    model2 = config['model']
-    runocropy(workspacepath, ocropar2)
-
-    runalligner(workspacepath, alignpar, model1, model2)
+    runalligner(workspacepath, alignpar, models)
 
     print(basestats)
     getstats(workspacepath)
