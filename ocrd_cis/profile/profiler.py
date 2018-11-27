@@ -52,14 +52,14 @@ class Profiler(Processor):
             eq = TextEquivType(
                 dataType='profiler-candidate',
                 dataTypeDetails=json.dumps(cand),
-                Unicode=Profiler.format_candidate(clean, cand['Suggestion']),
+                Unicode=self.format_candidate(clean, cand['Suggestion']),
                 conf=cand['Weight'],
             )
             word.add_TextEquiv(eq)
             self.log.debug("suggestion: [%s] %s (%f)",
                            clean, eq.Unicode, cand['Weight'])
 
-    def format_candidate(origin, cand):
+    def format_candidate(self, origin, cand):
         res = ""
         for (i, c) in enumerate(cand):
             if i < len(origin) and origin[i].isupper():
@@ -72,7 +72,7 @@ class Profiler(Processor):
         _input = []
         i = self.parameter['textEquivIndex']
         langs = dict()
-        for (line, pcgts, ifile) in self.get_all_lines():
+        for (line, _, _) in self.get_all_lines():
             _input.append(line.get_TextEquiv()[i].Unicode)
             langs[line.get_primaryLanguage().lower()] += 1
 
@@ -110,7 +110,7 @@ class Profiler(Processor):
                 words.append((word, pcgts, ifile))
         return words
 
-    def get_most_frequent_language(counts):
+    def get_most_frequent_language(self, counts):
         """ returns the most frequent language in the counts dictionary"""
         if counts.len() == 0:
             return 'unknown'
