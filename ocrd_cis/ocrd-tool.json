@@ -119,10 +119,6 @@
 										"type": "string",
 										"required": true
 								},
-								"profilerLanguage": {
-										"type": "string",
-										"required": true
-								},
 							"textEquivIndex": {
 								"type": "integer",
 								"default": 0

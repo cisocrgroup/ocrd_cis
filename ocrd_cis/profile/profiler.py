@@ -70,14 +70,17 @@ class Profiler(Processor):
     def read_profile(self):
         _input = []
         i = self.parameter['textEquivIndex']
+        langs = dict()
         for (line, pcgts, ifile) in self.get_all_lines():
             _input.append(line.get_TextEquiv()[i].Unicode)
+            langs[line.get_primaryLanguage().lower()] += 1
+
         p = JavaProcess.profiler(
              jar=self.parameter['cisOcrdJar'],
              args=[
                  self.parameter['profilerExecutable'],
                  self.parameter['profilerBackend'],
-                 self.parameter['profilerLanguage'],
+                 self.get_most_frequent_language(langs),
              ]
         )
         return p.run("\n".join(_input))
@@ -105,3 +108,10 @@ class Profiler(Processor):
             for word in line.get_Word():
                 words.append((word, pcgts, ifile))
         return words
+
+    def get_most_frequent_language(counts):
+        """ returns the most frequent language in the counts dictionary"""
+        if counts.len() == 0:
+            return 'unknown'
+        lang = sorted(counts.iteritems(), key=lambda k, v: (v, k))[0][1]
+        return lang
