@@ -2,12 +2,12 @@ import json
 import re
 from ocrd import Processor
 from ocrd import MIMETYPE_PAGE
-from ocrd_cis import get_ocrd_tool
 from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
-from ocrd_cis import JavaProcess
 from ocrd.model.ocrd_page_generateds import TextEquivType
 from ocrd.model.ocrd_page import to_xml
+from ocrd_cis import get_ocrd_tool
+from ocrd_cis import JavaProcess
 
 
 class Profiler(Processor):
@@ -77,12 +77,12 @@ class Profiler(Processor):
             langs[line.get_primaryLanguage().lower()] += 1
 
         p = JavaProcess.profiler(
-             jar=self.parameter['cisOcrdJar'],
-             args=[
-                 self.parameter['profilerExecutable'],
-                 self.parameter['profilerBackend'],
-                 self.get_most_frequent_language(langs),
-             ]
+            jar=self.parameter['cisOcrdJar'],
+            args=[
+                self.parameter['profilerExecutable'],
+                self.parameter['profilerBackend'],
+                self.get_most_frequent_language(langs),
+            ]
         )
         return p.run("\n".join(_input))
 
