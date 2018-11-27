@@ -23,10 +23,9 @@ class Stats(Processor):
         Performs the (text) recognition.
         """
 
-        cnum = 0
-        tess_err = 0
-        ocro1_err = 0
-        ocro2_err = 0
+        d = dict()
+        if "gt" not in d:
+            d["gt"]=0
 
         inputfiles = self.input_files
         for input_file in inputfiles:
@@ -45,33 +44,36 @@ class Stats(Processor):
                 lines = region.get_TextLine()
 
                 for line in lines:
+
                     gtline = line.get_TextEquiv()[1].Unicode
-                    cnum += len(gtline)
+                    d["gt"] += len(gtline)
 
-                    tessline = line.get_TextEquiv()[2].Unicode
-                    ocroline1 = line.get_TextEquiv()[3].Unicode
-                    ocroline2 = line.get_TextEquiv()[4].Unicode
-
-                    s = SequenceMatcher(None, gtline, tessline)
-                    tess_err += (1-s.ratio())*len(gtline)
-
-                    s = SequenceMatcher(None, gtline, ocroline1)
-                    ocro1_err += (1-s.ratio())*len(gtline)
-
-                    s = SequenceMatcher(None, gtline, ocroline2)
-                    ocro2_err += (1-s.ratio())*len(gtline)
+                    Type = line.get_TextEquiv()[0].dataType[9:]
 
 
-                    # words = line.get_Word()
-                    # for word in words:
-                    #     for ocr in word.get_TextEquiv():
-                    #         print(ocr.Unicode)
+                    for i in range(2,len(line.get_TextEquiv())):
+                        OCRType = line.get_TextEquiv()[i].dataType
+                        lindex = OCRType.find('OCR-D-')
+                        rindex = OCRType.find(Type)
+                        model = OCRType[lindex:rindex-1]
+
+                        
+                        if model not in d:
+                            d[model]=0
+
+                        #print(line.get_TextEquiv()[2].dataType)
+                        unicodeline = line.get_TextEquiv()[i].Unicode
+
+                        s = SequenceMatcher(None, gtline, unicodeline)
+                        d[model] += (1-s.ratio())*len(gtline)
 
 
-        tessac = 1-tess_err/cnum
-        ocro1ac = 1-ocro1_err/cnum
-        ocro2ac = 1-ocro2_err/cnum
 
-        print('tesserocr accuracy:    ', tessac)
-        print('ocropy model1 accuracy:', ocro1ac)
-        print('ocropy model2 accuracy:', ocro2ac)
+                        # words = line.get_Word()
+                        # for word in words:
+                        #     for ocr in word.get_TextEquiv():
+                        #         print(ocr.Unicode)
+
+        #tessac = 1-tess_err/cnum
+        
+        print(d)
