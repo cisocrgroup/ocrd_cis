@@ -1,0 +1,17 @@
+{
+	"ocr": [
+		{
+			"type": "tesseract",
+			"path": "config-tesseract.json"
+		},
+		{
+			"type": "ocropy",
+			"path": "config-ocropy1.json"
+		},
+		{
+			"type": "ocropy",
+			"path": "config-ocropy2.json"
+		}
+	],
+	"alignparampath": "config-align.json"
+}
