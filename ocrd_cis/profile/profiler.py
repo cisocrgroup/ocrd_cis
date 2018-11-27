@@ -69,8 +69,9 @@ class Profiler(Processor):
 
     def read_profile(self):
         _input = []
+        i = self.parameter['textEquivIndex']
         for (line, pcgts, ifile) in self.get_all_lines():
-            _input.append(line.get_TextEquiv()[0].Unicode)
+            _input.append(line.get_TextEquiv()[i].Unicode)
         p = JavaProcess.profiler(
              jar=self.parameter['cisOcrdJar'],
              args=[

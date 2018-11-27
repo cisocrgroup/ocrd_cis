@@ -122,7 +122,11 @@
 								"profilerLanguage": {
 										"type": "string",
 										"required": true
-								}
+								},
+							"textEquivIndex": {
+								"type": "integer",
+								"default": 0
+							}
 						}
 				},
 				"ocrd-cis-stats": {
