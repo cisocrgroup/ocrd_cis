@@ -14,6 +14,8 @@ All in One Tool for:
     Aligning
 '''
 
+OCRD_IMG_FGROUP = 'OCR-D-IMG'
+OCRD_GT_FGROUP = 'OCR-D-GT'
 
 def unpack(fromdir, todir):
     '''extract all zips into temp dir'''
@@ -109,7 +111,6 @@ def addtoworkspace(wsdir, gtdir):
     # walk through unpacked zipfiles and add tifs and xmls to workspace
     path, dirs, files = os.walk(tempdir).__next__()
     for d in dirs:
-
         filedir = os.path.join(tempdir, d, d)
         if not os.path.exists(filedir):
             filedir = os.path.join(tempdir, d)
@@ -125,7 +126,8 @@ def addtoworkspace(wsdir, gtdir):
                 if xmldir is None or not os.path.exists(xmldir):
                     raise Exception("cannot find page xml for {tif}".
                                     format(tif=tif))
-
+                print('dir: {dir}, filename: {filename}, xmldir: {xmldir}'
+                      .format(dir=d, filename=filename, xmldir=xmldir))
                 # xmldir = os.path.join(filedir, 'page', filename + '.xml')
 
                 # add tif image to workspace
