@@ -42,7 +42,8 @@ class Profiler(Processor):
         return files
 
     def add_candidates(self, profile, word):
-        _unicode = word.get_TextEquiv()[0].Unicode
+        i = self.parameter['textEquivIndex']
+        _unicode = word.get_TextEquiv()[i].Unicode
         clean = re.sub(r'^\W*(.*?)\W*$', r'\1', _unicode)
         lower = clean.lower()
         if lower not in profile['data']:
