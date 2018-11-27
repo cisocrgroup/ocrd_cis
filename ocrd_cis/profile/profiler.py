@@ -42,6 +42,12 @@ class Profiler(Processor):
         return files
 
     def add_candidates(self, profile, word):
+        """
+        Adds candidates of the given profile to a word in the page XML document.
+        All candidates are appended to the TextEquiv of the given word.
+        New TextEquivs have dataType="profiler-candidate" and
+        dataTypeDetails="`json of the according profiler suggestion`".
+        """
         i = self.parameter['textEquivIndex']
         _unicode = word.get_TextEquiv()[i].Unicode
         clean = re.sub(r'^\W*(.*?)\W*$', r'\1', _unicode)
@@ -60,6 +66,10 @@ class Profiler(Processor):
                            clean, eq.Unicode, cand['Weight'])
 
     def format_candidate(self, origin, cand):
+        """
+        Returns a copy of the given candidate
+        with the same casing as orgin
+        """
         res = ""
         for (i, c) in enumerate(cand):
             if i < len(origin) and origin[i].isupper():
