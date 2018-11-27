@@ -201,16 +201,15 @@ def get_ocrd_model(configfile):
     return config['model']
 
 
-def runtesserocr(wsdir, configdir, fgrps, models):
+def runtesserocr(wsdir, configdir, fgrpdict):
     """ Run tesseract with a model and return the new output-file-grp"""
     model = get_ocrd_model(configdir)
 
-    output_file_groups = []
-    for fgrp in fgrps:
+    for fgrp in fgrpdict:
 
         input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
         output_file_group = 'OCR-D-TESSER-{model}-{fgrp}'.format(model=model, fgrp=fgrp)
-        models[fgrp].append(output_file_group)
+        fgrpdict[fgrp].append(output_file_group)
 
         tesserocrcmd = '''
         ocrd-tesserocr-recognize \
@@ -221,20 +220,18 @@ def runtesserocr(wsdir, configdir, fgrps, models):
         '''.format(mets=wsdir, parameter=configdir, ifg=input_file_group, ofg=output_file_group)
         subprocess_cmd(tesserocrcmd)
 
-    return models
+    return fgrpdict
 
 
-def runocropy(wsdir, configdir, fgrps, models):
+def runocropy(wsdir, configdir, fgrpdict):
     """ Run ocropy with a model and return the new output-file-grp"""
     model = get_ocrd_model(configdir)
-    output_file_groups = []
 
-    for fgrp in fgrps:
+    for fgrp in fgrpdict:
 
         input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
         output_file_group = 'OCR-D-OCORPY-{model}-{fgrp}'.format(model=model, fgrp=fgrp)
-        output_file_groups.append(output_file_group)
-        models[fgrp].append(output_file_group)
+        fgrpdict[fgrp].append(output_file_group)
 
         ocropycmd = '''
         ocrd-cis-ocropy-recognize \
@@ -245,7 +242,7 @@ def runocropy(wsdir, configdir, fgrps, models):
         '''.format(mets=wsdir, parameter=configdir, ifg=input_file_group, ofg=output_file_group)
         subprocess_cmd(ocropycmd)
 
-    return models
+    return fgrpdict
 
 
 def runprofiler(wsdir, configdir, masterocr):
@@ -279,14 +276,13 @@ def getstats(wsdir, alignfilegrps):
         --mets {mets}/mets.xml
         '''.format(inpgrp=fgrp, mets=wsdir)
 
-        f = io.StringIO()
 
         out = subprocess_ret(statscmd).strip()
 
-        jout = json.loads(out.replace("'",'"'))
+        jout = json.loads(out.replace("'", '"'))
 
-        for k,v in jout.items():
-            stats[k]+=v
+        for k, v in jout.items():
+            stats[k] += v
 
     return stats
 
@@ -302,7 +298,7 @@ def AllInOne(actualfolder, parameterfile):
 
 
     # wget gt zip files (only downloads new zip files)
-    #wgetGT()
+    wgetGT()
 
     basestats = getbaseStats(actualfolder)
 
@@ -318,9 +314,9 @@ def AllInOne(actualfolder, parameterfile):
 
     for ocr in parameter['ocr']:
         if ocr['type'] == 'tesseract':
-            fgrpdict = runtesserocr(workspacepath, ocr['path'], projects, fgrpdict)
+            fgrpdict = runtesserocr(workspacepath, ocr['path'], fgrpdict)
         elif ocr['type'] == 'ocropy':
-            fgrpdict = runocropy(workspacepath, ocr['path'], projects, fgrpdict)
+            fgrpdict = runocropy(workspacepath, ocr['path'], fgrpdict)
         else:
             raise Exception('invalid ocr type: {typ}'.format(typ=ocr['type']))
 
