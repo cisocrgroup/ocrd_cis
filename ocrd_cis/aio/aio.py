@@ -1,10 +1,13 @@
+import io
 import re
 import os
 import json
-import sys
 import shutil
 import subprocess
 from zipfile import ZipFile
+from collections import defaultdict
+
+
 
 '''
 All in One Tool for:
@@ -42,6 +45,17 @@ def subprocess_cmd(command, want=0):
     if returncode != want:
         raise Exception("invalid returncode for {cmd}: {c}"
                         .format(cmd=command, c=returncode))
+
+def subprocess_ret(command, want=0):
+    print(re.sub("""\\s+""", " ", "running {command}".format(command=command)))
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+    out, err = process.communicate(command.encode('utf-8'))
+    returncode = process.wait()
+    if returncode != want:
+        raise Exception("invalid returncode for {cmd}: {c}"
+                        .format(cmd=command, c=returncode))
+    return out.decode('utf-8')
+
 
 
 def wgetGT():
@@ -123,18 +137,28 @@ def addtoworkspace(wsdir, gtdir):
 
                 tifdir = os.path.join(filedir, tif)
                 xmldir = find_page_xml_file(filedir, filename)
+                
+
                 if xmldir is None or not os.path.exists(xmldir):
                     raise Exception("cannot find page xml for {tif}".
                                     format(tif=tif))
-                print('dir: {dir}, filename: {filename}, xmldir: {xmldir}'
-                      .format(dir=d, filename=filename, xmldir=xmldir))
+                print('dir: {dir}, filename: {filename}, xmldir: {xmldir}, tifdir: {tifdir}'
+                      .format(dir=d, filename=filename, xmldir=xmldir, tifdir=tifdir))
+
+                xmlfname = xmldir[xmldir.rfind('/')+1:-4]
+                if filename != xmlfname:
+                    tif = xmlfname+'.tif'
+                    os.rename(tifdir, os.path.join(filedir, tif))
+                    filename = xmlfname
+                    tifdir = os.path.join(filedir, tif)
+
                 # xmldir = os.path.join(filedir, 'page', filename + '.xml')
 
                 # add tif image to workspace
-                filegrp = 'OCR-D-IMG'
+                filegrp = 'OCR-D-IMG-' + d
                 mimetype = 'image/tif'
                 fileid = filegrp + '-' + filename
-                grpid = fileid
+                grpid = filegrp
                 imgcmd = '''ocrd workspace add \
                 --file-grp {filegrp} \
                 --file-id {fileid} \
@@ -145,10 +169,10 @@ def addtoworkspace(wsdir, gtdir):
                 subprocess_cmd(imgcmd)
 
                 # add xml to workspace
-                filegrp = 'OCR-D-GT'
+                filegrp = 'OCR-D-GT-' + d
                 mimetype = 'application/vnd.prima.page+xml'
                 fileid = filegrp + '-' + filename
-                grpid = fileid
+                grpid = filegrp
                 xmlcmd = '''ocrd workspace add \
                 --file-grp {filegrp} \
                 --file-id {fileid} \
@@ -162,11 +186,12 @@ def addtoworkspace(wsdir, gtdir):
                 #rename filepaths in xml into file-urls
                 sedcmd = '''
                 sed -i {fname}.xml -e 's#imageFilename="{tif}"#imageFilename="{fdir}"#'
-                '''.format(fname=wsdir+'OCR-D-GT/'+filename, tif=tif,
-                           fdir=fileprefix+wsdir+'OCR-D-IMG/'+tif)
+                '''.format(fname=wsdir+'OCR-D-GT-'+d+'/'+filename, tif=tif,
+                           fdir=fileprefix+wsdir+'OCR-D-IMG-'+d+'/'+tif)
                 subprocess_cmd(sedcmd)
 
     shutil.rmtree(tempdir)
+    return dirs
 
 
 def get_ocrd_model(configfile):
@@ -176,61 +201,90 @@ def get_ocrd_model(configfile):
     return config['model']
 
 
-def runtesserocr(wsdir, configdir):
+def runtesserocr(wsdir, configdir, fgrpdict):
     """ Run tesseract with a model and return the new output-file-grp"""
     model = get_ocrd_model(configdir)
-    output_file_group = 'OCRD-D-TESSER-{model}'.format(model)
-    tesserocrcmd = '''
-    ocrd-tesserocr-recognize \
-    --input-file-grp OCR-D-GT \
-    --output-file-grp {ofg} \
-    --mets {mets}/mets.xml \
-    --parameter {parameter}
-    '''.format(mets=wsdir, parameter=configdir, ofg=output_file_group)
-    subprocess_cmd(tesserocrcmd)
-    return output_file_group
+
+    for fgrp in fgrpdict:
+
+        input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
+        output_file_group = 'OCR-D-TESSER-{model}-{fgrp}'.format(model=model, fgrp=fgrp)
+        fgrpdict[fgrp].append(output_file_group)
+
+        tesserocrcmd = '''
+        ocrd-tesserocr-recognize \
+        --input-file-grp {ifg} \
+        --output-file-grp {ofg} \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(mets=wsdir, parameter=configdir, ifg=input_file_group, ofg=output_file_group)
+        subprocess_cmd(tesserocrcmd)
+
+    return fgrpdict
 
 
-def runocropy(wsdir, configdir):
+def runocropy(wsdir, configdir, fgrpdict):
     """ Run ocropy with a model and return the new output-file-grp"""
     model = get_ocrd_model(configdir)
-    output_file_group = 'OCRD-D-OCORPY-{model}'.format(model)
-    ocropycmd = '''
-    ocrd-cis-ocropy-recognize \
-    --input-file-grp OCR-D-GT \
-    --output-file-grp {ofg} \
-    --mets {mets}/mets.xml \
-    --parameter {parameter}
-    '''.format(mets=wsdir, parameter=configdir, ofg=output_file_group)
-    subprocess_cmd(ocropycmd)
-    return output_file_group
+
+    for fgrp in fgrpdict:
+
+        input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
+        output_file_group = 'OCR-D-OCORPY-{model}-{fgrp}'.format(model=model, fgrp=fgrp)
+        fgrpdict[fgrp].append(output_file_group)
+
+        ocropycmd = '''
+        ocrd-cis-ocropy-recognize \
+        --input-file-grp {ifg} \
+        --output-file-grp {ofg} \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(mets=wsdir, parameter=configdir, ifg=input_file_group, ofg=output_file_group)
+        subprocess_cmd(ocropycmd)
+
+    return fgrpdict
 
 
 def runprofiler(wsdir, configdir, masterocr):
     pass
 
 
-def runalligner(wsdir, configdir, models):
-    input_file_group = 'OCR-D-GT,' + ','.join(models)
-    print('run aligner')
-    allingercmd = '''
-    ocrd-cis-align \
-    --input-file-grp '{ifg}' \
-    --output-file-grp 'OCR-D-ALIGN' \
-    --mets {mets}/mets.xml \
-    --parameter {parameter}
-    '''.format(ifg=input_file_group, mets=wsdir, parameter=configdir)
-    subprocess_cmd(allingercmd)
+def runalligner(wsdir, configdir, fgrpdict):
+
+    alignfilegrps = []
+    for fgrp in fgrpdict:
+        input_file_group = ','.join(fgrpdict[fgrp])
+        output_file_group = 'OCR-D-ALIGN-{fgrp}'.format(fgrp=fgrp)
+        alignfilegrps.append(output_file_group)
+        print('run aligner')
+        allingercmd = '''
+        ocrd-cis-align \
+        --input-file-grp '{ifg}' \
+        --output-file-grp '{ofg}' \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(ifg=input_file_group, ofg=output_file_group, mets=wsdir, parameter=configdir)
+        subprocess_cmd(allingercmd)
+    return alignfilegrps
+
+def getstats(wsdir, alignfilegrps):
+    stats = defaultdict(float)
+    for fgrp in alignfilegrps:
+        statscmd = '''
+        ocrd-cis-stats \
+        --input-file-grp '{inpgrp}' \
+        --mets {mets}/mets.xml
+        '''.format(inpgrp=fgrp, mets=wsdir)
 
 
-def getstats(wsdir):
-    inputfilegrp = 'OCR-D-ALIGN'
-    statscmd = '''
-    ocrd-cis-stats \
-    --input-file-grp '{inpgrp}' \
-    --mets {mets}/mets.xml
-    '''.format(inpgrp=inputfilegrp, mets=wsdir)
-    subprocess_cmd(statscmd)
+        out = subprocess_ret(statscmd).strip()
+
+        jout = json.loads(out.replace("'", '"'))
+
+        for k, v in jout.items():
+            stats[k] += v
+
+    return stats
 
 
 def AllInOne(actualfolder, parameterfile):
@@ -242,14 +296,7 @@ def AllInOne(actualfolder, parameterfile):
     with open(parameterfile) as f:
         parameter = json.load(f)
 
-    # try:
-    #     tesserpar = parameter['tesserparampath']
-    #     ocropar1 = parameter['ocropyparampath1']
-    #     ocropar2 = parameter['ocropyparampath2']
-    #     alignpar = parameter['alignparampath']
-    # except(KeyError):
-    #     print('parameter file is not complete')
-    #     sys.exit(1)
+
     # wget gt zip files (only downloads new zip files)
     wgetGT()
 
@@ -258,20 +305,31 @@ def AllInOne(actualfolder, parameterfile):
     workspacepath = actualfolder + '/workspace'
 
     # create Workspace
-    addtoworkspace(workspacepath, actualfolder)
+    projects = addtoworkspace(workspacepath, actualfolder)
 
-    models = list()
+    fgrpdict = dict()
+    for p in projects:
+        gt_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=p)
+        fgrpdict[p] = [gt_file_group]
+
     for ocr in parameter['ocr']:
         if ocr['type'] == 'tesseract':
-            ofg = runtesserocr(workspacepath, ocr['path'])
-            models.append(ofg)
-        elif ocr['type'] == 'ocorpy':
-            ofg = runocropy(workspacepath, ocr['path'])
-            models.append(ofg)
+            fgrpdict = runtesserocr(workspacepath, ocr['path'], fgrpdict)
+        elif ocr['type'] == 'ocropy':
+            fgrpdict = runocropy(workspacepath, ocr['path'], fgrpdict)
         else:
             raise Exception('invalid ocr type: {typ}'.format(typ=ocr['type']))
 
-    runalligner(workspacepath, alignpar, models)
+    alignpar = parameter['alignparampath']
+
+
+    #liste aller alignierten file-groups
+    alignfgrps = runalligner(workspacepath, alignpar, fgrpdict)
 
     print(basestats)
-    getstats(workspacepath)
+
+    stats = getstats(workspacepath, alignfgrps)
+    gtstats = stats["gt"]
+    for k,v in stats.items():
+        if k != "gt":
+            print(k + ' : ' + str(1-v/gtstats))
