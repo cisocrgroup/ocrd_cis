@@ -1,4 +1,3 @@
-import io
 import re
 import os
 import json
@@ -6,7 +5,6 @@ import shutil
 import subprocess
 from zipfile import ZipFile
 from collections import defaultdict
-
 
 
 '''
@@ -20,11 +18,15 @@ All in One Tool for:
 OCRD_IMG_FGROUP = 'OCR-D-IMG'
 OCRD_GT_FGROUP = 'OCR-D-GT'
 
+
 def unpack(fromdir, todir):
     '''extract all zips into temp dir'''
-    path, dirs, files = os.walk(fromdir).__next__()
+    _, _, files = os.walk(fromdir).__next__()
     for file in files:
         if '.zip' in file:
+            # skip -- missing page dir
+            if 'anton_locus' in file:
+                continue
             filedir = os.path.join(fromdir, file)
             resdir = os.path.join(todir, file)
             if os.path.isdir(resdir[0:-4]):
@@ -39,23 +41,23 @@ def unpack(fromdir, todir):
 def subprocess_cmd(command, want=0):
     print(re.sub("""\\s+""", " ", "running {command}".format(command=command)))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-    out, err = process.communicate(command.encode('utf-8'))
+    out, _ = process.communicate(command.encode('utf-8'))
     print(out.decode('utf-8'))
     returncode = process.wait()
     if returncode != want:
         raise Exception("invalid returncode for {cmd}: {c}"
                         .format(cmd=command, c=returncode))
 
+
 def subprocess_ret(command, want=0):
     print(re.sub("""\\s+""", " ", "running {command}".format(command=command)))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-    out, err = process.communicate(command.encode('utf-8'))
+    out, _ = process.communicate(command.encode('utf-8'))
     returncode = process.wait()
     if returncode != want:
         raise Exception("invalid returncode for {cmd}: {c}"
                         .format(cmd=command, c=returncode))
     return out.decode('utf-8')
-
 
 
 def wgetGT():
@@ -68,29 +70,29 @@ def wgetGT():
 
 
 def getbaseStats(gtdir):
-    path, dirs, files = os.walk(gtdir).__next__()
+    _, _, files = os.walk(gtdir).__next__()
     books, pages = 0, 0
     for file in files:
         if '.zip' in file:
             books += 1
-            with ZipFile(file, 'r') as zip:
-                zipinfo = zip.namelist()
+            with ZipFile(file, 'r') as _zip:
+                zipinfo = _zip.namelist()
                 for elem in zipinfo:
                     if '.tif' in elem:
                         pages += 1
-    return('files: ' + str(books) + ' - pages: ' + str(pages))
+    return('files: {books} - pages: {pages}'.format(
+        books=books, pages=pages))
 
 
 def find_page_xml_file(bdir, img):
     """search for a matching xml file in bdir"""
-    for root, dirs, files in os.walk(bdir):
+    for root, _, files in os.walk(bdir):
         if "alto" in root:
             continue
         if "page" not in root:
             continue
         for file in files:
             if file[-4:] != '.xml':
-                print("not an xml file: continue")
                 continue
             if img in file:
                 return os.path.join(bdir, root, file)
@@ -123,13 +125,13 @@ def addtoworkspace(wsdir, gtdir):
     # subprocess_cmd(setidcmd)
 
     # walk through unpacked zipfiles and add tifs and xmls to workspace
-    path, dirs, files = os.walk(tempdir).__next__()
+    _, dirs, _ = os.walk(tempdir).__next__()
     for d in dirs:
         filedir = os.path.join(tempdir, d, d)
         if not os.path.exists(filedir):
             filedir = os.path.join(tempdir, d)
 
-        path2, dirs2, tiffiles = os.walk(filedir).__next__()
+        _, _, tiffiles = os.walk(filedir).__next__()
 
         for tif in tiffiles:
             if tif[-4:] == '.tif':
@@ -137,14 +139,10 @@ def addtoworkspace(wsdir, gtdir):
 
                 tifdir = os.path.join(filedir, tif)
                 xmldir = find_page_xml_file(filedir, filename)
-                
 
                 if xmldir is None or not os.path.exists(xmldir):
                     raise Exception("cannot find page xml for {tif}".
                                     format(tif=tif))
-                print('dir: {dir}, filename: {filename}, xmldir: {xmldir}, tifdir: {tifdir}'
-                      .format(dir=d, filename=filename, xmldir=xmldir, tifdir=tifdir))
-
                 xmlfname = xmldir[xmldir.rfind('/')+1:-4]
                 if filename != xmlfname:
                     tif = xmlfname+'.tif'
@@ -182,8 +180,7 @@ def addtoworkspace(wsdir, gtdir):
                                  mimetype=mimetype, fdir=xmldir)
                 subprocess_cmd(xmlcmd)
 
-
-                #rename filepaths in xml into file-urls
+                # rename filepaths in xml into file-urls
                 sedcmd = '''
                 sed -i {fname}.xml -e 's#imageFilename="{tif}"#imageFilename="{fdir}"#'
                 '''.format(fname=wsdir+'OCR-D-GT-'+d+'/'+filename, tif=tif,
@@ -204,11 +201,13 @@ def get_ocrd_model(configfile):
 def runtesserocr(wsdir, configdir, fgrpdict):
     """ Run tesseract with a model and return the new output-file-grp"""
     model = get_ocrd_model(configdir)
-
+    print('runtesserocr({wsdir}, {cnf}, {fgrp}'.format(
+        wsdir=wsdir, cnf=configdir, fgrp=fgrpdict))
     for fgrp in fgrpdict:
 
         input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
-        output_file_group = 'OCR-D-TESSER-{model}-{fgrp}'.format(model=model, fgrp=fgrp)
+        output_file_group = 'OCR-D-TESSER-{model}-{fgrp}'.format(
+            model=model, fgrp=fgrp)
         fgrpdict[fgrp].append(output_file_group)
 
         tesserocrcmd = '''
@@ -217,7 +216,8 @@ def runtesserocr(wsdir, configdir, fgrpdict):
         --output-file-grp {ofg} \
         --mets {mets}/mets.xml \
         --parameter {parameter}
-        '''.format(mets=wsdir, parameter=configdir, ifg=input_file_group, ofg=output_file_group)
+        '''.format(mets=wsdir, parameter=configdir,
+                   ifg=input_file_group, ofg=output_file_group)
         subprocess_cmd(tesserocrcmd)
 
     return fgrpdict
@@ -230,7 +230,8 @@ def runocropy(wsdir, configdir, fgrpdict):
     for fgrp in fgrpdict:
 
         input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
-        output_file_group = 'OCR-D-OCORPY-{model}-{fgrp}'.format(model=model, fgrp=fgrp)
+        output_file_group = 'OCR-D-OCORPY-{model}-{fgrp}'.format(
+            model=model, fgrp=fgrp)
         fgrpdict[fgrp].append(output_file_group)
 
         ocropycmd = '''
@@ -239,14 +240,11 @@ def runocropy(wsdir, configdir, fgrpdict):
         --output-file-grp {ofg} \
         --mets {mets}/mets.xml \
         --parameter {parameter}
-        '''.format(mets=wsdir, parameter=configdir, ifg=input_file_group, ofg=output_file_group)
+        '''.format(mets=wsdir, parameter=configdir,
+                   ifg=input_file_group, ofg=output_file_group)
         subprocess_cmd(ocropycmd)
 
     return fgrpdict
-
-
-def runprofiler(wsdir, configdir, masterocr):
-    pass
 
 
 def runalligner(wsdir, configdir, fgrpdict):
@@ -263,9 +261,11 @@ def runalligner(wsdir, configdir, fgrpdict):
         --output-file-grp '{ofg}' \
         --mets {mets}/mets.xml \
         --parameter {parameter}
-        '''.format(ifg=input_file_group, ofg=output_file_group, mets=wsdir, parameter=configdir)
+        '''.format(ifg=input_file_group, ofg=output_file_group,
+                   mets=wsdir, parameter=configdir)
         subprocess_cmd(allingercmd)
     return alignfilegrps
+
 
 def getstats(wsdir, alignfilegrps):
     stats = defaultdict(float)
@@ -275,7 +275,6 @@ def getstats(wsdir, alignfilegrps):
         --input-file-grp '{inpgrp}' \
         --mets {mets}/mets.xml
         '''.format(inpgrp=fgrp, mets=wsdir)
-
 
         out = subprocess_ret(statscmd).strip()
 
@@ -295,7 +294,6 @@ def AllInOne(actualfolder, parameterfile):
         print('A Parameterfile is mandatory')
     with open(parameterfile) as f:
         parameter = json.load(f)
-
 
     # wget gt zip files (only downloads new zip files)
     wgetGT()
@@ -322,14 +320,13 @@ def AllInOne(actualfolder, parameterfile):
 
     alignpar = parameter['alignparampath']
 
-
-    #liste aller alignierten file-groups
+    # liste aller alignierten file-groups
     alignfgrps = runalligner(workspacepath, alignpar, fgrpdict)
 
     print(basestats)
 
     stats = getstats(workspacepath, alignfgrps)
     gtstats = stats["gt"]
-    for k,v in stats.items():
+    for k, v in stats.items():
         if k != "gt":
             print(k + ' : ' + str(1-v/gtstats))
