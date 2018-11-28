@@ -24,6 +24,8 @@ setup(
     install_requires=[
         'ocrd>=0.7.2',
         'click',
+        'scipy',
+        'matplotlib',
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
