@@ -2,7 +2,8 @@ import subprocess
 from ocrd.utils import getLogger
 from pathlib import Path
 
-ALIGNER = "de.lmu.cis.ocrd.cli.Align"
+MAIN = "de.lmu.cis.ocrd.cli.Main"
+ALIGNER = MAIN
 PROFILER = "de.lmu.cis.ocrd.cli.Profile"
 
 
@@ -16,9 +17,12 @@ class JavaProcess:
             raise FileNotFoundError("no such file: {}".format(jar))
 
     def aligner(jar, args):
+        args = ['-c', 'align'] + args
+        args.append('--log-level')
+        args.append(logging.getLevelName(self.log.level))
         return JavaProcess(jar, ALIGNER, args)
 
-    def profiler(jar, args):
+    def profiler(jar, args:
         return JavaProcess(jar, PROFILER, args)
 
     def run(self, _input):

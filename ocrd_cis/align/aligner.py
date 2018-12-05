@@ -141,7 +141,7 @@ class Aligner(Processor):
         n = len(ifs)
         p = JavaProcess.aligner(
             jar=self.parameter['cisOcrdJar'],
-            args=[str(n)]
+            args=['-D', '''{"n": {}}'''.format(n)],
         )
         return p.run("\n".join(_input))
 
