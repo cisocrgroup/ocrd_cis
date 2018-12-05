@@ -28,20 +28,6 @@ class Aligner(Processor):
         for ift in ifts:
             alignments = json.loads(self.run_java_aligner(ift))
             self.align(alignments, ift)
-        for ift in ifts:
-            self.log.info("##########################################")
-            for i in ift:
-                self.log.info("i = %s", i)
-                # self.log.info("i = %s %s", i.basename(), i.ID)
-
-        # return
-        # print(json.dumps(alignment, indent=4))
-        # page_alignments.append(PageAlignment(ifgs, ift, output))
-        # for pa in page_alignments:
-        #     for la in pa.line_alignments:
-        #         self.log.info("%s", la)
-        #     self.write_alignment_to_xml(pa)
-        # self.workspace.save_mets()
 
     def align(self, alignments, ift):
         """align the alignment objects with the according input file tuples"""
