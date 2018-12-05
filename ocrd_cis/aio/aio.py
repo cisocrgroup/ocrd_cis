@@ -323,8 +323,7 @@ def AllInOne(actualfolder, parameterfile):
 
     fgrpdict = dict()
     for p in projects:
-        gt_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=p)
-        fgrpdict[p] = [gt_file_group]
+        fgrpdict[p] = []
 
     for ocr in parameter['ocr']:
         if ocr['type'] == 'tesseract':
@@ -333,6 +332,10 @@ def AllInOne(actualfolder, parameterfile):
             fgrpdict = runocropy(workspacepath, ocr['path'], fgrpdict)
         else:
             raise Exception('invalid ocr type: {typ}'.format(typ=ocr['type']))
+
+    for p in projects:
+        gt_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=p)
+        fgrpdict[p].append(gt_file_group)
 
     alignpar = parameter['alignparampath']
 
