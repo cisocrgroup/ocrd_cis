@@ -307,7 +307,7 @@ def getstats(wsdir, alignfilegrps):
     return stats
 
 
-def AllInOne(actualfolder, parameterfile, verbose):
+def AllInOne(actualfolder, parameterfile, verbose, download):
 
     log = getLogger('AllInOne')
     if verbose:
@@ -323,8 +323,12 @@ def AllInOne(actualfolder, parameterfile, verbose):
         parameter = json.load(f)
 
     # wget gt zip files (only downloads new zip files)
-    log.info("downloading missing files...")
-    wgetGT()
+    if download:
+        log.info("downloading missing files...")
+        wgetGT()
+    else:
+        print('\ncontinuing without downloading missing files\n'
+              'if you want to download all files automatically use the argument "-l"\n')
 
     basestats = getbaseStats(actualfolder)
 
