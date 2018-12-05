@@ -3,7 +3,7 @@ from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x
 from ocrd import Processor, MIMETYPE_PAGE
 from ocrd_cis import get_ocrd_tool
 from ocrd.model.ocrd_page_generateds import parse, parsexml_, parsexmlstring_
-from difflib import SequenceMatcher
+from Levenshtein import distance
 
 
 
@@ -64,8 +64,7 @@ class Stats(Processor):
                         #print(line.get_TextEquiv()[2].dataType)
                         unicodeline = line.get_TextEquiv()[i].Unicode
 
-                        s = SequenceMatcher(None, gtline, unicodeline)
-                        d[model] += (1-s.ratio())*len(gtline)
+                        d[model] += distance(gtline, unicodeline)
 
 
 
@@ -74,6 +73,4 @@ class Stats(Processor):
                         #     for ocr in word.get_TextEquiv():
                         #         print(ocr.Unicode)
 
-        #tessac = 1-tess_err/cnum
-        
         print(d)

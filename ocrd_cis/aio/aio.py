@@ -6,6 +6,8 @@ import subprocess
 from zipfile import ZipFile
 from collections import defaultdict
 
+from ocrd.utils import getLogger
+
 
 '''
 All in One Tool for:
@@ -107,6 +109,9 @@ def find_page_xml_file(bdir, img):
                 return os.path.join(bdir, root, file)
     return None
 
+
+def getLang(filegrp):
+    pass
 
 def addtoworkspace(wsdir, gtdir):
     # path to workspace
@@ -302,7 +307,13 @@ def getstats(wsdir, alignfilegrps):
     return stats
 
 
-def AllInOne(actualfolder, parameterfile):
+def AllInOne(actualfolder, parameterfile, verbose, download):
+
+    log = getLogger('AllInOne')
+    if verbose:
+        import logging
+        log.setLevel(logging.DEBUG)
+
 
     os.chdir(actualfolder)
 
@@ -312,7 +323,12 @@ def AllInOne(actualfolder, parameterfile):
         parameter = json.load(f)
 
     # wget gt zip files (only downloads new zip files)
-    wgetGT()
+    if download:
+        log.info("downloading missing files...")
+        wgetGT()
+    else:
+        print('\ncontinuing without downloading missing files\n'
+              'if you want to download all files automatically use the argument "-l"\n')
 
     basestats = getbaseStats(actualfolder)
 
