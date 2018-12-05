@@ -73,6 +73,4 @@ class Stats(Processor):
                         #     for ocr in word.get_TextEquiv():
                         #         print(ocr.Unicode)
 
-        #tessac = 1-tess_err/cnum
-        
         print(d)
