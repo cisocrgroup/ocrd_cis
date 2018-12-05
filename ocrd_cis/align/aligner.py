@@ -7,6 +7,7 @@ from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
 from ocrd.model.ocrd_page import to_xml
 from ocrd.model.ocrd_page_generateds import TextEquivType
+from ocrd.model.ocrd_page_generateds import parse
 from ocrd_cis import JavaAligner
 from ocrd_cis import get_ocrd_tool
 
@@ -45,29 +46,25 @@ class Aligner(Processor):
     def align(self, alignments, ift):
         """align the alignment objects with the according input file tuples"""
         for t in ift:
-            self.log.info("tuple %s", t.basename_without_extension)
-        ift = self.open_input_file_tuples(ift)
+            self.log.info("tuple %s", os.path.basename(t.input_file.url))
+        pcgtst = self.open_input_file_tuples(ift)
         i = 0
-        for mi, mr in enumerate(ift[0].get_Page().get_TextRegion()):
-            for mj, ml in enumerate(mr.get_TextLine()):
-                # self.log.info('mi = %d, mj = %d', mi, mj)
-                lines = [ml]
-                for t in ift[1:]:
-                    # self.log.info('len regions: %d',
-                    #               len(t.get_Page().get_TextRegion()))
-                    # self.log.info('len lines: %d', len(t.get_Page(
-                    # ).get_TextRegion()[mi].get_TextLine()))
-                    lines.append(t.get_Page().get_TextRegion()
-                                 [mi].get_TextLine()[mj])
-                self.align_lines(alignments[i], lines)
+        for mi, mr in enumerate(pcgtst[0].get_Page().get_TextRegion()):
+            for mj, _ in enumerate(mr.get_TextLine()):
+                lines = []
+                for ii, t in enumerate(ift):
+                    tr = pcgtst[ii].get_Page().get_TextRegion()
+                    region = tr[mi].get_TextLine()[mj]
+                    lines.append(Alignment(t, region, alignments[i]))
+                self.align_lines(lines)
                 i += 1
 
-    def align_lines(self, alignment, lines):
+    def align_lines(self, lines):
         """align the given line alignment with the lines"""
-        #self.log.info('alignment: %s', json.dumps(alignment, indent=4))
-        # for line in lines:
-        #     self.log.info('line: %s', line.get_TextEquiv()[0].Unicode)
-        pass
+        for line in lines:
+            self.log.info('line: %s %s',
+                          line.input_file.input_file_group,
+                          line.region.get_TextEquiv()[0].Unicode)
 
     def open_input_file_tuples(self, ift):
         """
@@ -76,9 +73,8 @@ class Aligner(Processor):
         """
         res = list()
         for ifile in ift:
-            self.log.debug("## opening file %s", ifile)
-            f = from_file(self.workspace.download_file(ifile))
-            res.append(f)
+            pcgts = ifile.open()
+            res.append(pcgts)
         return tuple(res)
 
     def zip_input_files(self, ifgs):
@@ -92,7 +88,7 @@ class Aligner(Processor):
             for i in ifiles:
                 self.log.info("sorted file: %s %s",
                               os.path.basename(i.url), i.ID)
-            self.log.info("input files: %s", ifiles)
+            ifiles = [FileAlignment(x, ifg) for x in ifiles]
             files.append(ifiles)
         return zip(*files)
 
@@ -124,7 +120,7 @@ class Aligner(Processor):
     def read_lines_from_input_file(self, ifile):
         self.log.info("reading input file: %s", ifile)
         lines = list()
-        pcgts = from_file(self.workspace.download_file(ifile))
+        pcgts = ifile.open()
         for region in pcgts.get_Page().get_TextRegion():
             for line in region.get_TextLine():
                 lines.append(line.get_TextEquiv()[0].Unicode)
@@ -209,6 +205,23 @@ class PageAlignment:
                 Unicode=alignment_line.pairwise[i][1],
             )
             page_xml_line.add_TextEquiv(eq)
+
+
+class FileAlignment:
+    def __init__(self, ifile, ifg):
+        self.input_file = ifile
+        self.input_file_group = ifg
+        self.log = getLogger('cis.FileAlignment')
+
+    def open(self):
+        self.log.info("opening: %s", os.path.basename(self.input_file.url))
+        return parse(self.input_file.url, True)
+
+class Alignment:
+    def __init__(self, ifile, region, alignment):
+        self.input_file = ifile
+        self.region = region
+        self.alignment = alignment
 
 
 hash_escape = "\u0E23"
