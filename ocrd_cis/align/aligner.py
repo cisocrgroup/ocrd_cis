@@ -4,6 +4,7 @@ import os
 from ocrd import Processor
 from ocrd import MIMETYPE_PAGE
 from ocrd.utils import getLogger
+from ocrd.utils import concat_padded
 from ocrd.model.ocrd_page import from_file
 from ocrd.model.ocrd_page import to_xml
 from ocrd.model.ocrd_page_generateds import TextEquivType
@@ -25,9 +26,19 @@ class Aligner(Processor):
         if len(ifgs) < 2:
             raise Exception("need at least two input file groups to align")
         ifts = self.zip_input_files(ifgs)  # input file tuples
-        for ift in ifts:
+        for _id, ift in enumerate(ifts):
             alignments = json.loads(self.run_java_aligner(ift))
-            self.align(alignments, ift)
+            pcgts = self.align(alignments, ift)
+            ID = concat_padded(self.output_file_grp, _id+1)
+            basename = os.path.basename(ift[0].input_file.url)
+            out = self.workspace.add_file(
+                ID=ID,
+                file_grp=self.output_file_grp,
+                basename=self.output_file_grp + '-' + basename,
+                mimetype=MIMETYPE_PAGE,
+                content=to_xml(pcgts),
+            )
+            self.log.info('created file %s', out)
 
     def align(self, alignments, ift):
         """align the alignment objects with the according input file tuples"""
@@ -44,13 +55,49 @@ class Aligner(Processor):
                     lines.append(Alignment(t, region, alignments[i]))
                 self.align_lines(lines)
                 i += 1
+        return pcgtst[0]
 
     def align_lines(self, lines):
         """align the given line alignment with the lines"""
-        for line in lines:
-            self.log.info('line: %s %s',
-                          line.input_file.input_file_group,
-                          line.region.get_TextEquiv()[0].Unicode)
+        for i, line in enumerate(lines):
+            self.log.info('align line: %s [%s]',
+                          line.region.get_TextEquiv()[0].Unicode,
+                          line.input_file.input_file_group)
+            if i != 0:
+                lines[0].region.add_TextEquiv(line.region.get_TextEquiv()[0])
+            lines[0].region.get_TextEquiv()[i].set_comments(
+                line.input_file.input_file_group)
+        self.align_words(lines)
+
+    def align_words(self, lines):
+        for word in lines[0].alignment['words']:
+            self.log.info("aligning word %s", word['master'])
+            master = self.find_word(
+                [word['master']],
+                lines[0].region.get_Word())
+            if master is None or len(master) != 1:
+                raise Exception("cannot find {}".format(word['master']))
+            others = list()
+            for i, other in enumerate(word['alignments']):
+                tmp = self.find_word(other, lines[1+i].region.get_Word())
+                if tmp is None:
+                    raise Exception("cannot find {}".format(other))
+                others.append(tmp)
+
+    def find_word(self, tokens, regions):
+        self.log.info("tokens = %s", tokens)
+        for i, _ in enumerate(regions):
+            if not self.match_tokens(tokens, regions, i):
+                continue
+            return regions[i:i+len(tokens)]
+        return None
+
+    def match_tokens(self, tokens, regions, i):
+        for j, token in enumerate(tokens):
+            self.log.info('checking %s with %s', token, regions[i+j].get_TextEquiv()[0].Unicode)
+            if token not in regions[i+j].get_TextEquiv()[0].Unicode:
+                return False
+        return True
 
     def open_input_file_tuples(self, ift):
         """
@@ -202,6 +249,7 @@ class FileAlignment:
     def open(self):
         self.log.info("opening: %s", os.path.basename(self.input_file.url))
         return parse(self.input_file.url, True)
+
 
 class Alignment:
     def __init__(self, ifile, region, alignment):
