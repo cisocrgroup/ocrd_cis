@@ -139,6 +139,21 @@
 					"type": "string"
 				}
 			}
+		},
+		"ocrd-cis-lang": {
+			"executable": "ocrd-cis-lang",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"postprocessing/alignment"
+			],
+			"description": "Get language and font of input-file-group",
+			"parameters": {
+				"none": {
+					"type": "string"
+				}
+			}
 		}
 	}
 }

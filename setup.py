@@ -6,6 +6,7 @@ Installs:
     - ocrd-cis-ocropy-train
     - ocrd-cis-aio
     - ocrd-cis-stats
+    - ocrd-cis-lang
 """
 
 from setuptools import setup
@@ -26,7 +27,7 @@ setup(
         'click',
         'scipy',
         'matplotlib',
-        'levenshtein'
+        'python-Levenshtein'
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
@@ -39,6 +40,7 @@ setup(
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
             'ocrd-cis-aio=ocrd_cis.aio.cli:cis_ocrd_aio',
             'ocrd-cis-stats=ocrd_cis.stats.cli:cis_ocrd_stats',
+            'ocrd-cis-lang=ocrd_cis.stats.cli:cis_ocrd_lang',
         ]
     },
 )

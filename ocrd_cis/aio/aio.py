@@ -108,6 +108,9 @@ def find_page_xml_file(bdir, img):
     return None
 
 
+def getLang(filegrp):
+    pass
+
 def addtoworkspace(wsdir, gtdir):
     # path to workspace
     if wsdir[-1] != '/':
