@@ -21,9 +21,13 @@ OCRD_GT_FGROUP = 'OCR-D-GT'
 
 def unpack(fromdir, todir):
     '''extract all zips into temp dir'''
+    n = 1
     _, _, files = os.walk(fromdir).__next__()
     for file in files:
         if '.zip' in file:
+            if n == 0:
+                break
+            n -= 1
             # skip -- missing page dir
             if 'anton_locus' in file:
                 continue
@@ -38,15 +42,20 @@ def unpack(fromdir, todir):
                 myzip.extractall(todir)
 
 
+def cmd_to_string(cmd):
+    """remove unneded whitepsace from command strings"""
+    return re.sub("""\\s+""", " ", cmd).strip()
+
+
 def subprocess_cmd(command, want=0):
-    print(re.sub("""\\s+""", " ", "running {command}".format(command=command)))
+    print("running command: {}".format(cmd_to_string(command)))
     process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
     out, _ = process.communicate(command.encode('utf-8'))
     print(out.decode('utf-8'))
     returncode = process.wait()
     if returncode != want:
         raise Exception("invalid returncode for {cmd}: {c}"
-                        .format(cmd=command, c=returncode))
+                        .format(cmd=cmd_to_string(command), c=returncode))
 
 
 def subprocess_ret(command, want=0):
@@ -116,6 +125,7 @@ def addtoworkspace(wsdir, gtdir):
     # unpack zip files into temp file
     unpack(gtdir, tempdir)
 
+    old_cwd = os.getcwd()
     os.chdir(wsdir)
 
     initcmd = 'ocrd workspace init {}'.format(wsdir)
@@ -141,8 +151,11 @@ def addtoworkspace(wsdir, gtdir):
                 xmldir = find_page_xml_file(filedir, filename)
 
                 if xmldir is None or not os.path.exists(xmldir):
-                    raise Exception("cannot find page xml for {tif}".
-                                    format(tif=tif))
+                    print(
+                        "Warning: cannot find page xml file for {tif}".format(tif=tif))
+                    continue
+                    # raise Exception("cannot find page xml for {tif}".
+                    #                 format(tif=tif))
                 xmlfname = xmldir[xmldir.rfind('/')+1:-4]
                 if filename != xmlfname:
                     tif = xmlfname+'.tif'
@@ -182,17 +195,20 @@ def addtoworkspace(wsdir, gtdir):
 
                 # rename filepaths in xml into file-urls
                 sedcmd = '''
-                sed -i {fname}.xml -e 's#imageFilename="{tif}"#imageFilename="{fdir}"#'
-                '''.format(fname=wsdir+'OCR-D-GT-'+d+'/'+filename, tif=tif,
+                sed -i {fname}.xml -e 's#imageFilename="[^"]*"#imageFilename="{fdir}"#'
+                '''.format(fname=wsdir+'OCR-D-GT-'+d+'/'+filename,
                            fdir=fileprefix+wsdir+'OCR-D-IMG-'+d+'/'+tif)
                 subprocess_cmd(sedcmd)
 
     shutil.rmtree(tempdir)
+    os.chdir(old_cwd)
     return dirs
 
 
 def get_ocrd_model(configfile):
-    """Read model parameter from configfile and return it."""
+    """Read model parameter from a ocr configfile and return it."""
+    print("opening {cnf} [{cwd}]".
+          format(cnf=configfile, cwd=os.getcwd()))
     with open(configfile) as f:
         config = json.load(f)
     return config['model']
@@ -200,9 +216,9 @@ def get_ocrd_model(configfile):
 
 def runtesserocr(wsdir, configdir, fgrpdict):
     """ Run tesseract with a model and return the new output-file-grp"""
-    model = get_ocrd_model(configdir)
     print('runtesserocr({wsdir}, {cnf}, {fgrp}'.format(
         wsdir=wsdir, cnf=configdir, fgrp=fgrpdict))
+    model = get_ocrd_model(configdir)
     for fgrp in fgrpdict:
 
         input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
