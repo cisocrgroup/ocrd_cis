@@ -150,13 +150,14 @@ class OcropyRecognize(Processor):
                           ID, input_file.basename, self.output_file_grp)
             # Use the input file's basename for the new file
             # this way the files retain the same basenames.
-            self.workspace.add_file(
+            out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,
                 basename=input_file.basename,
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
             )
+            self.log.info('created file %s', out)
 
     def process_regions(self, regions, maxlevel, args):
         for region in regions:
