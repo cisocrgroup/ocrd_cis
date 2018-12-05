@@ -6,6 +6,8 @@ import subprocess
 from zipfile import ZipFile
 from collections import defaultdict
 
+from ocrd.utils import getLogger
+
 
 '''
 All in One Tool for:
@@ -305,7 +307,13 @@ def getstats(wsdir, alignfilegrps):
     return stats
 
 
-def AllInOne(actualfolder, parameterfile):
+def AllInOne(actualfolder, parameterfile, verbose):
+
+    log = getLogger('AllInOne')
+    if verbose:
+        import logging
+        log.setLevel(logging.DEBUG)
+
 
     os.chdir(actualfolder)
 
@@ -315,6 +323,7 @@ def AllInOne(actualfolder, parameterfile):
         parameter = json.load(f)
 
     # wget gt zip files (only downloads new zip files)
+    log.info("downloading missing files...")
     wgetGT()
 
     basestats = getbaseStats(actualfolder)
