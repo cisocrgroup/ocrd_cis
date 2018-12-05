@@ -119,7 +119,8 @@ class OcropyRecognize(Processor):
 
         ocropydir = os.path.dirname(os.path.abspath(__file__))
         network = ocrolib.load_object(
-            os.path.join(ocropydir, 'models', self.parameter['model']), verbose=1)
+            os.path.join(ocropydir, 'models', self.parameter['model']),
+            verbose=1)
         for x in network.walk():
             x.postLoad()
         for x in network.walk():
