@@ -26,6 +26,7 @@ setup(
         'click',
         'scipy',
         'matplotlib',
+        'levenshtein'
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
