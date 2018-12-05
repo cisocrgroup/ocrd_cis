@@ -161,6 +161,26 @@ class PageAlignment:
             page_xml_line.add_TextEquiv(eq)
 
 
+hash_escape = "\u0E23"
+dollar_escape = "\u0E24"
+underscore_escape = "\u0E5F"
+
+
+def escape_for_aligner(text):
+    """escapes # with 0xE023 and $ with 0xE024"""
+    text = text.replace("#", hash_escape)
+    text = text.replace("$", dollar_escape)
+    text = text.replace("_", underscore_escape)
+    return text
+
+
+def unescape_from_aligner(text):
+    """escapes 0xE023 with # and 0xE024 with $"""
+    text = text.replace(hash_escape, "#")
+    text = text.replace(dollar_escape, "$")
+    return text
+
+
 class LineAlignment:
     """
     LineAlignment holds a line alignment.
