@@ -1,10 +1,17 @@
 import subprocess
+import logging
 from ocrd.utils import getLogger
 from pathlib import Path
 
 MAIN = "de.lmu.cis.ocrd.cli.Main"
 ALIGNER = MAIN
 PROFILER = "de.lmu.cis.ocrd.cli.Profile"
+
+
+def JavaAligner(jar, args):
+    """Create a java process that calls -c align"""
+    args = ['-c', 'align'] + args
+    return JavaProcess(jar, ALIGNER, args)
 
 
 class JavaProcess:
@@ -16,13 +23,7 @@ class JavaProcess:
         if not Path(jar).is_file():
             raise FileNotFoundError("no such file: {}".format(jar))
 
-    def aligner(jar, args):
-        args = ['-c', 'align'] + args
-        args.append('--log-level')
-        args.append(logging.getLevelName(self.log.level))
-        return JavaProcess(jar, ALIGNER, args)
-
-    def profiler(jar, args:
+    def profiler(jar, args):
         return JavaProcess(jar, PROFILER, args)
 
     def run(self, _input):
@@ -51,5 +52,13 @@ class JavaProcess:
 
     def get_cmd(self):
         cmd = ['java', '-cp', self.jar, self.main]
+        self.args.append('--log-level')
+        self.args.append(self.get_log_level())
         cmd.extend(self.args)
         return cmd
+
+    def get_log_level(self):
+        level = logging.getLevelName(self.log.level)
+        if level == 'NOTSET':
+            level = 'INFO'
+        return level

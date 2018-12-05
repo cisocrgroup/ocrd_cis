@@ -7,7 +7,7 @@ from ocrd.utils import getLogger
 from ocrd.model.ocrd_page import from_file
 from ocrd.model.ocrd_page import to_xml
 from ocrd.model.ocrd_page_generateds import TextEquivType
-from ocrd_cis import JavaProcess
+from ocrd_cis import JavaAligner
 from ocrd_cis import get_ocrd_tool
 
 
@@ -139,9 +139,9 @@ class Aligner(Processor):
         for i in _input:
             self.log.debug("input line: %s", i)
         n = len(ifs)
-        p = JavaProcess.aligner(
+        p = JavaAligner(
             jar=self.parameter['cisOcrdJar'],
-            args=['-D', '''{"n": {}}'''.format(n)],
+            args=['-D', '''{{"n": {}}}'''.format(n)],
         )
         return p.run("\n".join(_input))
 
