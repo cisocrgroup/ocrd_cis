@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import json
+import os
 from ocrd import Processor
 from ocrd import MIMETYPE_PAGE
 from ocrd.utils import getLogger
@@ -23,15 +24,62 @@ class Aligner(Processor):
         if len(ifgs) < 2:
             raise Exception("need at least two input file groups to align")
         ifts = self.zip_input_files(ifgs)  # input file tuples
-        page_alignments = list()
         for ift in ifts:
-            output = self.run_java_aligner(ift)
-            page_alignments.append(PageAlignment(ifgs, ift, output))
-        for pa in page_alignments:
-            for la in pa.line_alignments:
-                self.log.info("%s", la)
-            self.write_alignment_to_xml(pa)
-        self.workspace.save_mets()
+            alignments = json.loads(self.run_java_aligner(ift))
+            self.align(alignments, ift)
+        for ift in ifts:
+            self.log.info("##########################################")
+            for i in ift:
+                self.log.info("i = %s", i)
+                # self.log.info("i = %s %s", i.basename(), i.ID)
+
+        # return
+        # print(json.dumps(alignment, indent=4))
+        # page_alignments.append(PageAlignment(ifgs, ift, output))
+        # for pa in page_alignments:
+        #     for la in pa.line_alignments:
+        #         self.log.info("%s", la)
+        #     self.write_alignment_to_xml(pa)
+        # self.workspace.save_mets()
+
+    def align(self, alignments, ift):
+        """align the alignment objects with the according input file tuples"""
+        for t in ift:
+            self.log.info("tuple %s", t.basename_without_extension)
+        ift = self.open_input_file_tuples(ift)
+        i = 0
+        for mi, mr in enumerate(ift[0].get_Page().get_TextRegion()):
+            for mj, ml in enumerate(mr.get_TextLine()):
+                # self.log.info('mi = %d, mj = %d', mi, mj)
+                lines = [ml]
+                for t in ift[1:]:
+                    # self.log.info('len regions: %d',
+                    #               len(t.get_Page().get_TextRegion()))
+                    # self.log.info('len lines: %d', len(t.get_Page(
+                    # ).get_TextRegion()[mi].get_TextLine()))
+                    lines.append(t.get_Page().get_TextRegion()
+                                 [mi].get_TextLine()[mj])
+                self.align_lines(alignments[i], lines)
+                i += 1
+
+    def align_lines(self, alignment, lines):
+        """align the given line alignment with the lines"""
+        #self.log.info('alignment: %s', json.dumps(alignment, indent=4))
+        # for line in lines:
+        #     self.log.info('line: %s', line.get_TextEquiv()[0].Unicode)
+        pass
+
+    def open_input_file_tuples(self, ift):
+        """
+        opens all xml files of the given input file tuple
+        and returns them as tuples
+        """
+        res = list()
+        for ifile in ift:
+            self.log.debug("## opening file %s", ifile)
+            f = from_file(self.workspace.download_file(ifile))
+            res.append(f)
+        return tuple(res)
 
     def zip_input_files(self, ifgs):
         """Zip files of the given input file groups"""
@@ -40,9 +88,10 @@ class Aligner(Processor):
             self.log.info("input file group: %s", ifg)
             ifiles = sorted(
                 self.workspace.mets.find_files(fileGrp=ifg),
-                key=lambda ifile: ifile.ID)
+                key=lambda ifile: ifile.url)
             for i in ifiles:
-                self.log.info("sorted file: %s %s", i.url, i.ID)
+                self.log.info("sorted file: %s %s",
+                              os.path.basename(i.url), i.ID)
             self.log.info("input files: %s", ifiles)
             files.append(ifiles)
         return zip(*files)
@@ -73,7 +122,7 @@ class Aligner(Processor):
         )
 
     def read_lines_from_input_file(self, ifile):
-        self.log.info("reading input file: %s", ifile.url)
+        self.log.info("reading input file: %s", ifile)
         lines = list()
         pcgts = from_file(self.workspace.download_file(ifile))
         for region in pcgts.get_Page().get_TextRegion():
@@ -99,6 +148,7 @@ class Aligner(Processor):
 
 class PageAlignment:
     """PageAlignment holds a list of LineAlignments."""
+
     def __init__(self, ifgs, ifs, process_output):
         """
         Create a page alignment from java-aligner's output.
@@ -191,6 +241,7 @@ class LineAlignment:
     master line with another. Pairwise aligned lines have always
     the same length. Underscores ('_') mark deletions or insertions.
     """
+
     def __init__(self, lines):
         """
         Create a LineAlignment from n-1 pairwise
