@@ -246,7 +246,7 @@ def runocropy(wsdir, configdir, fgrpdict):
     for fgrp in fgrpdict:
 
         input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
-        output_file_group = 'OCR-D-OCORPY-{model}-{fgrp}'.format(
+        output_file_group = 'OCR-D-OCROPY-{model}-{fgrp}'.format(
             model=model, fgrp=fgrp)
         fgrpdict[fgrp].append(output_file_group)
 
