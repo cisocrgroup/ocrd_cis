@@ -116,7 +116,10 @@ class OcropyRecognize(Processor):
                 "currently only implemented at the line/glyph level")
 
         filepath = os.path.dirname(os.path.abspath(__file__))
-        network = ocrolib.load_object(self.parameter['model'], verbose=1)
+
+        ocropydir = os.path.dirname(os.path.abspath(__file__))
+        network = ocrolib.load_object(
+            os.path.join(ocropydir, 'models', self.parameter['model']), verbose=1)
         for x in network.walk():
             x.postLoad()
         for x in network.walk():
