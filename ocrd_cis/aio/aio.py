@@ -30,8 +30,9 @@ def unpack(fromdir, todir):
             if n == 0:
                 break
             n -= 1
-            # skip -- missing page dir
-            if 'anton_locus' in file:
+            # skip -- missing page dir or corrupt xml
+            exclude = ['anton_locusGalat_1800.zip', 'dorn_uppedat_1507.zip']
+            if file in exclude:
                 continue
             filedir = os.path.join(fromdir, file)
             resdir = os.path.join(todir, file)
