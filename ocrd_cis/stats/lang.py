@@ -31,9 +31,7 @@ class Lang(Processor):
         for input_file in inputfiles:
 
             alignurl = input_file.url
-
             pcgts = parse(alignurl, True)
-
             page = pcgts.get_Page()
             regions = page.get_TextRegion()
 
@@ -46,14 +44,12 @@ class Lang(Processor):
                         linelang[llang] += 1
                     except:
                         pass
-                    try:
 
+                    try:
                         lfont = line.fontFamily
                         linefont[lfont] +=1
-
                     except:
                         pass
-
 
                     words = line.get_Word()
                     for word in words:
@@ -69,9 +65,24 @@ class Lang(Processor):
                         except:
                             pass
 
+        #predominant language
+        try:
+            lang = max(linelang, key=lambda k: linelang[k])
+        except:
+            try:
+                lang = max(wordlang, key=lambda k: wordlang[k])
+            except:
+                lang = 'German'
 
-        print(linelang)
-        print(wordlang)
+        #predominant font
+        try:
+            font = max(linefont, key=lambda k: linefont[k])
+        except:
+            try:
+                font = max(wordfont, key=lambda k: wordfont[k])
+            except:
+                font = 'Antiqua'
 
-        print(linefont)
-        print(wordfont)
+
+        print(lang)
+        print(font)
