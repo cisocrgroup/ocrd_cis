@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 import json
 import os
+import Levenshtein
 from ocrd import Processor
 from ocrd import MIMETYPE_PAGE
 from ocrd.utils import getLogger
@@ -60,8 +61,9 @@ class Aligner(Processor):
     def align_lines(self, lines):
         """align the given line alignment with the lines"""
         for i, line in enumerate(lines):
-            self.log.info('align line: %s [%s]',
+            self.log.info('align line: %s [%s - %s]',
                           line.region.get_TextEquiv()[0].Unicode,
+                          line.region.get_id(),
                           line.input_file.input_file_group)
             if i != 0:
                 lines[0].region.add_TextEquiv(line.region.get_TextEquiv()[0])
@@ -70,34 +72,82 @@ class Aligner(Processor):
         self.align_words(lines)
 
     def align_words(self, lines):
+        self.log.info(json.dumps(lines[0].alignment))
+        mregion = lines[0].region.get_Word()
+        oregion = [lines[i].region.get_Word() for i in range(1, len(lines))]
+
         for word in lines[0].alignment['words']:
             self.log.info("aligning word %s", word['master'])
-            master = self.find_word(
-                [word['master']],
-                lines[0].region.get_Word())
+            master, rest = self.find_word([word['master']], mregion, "master")
+            mregion = rest
             if master is None or len(master) != 1:
                 raise Exception("cannot find {}".format(word['master']))
             others = list()
             for i, other in enumerate(word['alignments']):
-                tmp = self.find_word(other, lines[1+i].region.get_Word())
-                if tmp is None:
+                match, rest = self.find_word(other, oregion[i])
+                if match is None:
                     raise Exception("cannot find {}".format(other))
-                others.append(tmp)
+                others.append(match)
+                oregion[i] = rest
+            self.log.info("word alignment (master): %s",
+                          master[0].get_TextEquiv()[0].Unicode)
+            for other in others:
+                _str = [x.get_TextEquiv()[0].Unicode for x in other]
+                self.log.info("word alignment (other):  %s",
+                              " ".join(_str));
 
-    def find_word(self, tokens, regions):
-        self.log.info("tokens = %s", tokens)
+    def find_word(self, tokens, regions, t="other"):
+        self.log.info("tokens = %s [%s]", tokens, t)
         for i, _ in enumerate(regions):
-            if not self.match_tokens(tokens, regions, i):
+            n = self.match_tokens(tokens, regions, i)
+            self.log.info("n = %d", n)
+            if n == 0:
                 continue
-            return regions[i:i+len(tokens)]
-        return None
+            return tuple([regions[i:n], regions[i:]])
+        # not found try again with levenshtein
+        self.log.warn(
+            "could not find tokens = %s [%s]; trying again",
+            tokens, t)
+        for i, _ in enumerate(regions):
+            n = self.match_tokens_lev(tokens, regions, i)
+            self.log.info("n = %d", n)
+            if n == 0:
+                continue
+            return tuple([regions[i:n], regions[i:]])
+        # nothing could be found
+        return tuple([None, regions])
 
     def match_tokens(self, tokens, regions, i):
+        f = lambda a, b: a in b
+        return self.match_tokens_lambda(tokens, regions, i, f)
+
+    def match_tokens_lev(self, tokens, regions, i):
+        def f(a, b):
+            k = int(len(a)/3)
+            d = Levenshtein.distance(a, b)
+            return d <= 1 or d <= k
+        return self.match_tokens_lambda(tokens, regions, i, f)
+
+    def match_tokens_lambda(self, tokens, regions, i, f):
+        """
+        Returns one after the last index of the match starting from i.
+        Returns 0 if nothing could be matched.
+        """
         for j, token in enumerate(tokens):
-            self.log.info('checking %s with %s', token, regions[i+j].get_TextEquiv()[0].Unicode)
-            if token not in regions[i+j].get_TextEquiv()[0].Unicode:
-                return False
-        return True
+            if j + i > len(regions):
+                return 0
+            self.log.info('checking %s with %s', token,
+                          regions[i+j].get_TextEquiv()[0].Unicode)
+            if f(token, regions[i+j].get_TextEquiv()[0].Unicode):
+                continue
+            if j == 0:
+                return 0
+            # skip this and try next one
+            # if we already have found a
+            # match ath the first token position
+            i += 1
+        return i + len(tokens)
+
 
     def open_input_file_tuples(self, ift):
         """
@@ -168,10 +218,7 @@ class Aligner(Processor):
         for i in _input:
             self.log.debug("input line: %s", i)
         n = len(ifs)
-        p = JavaAligner(
-            jar=self.parameter['cisOcrdJar'],
-            args=['-D', '''{{"n": {}}}'''.format(n)],
-        )
+        p = JavaAligner(self.parameter['cisOcrdJar'], n)
         return p.run("\n".join(_input))
 
 
