@@ -281,7 +281,8 @@ def runalligner(wsdir, configdir, fgrpdict):
         --input-file-grp '{ifg}' \
         --output-file-grp '{ofg}' \
         --mets {mets}/mets.xml \
-        --parameter {parameter}
+        --parameter {parameter} \
+        --log-level DEBUG
         '''.format(ifg=input_file_group, ofg=output_file_group,
                    mets=wsdir, parameter=configdir)
         subprocess_cmd(allingercmd)
