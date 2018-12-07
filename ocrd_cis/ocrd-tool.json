@@ -111,11 +111,11 @@
 					"type": "string",
 					"required": true
 				},
-				"profilerExecutable": {
+				"executable": {
 					"type": "string",
 					"required": true
 				},
-				"profilerBackend": {
+				"backend": {
 					"type": "string",
 					"required": true
 				},
