@@ -1,5 +1,6 @@
 import subprocess
 import logging
+import json
 from ocrd.utils import getLogger
 from pathlib import Path
 
@@ -8,9 +9,10 @@ ALIGNER = MAIN
 PROFILER = "de.lmu.cis.ocrd.cli.Profile"
 
 
-def JavaAligner(jar, args):
-    """Create a java process that calls -c align"""
-    args = ['-c', 'align'] + args
+def JavaAligner(jar, n):
+    """Create a java process that calls -c align -D '{"n":n}'"""
+    d = {'n': n}
+    args = ['-c', 'align', '-D', "{}".format(json.dumps(d))]
     return JavaProcess(jar, ALIGNER, args)
 
 
@@ -32,23 +34,31 @@ class JavaProcess:
         The process writes _input to stdin of the process.
         """
         cmd = self.get_cmd()
-        self.log.info('command: %s', cmd)
+        self.log.info('command: %s', " ".join(cmd))
         with subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stdin=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 # only since 3.6: encoding='utf-8',
-                # stderr=subprocess.DEVNULL,
         ) as p:
             output, err = p.communicate(input=_input.encode('utf-8'))
+            self.log_stderr(err)
             output = output.decode('utf-8')
             retval = p.wait()
-            self.log.info("%s: %i", cmd, retval)
+            self.log.info("%s: %i", " ".join(cmd), retval)
             if retval != 0:
                 raise ValueError(
                     "cannot execute {}: {}\nreturned: {}"
                     .format(cmd, err.decode('utf-8') if err else u'', retval))
             return output
+
+    def log_stderr(self, err):
+        for line in err.decode('utf-8').split("\n"):
+            if "DEBUG:" in line:
+                self.log.debug(line[6:])
+            elif "INFO:" in line:
+                self.log.info(line[5:])
 
     def get_cmd(self):
         cmd = ['java', '-cp', self.jar, self.main]
