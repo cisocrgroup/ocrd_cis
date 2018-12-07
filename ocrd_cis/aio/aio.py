@@ -30,8 +30,9 @@ def unpack(fromdir, todir):
             if n == 0:
                 break
             n -= 1
-            # skip -- missing page dir
-            if 'anton_locus' in file:
+            # skip -- missing page dir or corrupt xml
+            exclude = ['anton_locusGalat_1800.zip', 'dorn_uppedat_1507.zip']
+            if file in exclude:
                 continue
             filedir = os.path.join(fromdir, file)
             resdir = os.path.join(todir, file)
@@ -81,6 +82,7 @@ def wgetGT():
 
 
 def getbaseStats(gtdir):
+    """get base stats: number of projects and pages)"""
     _, _, files = os.walk(gtdir).__next__()
     books, pages = 0, 0
     for file in files:
@@ -110,8 +112,18 @@ def find_page_xml_file(bdir, img):
     return None
 
 
-def getLang(filegrp):
-    pass
+def getLF(wsdir, input_file_group):
+    """get predominant language and fonttype of input file group"""
+
+    langcmd = '''
+    ocrd-cis-lang \
+    --input-file-grp {ifg} \
+    --mets {mets}/mets.xml \
+    '''.format(mets=wsdir, ifg=input_file_group)
+
+    [lang, font] = subprocess_ret(langcmd).strip().split('\n')
+
+    return lang, font
 
 def addtoworkspace(wsdir, gtdir):
     # path to workspace
@@ -317,6 +329,7 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
 
 
     os.chdir(actualfolder)
+
 
     if parameterfile is None:
         print('A Parameterfile is mandatory')

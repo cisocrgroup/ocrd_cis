@@ -206,22 +206,26 @@ class OcropyRecognize(Processor):
             word_r_list = [[0]]
             word_conf_list = [[]]
 
-            w_no = 0
-            found_char = False
-            for i, c in enumerate(clist):
-                if c != ' ':
-                    found_char = True
-                    word_conf_list[w_no].append(confidlist[i])
-                    word_r_list[w_no].append(rlist[i])
+            if words != []:
+                w_no = 0
+                found_char = False
+                for i, c in enumerate(clist):
+                    if c != ' ':
+                        found_char = True
+                        word_conf_list[w_no].append(confidlist[i])
+                        word_r_list[w_no].append(rlist[i])
 
-                if c == ' ' and found_char:
-                    if i == 0:
-                        word_r_list[0][0] = rlist[i]
+                    if c == ' ' and found_char:
+                        if i == 0:
+                            word_r_list[0][0] = rlist[i]
 
-                    elif i+1 <= len(clist)-1 and clist[i+1] != ' ':
-                        word_conf_list.append([])
-                        word_r_list.append([rlist[i]])
-                        w_no += 1
+                        elif i+1 <= len(clist)-1 and clist[i+1] != ' ':
+                            word_conf_list.append([])
+                            word_r_list.append([rlist[i]])
+                            w_no += 1
+            else:
+                word_conf_list = [[0]]
+                word_r_list = [[0, box[2]-box[0]]]
 
             # conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]
