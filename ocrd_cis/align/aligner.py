@@ -67,8 +67,11 @@ class Aligner(Processor):
                           line.input_file.input_file_group)
             if i != 0:
                 lines[0].region.add_TextEquiv(line.region.get_TextEquiv()[0])
+                lines[0].region.get_TextEquiv()[i].set_dataType("alignment")
+            else:
+                lines[0].region.get_TextEquiv()[i].set_dataType("master-ocr")
             lines[0].region.get_TextEquiv()[i].set_comments(
-                line.input_file.input_file_group + "." + line.region.get_id())
+                line.input_file.input_file_group + "/" + line.region.get_id())
         self.align_words(lines)
 
     def align_words(self, lines):
@@ -96,25 +99,20 @@ class Aligner(Processor):
             self.align_word_regions(words)
 
     def align_word_regions(self, words):
-        # self.log.info("word alignment (master): %s",
-        #               words[0].region[0].get_TextEquiv()[0].Unicode)
-        # for other in words[1:]:
-        #     _str = [x.get_TextEquiv()[0].Unicode for x in other.region]
-        #     self.log.info("word alignment (other):  %s",
-        #                   " ".join(_str))
+        te0 = lambda x: x.get_TextEquiv()[0]
         for i, word in enumerate(words):
-            _str = " ".join([x.get_TextEquiv()[0].Unicode for x in word.region])
+            _str = " ".join([te0(x).Unicode for x in word.region])
             _id = ",".join([x.get_id() for x in word.region])
-            conf = min([x.get_TextEquiv()[0].get_conf() or 0.0 for x in word.region])
-            self.log.info("word alignment: %s [%s - %s]",
-                          _str,
-                          _id,
-                          word.input_file.input_file_group)
+            # if conf is none it is most likely ground truth data
+            conf = min([te0(x).get_conf() or 1 for x in word.region])
+            ifg = word.inptu_file.input_file_group
+            self.log.info("word alignment: %s [%s - %s]", _str, _id, ifg)
             if i != 0:
                 words[0].region[0].add_TextEquiv(
                     TextEquivType(Unicode=_str, conf=conf))
             words[0].region[0].get_TextEquiv()[i].set_comments(
-                word.input_file.input_file_group + "." + _id)
+                word.input_file.input_file_group + "/" + _id)
+            words[0].region[0].get_TextEquiv()[i].set_index(i+1)
 
     def find_word(self, tokens, regions, t="other"):
         self.log.debug("tokens = %s [%s]", tokens, t)
