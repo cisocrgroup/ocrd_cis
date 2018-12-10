@@ -105,7 +105,7 @@ class Aligner(Processor):
             _id = ",".join([x.get_id() for x in word.region])
             # if conf is none it is most likely ground truth data
             conf = min([te0(x).get_conf() or 1 for x in word.region])
-            ifg = word.inptu_file.input_file_group
+            ifg = word.input_file.input_file_group
             self.log.info("word alignment: %s [%s - %s]", _str, _id, ifg)
             if i != 0:
                 words[0].region[0].add_TextEquiv(
