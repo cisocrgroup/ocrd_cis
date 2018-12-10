@@ -5,28 +5,33 @@ from ocrd.utils import getLogger
 from pathlib import Path
 
 MAIN = "de.lmu.cis.ocrd.cli.Main"
-ALIGNER = MAIN
-PROFILER = "de.lmu.cis.ocrd.cli.Profile"
 
 
 def JavaAligner(jar, n):
     """Create a java process that calls -c align -D '{"n":n}'"""
     d = {'n': n}
     args = ['-c', 'align', '-D', "{}".format(json.dumps(d))]
-    return JavaProcess(jar, ALIGNER, args)
+    return JavaProcess(jar, args)
+
+
+def JavaProfiler(jar, exe, backend, lang):
+    d = {
+        'executable': exe,
+        'backend': backend,
+        'language': lang,
+    }
+    args = ['-c', 'align', '-D', "{}".format(json.dumps(d))]
+    return JavaProcess(jar, args)
 
 
 class JavaProcess:
-    def __init__(self, jar, main, args):
+    def __init__(self, jar, args):
         self.jar = jar
         self.args = args
-        self.main = main
+        self.main = MAIN
         self.log = getLogger('cis.JavaProcess')
         if not Path(jar).is_file():
             raise FileNotFoundError("no such file: {}".format(jar))
-
-    def profiler(jar, args):
-        return JavaProcess(jar, PROFILER, args)
 
     def run(self, _input):
         """
