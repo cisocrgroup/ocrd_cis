@@ -107,11 +107,16 @@ class Aligner(Processor):
             conf = min([te0(x).get_conf() or 1 for x in word.region])
             ifg = word.input_file.input_file_group
             self.log.info("word alignment: %s [%s - %s]", _str, _id, ifg)
+            ddt = word.input_file.input_file_group + "/" + _id
             if i != 0:
-                words[0].region[0].add_TextEquiv(
-                    TextEquivType(Unicode=_str, conf=conf))
-            words[0].region[0].get_TextEquiv()[i].set_comments(
-                word.input_file.input_file_group + "/" + _id)
+                te = TextEquivType(
+                    Unicode=_str,
+                    conf=conf,
+                    dataType="ocr-word-alignment",
+                    dataTypeDetails=ddt)
+                words[0].region[0].addTextEquiv(te)
+            # words[0].region[0].get_TextEquiv()[i].set_comments(
+            #     word.input_file.input_file_group + "/" + _id)
             words[0].region[0].get_TextEquiv()[i].set_index(i+1)
 
     def find_word(self, tokens, regions, t="other"):
