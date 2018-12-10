@@ -114,7 +114,7 @@ class Aligner(Processor):
                     conf=conf,
                     dataType="ocr-word-alignment",
                     dataTypeDetails=ddt)
-                words[0].region[0].addTextEquiv(te)
+                words[0].region[0].add_TextEquiv(te)
             # words[0].region[0].get_TextEquiv()[i].set_comments(
             #     word.input_file.input_file_group + "/" + _id)
             words[0].region[0].get_TextEquiv()[i].set_index(i+1)
