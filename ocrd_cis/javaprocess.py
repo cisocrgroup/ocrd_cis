@@ -2,6 +2,7 @@ import subprocess
 import logging
 import json
 from ocrd.utils import getLogger
+from ocrd.logging import _overrideLogLevel
 from pathlib import Path
 
 MAIN = "de.lmu.cis.ocrd.cli.Main"
@@ -20,7 +21,7 @@ def JavaProfiler(jar, exe, backend, lang):
         'backend': backend,
         'language': lang,
     }
-    args = ['-c', 'align', '-D', "{}".format(json.dumps(d))]
+    args = ['-c', 'profile', '-D', "{}".format(json.dumps(d))]
     return JavaProcess(jar, args)
 
 
@@ -73,7 +74,8 @@ class JavaProcess:
         return cmd
 
     def get_log_level(self):
-        level = logging.getLevelName(self.log.level)
-        if level == 'NOTSET':
-            level = 'INFO'
-        return level
+        # level = _overrideLogLevel
+        # self.log.info("self.log.level: %s", level)
+        # level = self.log.level
+        # self.log.info("self.log.level: %s", level)
+        return "DEBUG"

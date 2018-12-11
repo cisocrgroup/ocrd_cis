@@ -7,7 +7,7 @@ from ocrd.model.ocrd_page import from_file
 from ocrd.model.ocrd_page_generateds import TextEquivType
 from ocrd.model.ocrd_page import to_xml
 from ocrd_cis import get_ocrd_tool
-from ocrd_cis import JavaProcess
+from ocrd_cis import JavaProfiler
 
 
 class Profiler(Processor):
@@ -19,7 +19,7 @@ class Profiler(Processor):
         self.log = getLogger('cis.Processor.Profiler')
 
     def process(self):
-        profile = self.read_profile()
+        profile = json.loads(self.read_profile())
         files = self.add_suggestions(profile)
         for (pcgts, ifile) in files:
             self.add_output_file(
@@ -42,13 +42,14 @@ class Profiler(Processor):
         return files
 
     def add_candidates(self, profile, word):
-        """
-        Adds candidates of the given profile to a word in the page XML document.
-        All candidates are appended to the TextEquiv of the given word.
-        New TextEquivs have dataType="profiler-candidate" and
+        """Adds candidates of the given profile to a word in the page XML
+        document.  All candidates are appended to the TextEquiv of the
+        given word.  New TextEquivs have
+        dataType="ocrd-cis-profiler-candidate" and
         dataTypeDetails="`json of the according profiler suggestion`".
+
         """
-        i = self.parameter['textEquivIndex']
+        i = self.parameter['index']
         _unicode = word.get_TextEquiv()[i].Unicode
         clean = re.sub(r'^\W*(.*?)\W*$', r'\1', _unicode)
         lower = clean.lower()
@@ -56,11 +57,12 @@ class Profiler(Processor):
             return
         for cand in profile['data'][lower]['Candidates']:
             eq = TextEquivType(
-                dataType='profiler-candidate',
+                dataType='ocrd-cis-profiler-candidate',
                 dataTypeDetails=json.dumps(cand),
                 Unicode=self.format_candidate(clean, cand['Suggestion']),
                 conf=cand['Weight'],
             )
+            eq.set_index(len(word.get_TextEquiv()))
             word.add_TextEquiv(eq)
             self.log.debug("suggestion: [%s] %s (%f)",
                            clean, eq.Unicode, cand['Weight'])
@@ -80,20 +82,23 @@ class Profiler(Processor):
 
     def read_profile(self):
         _input = []
-        i = self.parameter['textEquivIndex']
+        i = self.parameter['index']
         langs = dict()
         for (line, _, _) in self.get_all_lines():
             _input.append(line.get_TextEquiv()[i].Unicode)
-            langs[line.get_primaryLanguage().lower()] += 1
+            plang = line.get_primaryLanguage()
+            if plang is not None and plang in langs:
+                langs[line.get_primaryLanguage().lower()] += 1
+            elif plang is not None:
+                langs[line.get_primaryLanguage().lower()] = 1
 
-        p = JavaProcess.profiler(
+        lang = self.get_most_frequent_language(langs)
+        lang = "deutsch"  # set default for now
+        p = JavaProfiler(
             jar=self.parameter['cisOcrdJar'],
-            args=[
-                self.parameter['profilerExecutable'],
-                self.parameter['profilerBackend'],
-                self.get_most_frequent_language(langs),
-            ]
-        )
+            exe=self.parameter['executable'],
+            backend=self.parameter['backend'],
+            lang=lang)
         return p.run("\n".join(_input))
 
     def get_all_lines(self):
@@ -122,7 +127,7 @@ class Profiler(Processor):
 
     def get_most_frequent_language(self, counts):
         """ returns the most frequent language in the counts dictionary"""
-        if counts.len() == 0:
+        if not counts:
             return 'unknown'
-        lang = sorted(counts.iteritems(), key=lambda k, v: (v, k))[0][1]
+        lang = sorted(counts.items(), key=lambda kv: kv[1])[0][0]
         return lang

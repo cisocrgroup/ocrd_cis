@@ -281,14 +281,12 @@ def runocropy(wsdir, configdir, fgrpdict):
 
 
 def runalligner(wsdir, configdir, fgrpdict):
-
     alignfilegrps = []
     for fgrp in fgrpdict:
         input_file_group = ','.join(fgrpdict[fgrp])
         output_file_group = 'OCR-D-ALIGN-{fgrp}'.format(fgrp=fgrp)
         alignfilegrps.append(output_file_group)
-        print('run aligner')
-        allingercmd = '''
+        alignercmd = '''
         ocrd-cis-align \
         --input-file-grp '{ifg}' \
         --output-file-grp '{ofg}' \
@@ -297,8 +295,24 @@ def runalligner(wsdir, configdir, fgrpdict):
         --log-level DEBUG
         '''.format(ifg=input_file_group, ofg=output_file_group,
                    mets=wsdir, parameter=configdir)
-        subprocess_cmd(allingercmd)
+        subprocess_cmd(alignercmd)
     return alignfilegrps
+
+
+def runprofiler(wsdir, configdir, input_file_grp):
+    output_file_grp = input_file_grp.replace(
+        'OCR-D-ALIGN-', 'OCR-D-PROFILE-')
+    profilercmd = '''
+        ocrd-cis-profile \
+        --input-file-grp '{ifg}' \
+        --output-file-grp '{ofg}' \
+        --mets {mets}/mets.xml \
+        --parameter {parameter} \
+        --log-level DEBUG
+        '''.format(ifg=input_file_grp, ofg=output_file_grp,
+                   mets=wsdir, parameter=configdir)
+    subprocess_cmd(profilercmd)
+    return output_file_grp
 
 
 def getstats(wsdir, alignfilegrps):
@@ -372,6 +386,11 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
     # liste aller alignierten file-groups
     alignfgrps = runalligner(workspacepath, alignpar, fgrpdict)
 
+    print(json.dumps(parameter))
+    profilerfgrps = []
+    for fg in alignfgrps:
+        ofg = runprofiler(workspacepath, parameter['profilerparampath'], fg)
+        profilerfgrps.append(ofg)
     print(basestats)
 
     stats = getstats(workspacepath, alignfgrps)

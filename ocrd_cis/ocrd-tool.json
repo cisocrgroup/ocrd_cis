@@ -119,7 +119,7 @@
 					"type": "string",
 					"required": true
 				},
-				"textEquivIndex": {
+				"index": {
 					"type": "integer",
 					"default": 0
 				}

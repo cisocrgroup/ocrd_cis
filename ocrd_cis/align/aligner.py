@@ -67,9 +67,9 @@ class Aligner(Processor):
                           line.input_file.input_file_group)
             if i != 0:
                 lines[0].region.add_TextEquiv(line.region.get_TextEquiv()[0])
-                lines[0].region.get_TextEquiv()[i].set_dataType("alignment")
+                lines[0].region.get_TextEquiv()[i].set_dataType("ocrd-cis-line-alignment")
             else:
-                lines[0].region.get_TextEquiv()[i].set_dataType("master-ocr")
+                lines[0].region.get_TextEquiv()[i].set_dataType("ocrd-cis-line-alignment-master-ocr")
             lines[0].region.get_TextEquiv()[i].set_comments(
                 line.input_file.input_file_group + "/" + line.region.get_id())
         self.align_words(lines)
@@ -95,7 +95,10 @@ class Aligner(Processor):
             words = list()
             words.append(Alignment(lines[0].input_file, master, lines[0].alignment))
             for i, other in enumerate(others):
-                words.append(Alignment(lines[i+1].input_file, other, lines[i+1].alignment))
+                words.append(Alignment(
+                    lines[i+1].input_file,
+                    other,
+                    lines[i+1].alignment))
             self.align_word_regions(words)
 
     def align_word_regions(self, words):
@@ -112,11 +115,13 @@ class Aligner(Processor):
                 te = TextEquivType(
                     Unicode=_str,
                     conf=conf,
-                    dataType="ocr-word-alignment",
+                    dataType="ocrd-cis-word-alignment",
                     dataTypeDetails=ddt)
                 words[0].region[0].add_TextEquiv(te)
-            # words[0].region[0].get_TextEquiv()[i].set_comments(
-            #     word.input_file.input_file_group + "/" + _id)
+            else:
+                words[0].region[0].get_TextEquiv()[i].set_dataType(
+                    'ocrd-cis-word-alignment-master-ocr')
+                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(ddt)
             words[0].region[0].get_TextEquiv()[i].set_index(i+1)
 
     def find_word(self, tokens, regions, t="other"):
