@@ -6,7 +6,10 @@ import subprocess
 from zipfile import ZipFile
 from collections import defaultdict
 
+import string
+
 from ocrd.utils import getLogger
+from ocrd.model.ocrd_page_generateds import parse
 
 
 '''
@@ -332,6 +335,99 @@ def getstats(wsdir, alignfilegrps):
             stats[k] += v
 
     return stats
+
+
+def getFileLanguage(workspace, filegroup, index=0):
+
+    fgrppath = workspace + '/' + filegroup
+    _, _, files = os.walk(fgrppath).__next__()
+
+    inputfiles = []
+    for file in files:
+        if 'xml' in file:
+            inputfiles.append(file)
+
+    fgrp = defaultdict(int)
+    for input_file in inputfiles:
+
+        alignurl = fgrppath + '/' + input_file
+        pcgts = parse(alignurl, True)
+        page = pcgts.get_Page()
+        regions = page.get_TextRegion()
+
+        pagetext = ''
+        for region in regions:
+            pagetext += region.get_TextEquiv()[index].Unicode + ' '
+
+        lang = detect_language(pagetext)
+        fgrp[lang] += 1
+
+    return max(fgrp, key=lambda k: fgrp[k])
+
+
+def tokenize(text):
+    remove_punct = str.maketrans(string.punctuation, ' ' * len(string.punctuation))
+    remove_digits = str.maketrans('', '', string.digits)
+
+    tokenList = text.replace('\n', ' ').replace('\r', '').translate(remove_digits)\
+        .translate(remove_punct).lower().strip().split()
+    return tokenList
+
+def detect_language(text):
+    languages_ratios = {}
+    words = tokenize(text)
+    words_set = set(words)
+
+
+    germanstopwords = 'aber, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, dadurch, daher, darum, ' \
+                      'das, daß, dass, dein, deine, dem, den, der, des, dessen, deshalb, die, dies, dieser, ' \
+                      'dieses, doch, dort, du, durch, ein, eine, einem, einen, einer, eines, er, es, euer, ' \
+                      'eure, für, hatte, hatten, hattest, hattet, hier, hinter, ich, ihr, ihre, im, in, ist, ' \
+                      'ja, jede, jedem, jeden, jeder, jedes, jener, jenes, jetzt, kann, kannst, können, könnt, ' \
+                      'machen, mein, meine, mit, muß, mußt, musst, müssen, müßt, nach, nachdem, nein, nicht, ' \
+                      'nun, oder, seid, sein, seine, sich, sie, sind, soll, sollen, sollst, sollt, sonst, ' \
+                      'soweit, sowie, und, unser, unsere, unter, vom, von, vor, wann, warum, was, weiter, ' \
+                      'weitere, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, wieso, wir, wird, ' \
+                      'wirst, wo, woher, wohin, zu, zum, zur, über'
+
+    englishstopwords = "a, about, above, after, again, against, all, am, an, and, any, are, aren't, as, at, " \
+                       "be, because, been, before, being, below, between, both, but, by, can't, cannot, could, " \
+                       "couldn't, did, didn't, do, does, doesn't, doing, don't, down, during, each, few, for, " \
+                       "from, further, had, hadn't, has, hasn't, have, haven't, having, he, he'd, he'll, he's, " \
+                       "her, here, here's, hers, herself, him, himself, his, how, how's, i, i'd, i'll, i'm, " \
+                       "i've, if, in, into, is, isn't, it, it's, its, itself, let's, me, more, most, mustn't, " \
+                       "my, myself, no, nor, not, of, off, on, once, only, or, other, ought, our, ours, ourselves, " \
+                       "out, over, own, same, shan't, she, she'd, she'll, she's, should, shouldn't, so, some, such, " \
+                       "than, that, that's, the, their, theirs, them, themselves, then, there, there's, these, they, " \
+                       "they'd, they'll, they're, they've, this, those, through, to, too, under, until, up, very, " \
+                       "was, wasn't, we, we'd, we'll, we're, we've, were, weren't, what, what's, when, when's, " \
+                       "where, where's, which, while, who, who's, whom, why, why's, with, won't, would, wouldn't, " \
+                       "you, you'd, you'll, you're, you've, your, yours, yourself, yourselves"
+
+    latinstopwords = 'ab, ac, ad, adhic, aliqui, aliquis, an, ante, apud, at, atque, aut, autem, cum, cur, de, ' \
+                     'deinde, dum, ego, enim, ergo, es, est, et, etiam, etsi, ex, fio, haud, hic, iam, idem, ' \
+                     'igitur, ille, in, infra, inter, interim, ipse, is, ita, magis, modo, mox, nam, ne, nec, ' \
+                     'necque, neque, nisi, non, nos, o, ob, per, possum, post, pro, quae, quam, quare, qui, ' \
+                     'quia, quicumque, quidem, quilibet, quis, quisnam, quisquam, quisque, quisquis, quo, ' \
+                     'quoniam, sed, si, sic, sive, sub, sui, sum, super, suus, tam, tamen, trans, tu, tum, ' \
+                     'ubi, uel, uero'
+
+    languages = {'german':germanstopwords, 'englisch':englishstopwords, 'latin':latinstopwords}
+
+    for language in languages:
+            stopwords_set = set(languages[language])
+            common_elements = words_set.intersection(stopwords_set)
+            languages_ratios[language] = len(common_elements)
+
+    stopwords_set = set(latinstopwords.split(', '))
+    common_elements = words_set.intersection(stopwords_set)
+    languages_ratios['latin'] = len(common_elements)
+
+    most_rated_language = max(languages_ratios, key=languages_ratios.get)
+
+    return most_rated_language
+
+
 
 
 def AllInOne(actualfolder, parameterfile, verbose, download):
