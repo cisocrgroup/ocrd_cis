@@ -154,6 +154,27 @@
 					"type": "string"
 				}
 			}
+		},
+		"ocrd-cis-clean": {
+			"executable": "ocrd-cis-clean",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"postprocessing"
+			],
+			"description": "clean-up-tool",
+			"parameters": {
+				"mainLevel": {
+					"type": "string",
+					"enum": ["line", "word", "glyph"],
+					"default": "line"
+				},
+				"mainIndex": {
+					"type": "integer",
+					"description": "model index"
+				}
+			}
 		}
 	}
 }

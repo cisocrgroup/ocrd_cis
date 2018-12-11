@@ -1,8 +1,8 @@
 import click
 
 from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
-from ocrd_cis.stats.stats import Stats
-from ocrd_cis.stats.lang import Lang
+from ocrd_cis.div.stats import Stats
+from ocrd_cis.div.lang import Lang
 
 
 @click.command()
