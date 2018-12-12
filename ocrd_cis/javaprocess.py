@@ -8,20 +8,28 @@ from pathlib import Path
 MAIN = "de.lmu.cis.ocrd.cli.Main"
 
 
-def JavaAligner(jar, n):
+def JavaAligner(jar, n, loglvl="INFO"):
     """Create a java process that calls -c align -D '{"n":n}'"""
     d = {'n': n}
-    args = ['-c', 'align', '-D', "{}".format(json.dumps(d))]
+    args = [
+        '-c', 'align',
+        "--log-level", loglvl,
+        '-D', "{}".format(json.dumps(d))
+    ]
     return JavaProcess(jar, args)
 
 
-def JavaProfiler(jar, exe, backend, lang):
+def JavaProfiler(jar, exe, backend, lang, loglvl="INFO"):
     d = {
         'executable': exe,
         'backend': backend,
         'language': lang,
     }
-    args = ['-c', 'profile', '-D', "{}".format(json.dumps(d))]
+    args = [
+        '-c', 'profile',
+        "--log-level", loglvl,
+        '-D', "{}".format(json.dumps(d))
+    ]
     return JavaProcess(jar, args)
 
 
@@ -68,14 +76,5 @@ class JavaProcess:
 
     def get_cmd(self):
         cmd = ['java', '-cp', self.jar, self.main]
-        self.args.append('--log-level')
-        self.args.append(self.get_log_level())
         cmd.extend(self.args)
         return cmd
-
-    def get_log_level(self):
-        # level = _overrideLogLevel
-        # self.log.info("self.log.level: %s", level)
-        # level = self.log.level
-        # self.log.info("self.log.level: %s", level)
-        return "DEBUG"
