@@ -33,11 +33,12 @@ def JavaProfiler(jar, exe, backend, lang, loglvl="INFO"):
     return JavaProcess(jar, args)
 
 
-def JavaTrain(jar, ifgs, parameter, loglvl="INFO"):
+def JavaTrain(jar, mets, ifgs, parameter, loglvl="INFO"):
     args = [
         "-c", "train",
+        "--mets", mets,
         "--log-level", loglvl,
-        "-P", parameter
+        "--parameter", parameter
     ]
     for ifg in ifgs:
         args.append("-I")
