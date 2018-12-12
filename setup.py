@@ -38,7 +38,7 @@ setup(
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
             'ocrd-cis-profile=ocrd_cis.profile.cli:cis_ocrd_profile',
-            'ocrd-cis-train=ocrd_cis.div.cli:cis_ocrd_train',
+            'ocrd-cis-train=ocrd_cis.train.cli:cis_ocrd_train',
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_recognize',
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
             'ocrd-cis-aio=ocrd_cis.aio.cli:cis_ocrd_aio',
