@@ -33,6 +33,18 @@ def JavaProfiler(jar, exe, backend, lang, loglvl="INFO"):
     return JavaProcess(jar, args)
 
 
+def JavaTrain(jar, ifgs, parameter, loglvl="INFO"):
+    args = [
+        "-c", "train",
+        "--log-level", loglvl,
+        "-P", parameter
+    ]
+    for ifg in ifgs:
+        args.append("-I")
+        args.append(ifg)
+    return JavaProcess(jar, args)
+
+
 class JavaProcess:
     def __init__(self, jar, args):
         self.jar = jar
