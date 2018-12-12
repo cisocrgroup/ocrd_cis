@@ -125,6 +125,22 @@
 				}
 			}
 		},
+		"ocrd-cis-train": {
+			"executable": "ocrd-cis-train",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"postprocessing/alignment"
+			],
+			"description": "Train post correction model",
+			"parameters": {
+				"cisOcrdJar": {
+					"type": "string",
+					"required": true
+				}
+			}
+		},
 		"ocrd-cis-stats": {
 			"executable": "ocrd-cis-stats",
 			"categories": [

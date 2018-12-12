@@ -1,0 +1,11 @@
+import click
+
+from ocrd.decorators import ocrd_cli_options
+from ocrd.decorators import ocrd_cli_wrap_processor
+from ocrd_cis.train.trainer import Trainer
+
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_train(*args, **kwargs):
+    return ocrd_cli_wrap_processor(Trainer, *args, **kwargs)
