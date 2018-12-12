@@ -62,7 +62,7 @@ class Profiler(Processor):
                 Unicode=self.format_candidate(clean, cand['Suggestion']),
                 conf=cand['Weight'],
             )
-            eq.set_index(len(word.get_TextEquiv()))
+            eq.set_index(len(word.get_TextEquiv()) + 1)
             word.add_TextEquiv(eq)
             self.log.debug("suggestion: [%s] %s (%f)",
                            clean, eq.Unicode, cand['Weight'])
