@@ -2,6 +2,7 @@
 Installs:
     - ocrd-cis-align
     - ocrd-cis-profile
+    - ocrd-cis-train
     - ocrd-cis-ocropy-recognize
     - ocrd-cis-ocropy-train
     - ocrd-cis-aio
