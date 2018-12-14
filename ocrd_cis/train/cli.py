@@ -8,7 +8,6 @@ import ocrd_cis.train.config as config
 @click.command()
 @ocrd_cli_options
 def cis_ocrd_train(*args, **kwargs):
-    print("kwargs: ", kwargs)
     if "log_level" in kwargs:
         config.LOG_LEVEL = kwargs["log_level"]
     config.MPATH = kwargs["mets"]
