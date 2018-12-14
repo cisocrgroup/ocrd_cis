@@ -30,7 +30,7 @@
 				}
 			}
 		},
-		"ocrd-cis-train": {
+		"ocrd-cis-align": {
 			"executable": "ocrd-cis-align",
 			"categories": [
 				"Text recognition and optimization"
