@@ -25,7 +25,7 @@ class Trainer(Processor):
             mets=self.mpath,
             parameter=self.ppath,
             ifgs=ifgs,
-            loglvl=config.LOGLEVEL,
+            loglvl=config.LOG_LEVEL,
         ).run("")
 
     def setup_model_dirs(self):
