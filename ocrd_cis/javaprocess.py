@@ -76,8 +76,8 @@ class JavaProcess:
             self.log.info("%s: %i", " ".join(cmd), retval)
             if retval != 0:
                 raise ValueError(
-                    "cannot execute {}: {}\nreturned: {}"
-                    .format(cmd, err.decode('utf-8') if err else u'', retval))
+                    "cannot execute {}: {}\n{}"
+                    .format(" ".join(cmd), retval, err.decode('utf-8')))
             return output
 
     def log_stderr(self, err):
