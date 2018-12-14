@@ -189,13 +189,11 @@ def addtoworkspace(wsdir, gtdir):
                 filegrp = 'OCR-D-IMG-' + d
                 mimetype = 'image/tif'
                 fileid = filegrp + '-' + filename
-                grpid = filegrp
                 imgcmd = '''ocrd workspace add \
                 --file-grp {filegrp} \
                 --file-id {fileid} \
-                --group-id {grpid} \
                 --mimetype {mimetype} \
-                {fdir}'''.format(filegrp=filegrp, fileid=fileid, grpid=grpid,
+                {fdir}'''.format(filegrp=filegrp, fileid=fileid,
                                  mimetype=mimetype, fdir=tifdir)
                 subprocess_cmd(imgcmd)
 
@@ -203,13 +201,11 @@ def addtoworkspace(wsdir, gtdir):
                 filegrp = 'OCR-D-GT-' + d
                 mimetype = 'application/vnd.prima.page+xml'
                 fileid = filegrp + '-' + filename
-                grpid = filegrp
                 xmlcmd = '''ocrd workspace add \
                 --file-grp {filegrp} \
                 --file-id {fileid} \
-                --group-id {grpid} \
                 --mimetype {mimetype} \
-                {fdir}'''.format(filegrp=filegrp, fileid=fileid, grpid=grpid,
+                {fdir}'''.format(filegrp=filegrp, fileid=fileid,
                                  mimetype=mimetype, fdir=xmldir)
                 subprocess_cmd(xmlcmd)
 
