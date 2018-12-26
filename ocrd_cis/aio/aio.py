@@ -28,8 +28,15 @@ def unpack(fromdir, todir):
     '''extract all zips into temp dir'''
     n = 1
     _, _, files = os.walk(fromdir).__next__()
+
+    #for checking if zips are already unpacked
+    if os.path.exists(todir):
+        _, dirs, _ = os.walk(todir).__next__()
+    else:
+        dirs = []
+
     for file in files:
-        if '.zip' in file:
+        if '.zip' in file and file not in dirs:
             if n == 0:
                 break
             n -= 1
@@ -148,14 +155,16 @@ def addtoworkspace(wsdir, gtdir):
     old_cwd = os.getcwd()
     os.chdir(wsdir)
 
-    initcmd = 'ocrd workspace init {}'.format(wsdir)
-    subprocess_cmd(initcmd)
+    _, _, files = os.walk(wsdir).__next__()
+    if 'mets.xml' not in files:
+        initcmd = 'ocrd workspace init {}'.format(wsdir)
+        subprocess_cmd(initcmd)
 
-    # setidcmd = 'ocrd workspace set-id {}'.format(wsid)
-    # subprocess_cmd(setidcmd)
 
     # walk through unpacked zipfiles and add tifs and xmls to workspace
     _, dirs, _ = os.walk(tempdir).__next__()
+    _, wsdirs, _ = os.walk(wsdir).__next__()
+
     for d in dirs:
         filedir = os.path.join(tempdir, d, d)
         if not os.path.exists(filedir):
@@ -195,7 +204,8 @@ def addtoworkspace(wsdir, gtdir):
                 --mimetype {mimetype} \
                 {fdir}'''.format(filegrp=filegrp, fileid=fileid,
                                  mimetype=mimetype, fdir=tifdir)
-                subprocess_cmd(imgcmd)
+                if filegrp not in wsdirs:
+                    subprocess_cmd(imgcmd)
 
                 # add xml to workspace
                 filegrp = 'OCR-D-GT-' + d
@@ -207,7 +217,8 @@ def addtoworkspace(wsdir, gtdir):
                 --mimetype {mimetype} \
                 {fdir}'''.format(filegrp=filegrp, fileid=fileid,
                                  mimetype=mimetype, fdir=xmldir)
-                subprocess_cmd(xmlcmd)
+                if filegrp not in wsdirs:
+                    subprocess_cmd(xmlcmd)
 
                 # rename filepaths in xml into file-urls
                 sedcmd = '''
@@ -250,7 +261,10 @@ def runtesserocr(wsdir, configdir, fgrpdict):
         --parameter {parameter}
         '''.format(mets=wsdir, parameter=configdir,
                    ifg=input_file_group, ofg=output_file_group)
-        subprocess_cmd(tesserocrcmd)
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(tesserocrcmd)
 
     return fgrpdict
 
@@ -274,7 +288,10 @@ def runocropy(wsdir, configdir, fgrpdict):
         --parameter {parameter}
         '''.format(mets=wsdir, parameter=configdir,
                    ifg=input_file_group, ofg=output_file_group)
-        subprocess_cmd(ocropycmd)
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(ocropycmd)
 
     return fgrpdict
 
@@ -294,7 +311,10 @@ def runalligner(wsdir, configdir, fgrpdict):
         --log-level DEBUG
         '''.format(ifg=input_file_group, ofg=output_file_group,
                    mets=wsdir, parameter=configdir)
-        subprocess_cmd(alignercmd)
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(alignercmd)
     return alignfilegrps
 
 
