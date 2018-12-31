@@ -13,5 +13,7 @@
 			"path": "config-ocropy2.json"
 		}
 	],
-	"alignparampath": "config-align.json"
+	"alignparampath": "config-align.json",
+	"cutterparampath": "config-cutter.json",
+	"importerparampath": "config-importer.json"
 }

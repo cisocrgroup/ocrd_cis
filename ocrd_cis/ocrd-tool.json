@@ -171,6 +171,36 @@
 				}
 			}
 		},
+		"ocrd-cis-importer": {
+			"executable": "ocrd-cis-importer",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"postprocessing"
+			],
+			"description": "different ocropy tool",
+			"parameters": {
+				"none": {
+					"type": "string"
+				}
+			}
+		},
+		"ocrd-cis-cutter": {
+			"executable": "ocrd-cis-cutter",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"postprocessing"
+			],
+			"description": "cut lines from input-file-groups",
+			"parameters": {
+				"gtdir": {
+					"type": "string"
+				}
+			}
+		},
 		"ocrd-cis-clean": {
 			"executable": "ocrd-cis-clean",
 			"categories": [

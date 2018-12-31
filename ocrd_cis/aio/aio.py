@@ -295,6 +295,72 @@ def runocropy(wsdir, configdir, fgrpdict):
 
     return fgrpdict
 
+def runcutter(wsdir, configdir, fgrpdict):
+    for fgrp in fgrpdict:
+        input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
+        cuttercmd = '''
+        ocrd-cis-cutter \
+        --input-file-grp {ifg} \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(mets=wsdir, parameter=configdir,
+                   ifg=input_file_group)
+        subprocess_cmd(cuttercmd)
+
+
+def runcalamari(wsdir, configdir, fgrpdict):
+    import json
+    with open(configdir) as f:
+        data = json.load(f)
+    linesdir = data['linesdir']
+    models = []
+    models.append(data['model1'])
+    models.append(data['model2'])
+    models.append(data['model3'])
+    models.append(data['model4'])
+
+    root, _, files = os.walk(linesdir).__next__()
+
+    pngs = []
+    for file in files:
+        if '.png' in file:
+            pngs.append(root + '/' + file)
+
+    filestr = ' '.join(pngs)
+    modelstr = ' '.join(models)
+
+
+    calamaricmd = '''
+    calamari-predict\
+     --checkpoint {models}\
+     --files {files}
+    '''.format(models=modelstr, files=filestr)
+    subprocess_cmd(calamaricmd)
+
+
+    for fgrp in fgrpdict:
+
+        input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
+        output_file_group = 'OCR-D-Calamari-{fgrp}'.format(fgrp=fgrp)
+        fgrpdict[fgrp].append(output_file_group)
+
+        importercmd = '''
+        ocrd-cis-importer \
+        --input-file-grp {ifg} \
+        --output-file-grp {ofg} \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(mets=wsdir, parameter=configdir,
+                   ifg=input_file_group, ofg=output_file_group)
+
+
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(importercmd)
+
+
+
 
 def runalligner(wsdir, configdir, fgrpdict):
     alignfilegrps = []
@@ -480,6 +546,11 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
     fgrpdict = dict()
     for p in projects:
         fgrpdict[p] = []
+
+
+    #runcutter(workspacepath, parameter['cutterparampath'], fgrpdict)
+    #runcalamari(workspacepath, parameter['importerparampath'], fgrpdict)
+
 
     for ocr in parameter['ocr']:
         if ocr['type'] == 'tesseract':

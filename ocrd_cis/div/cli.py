@@ -3,6 +3,8 @@ import click
 from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
 from ocrd_cis.div.stats import Stats
 from ocrd_cis.div.lang import Lang
+from ocrd_cis.div.cutter import Cutter
+from ocrd_cis.div.importer import Importer
 
 
 @click.command()
@@ -14,3 +16,13 @@ def cis_ocrd_stats(*args, **kwargs):
 @ocrd_cli_options
 def cis_ocrd_lang(*args, **kwargs):
     return ocrd_cli_wrap_processor(Lang, *args, **kwargs)
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_cutter(*args, **kwargs):
+    return ocrd_cli_wrap_processor(Cutter, *args, **kwargs)
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_importer(*args, **kwargs):
+    return ocrd_cli_wrap_processor(Importer, *args, **kwargs)

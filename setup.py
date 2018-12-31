@@ -9,6 +9,8 @@ Installs:
     - ocrd-cis-stats
     - ocrd-cis-lang
     - ocrd-cis-clean
+    - ocrd-cis-cutter
+    - ocrd-cis-importer
 """
 
 from setuptools import setup
@@ -29,7 +31,8 @@ setup(
         'click',
         'scipy',
         'matplotlib',
-        'python-Levenshtein'
+        'python-Levenshtein',
+        'calamari_ocr'
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
@@ -45,6 +48,8 @@ setup(
             'ocrd-cis-stats=ocrd_cis.div.cli:cis_ocrd_stats',
             'ocrd-cis-lang=ocrd_cis.div.cli:cis_ocrd_lang',
             'ocrd-cis-clean=ocrd_cis.div.cli:cis_ocrd_clean',
+            'ocrd-cis-importer=ocrd_cis.div.cli:cis_ocrd_importer',
+            'ocrd-cis-cutter=ocrd_cis.div.cli:cis_ocrd_cutter',
         ]
     },
 )
