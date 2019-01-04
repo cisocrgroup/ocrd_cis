@@ -50,6 +50,32 @@ def JavaTrain(jar, mets, ifgs, parameter, loglvl="INFO"):
     return JavaProcess(jar, args)
 
 
+def JavaEvalDLE(jar, mets, ifgs, parameter, loglvl="INFO"):
+    args = [
+        '-c', 'evaluate-dle',
+        '--mets', mets,
+        '--log-level', loglvl,
+        '--parameter', parameter
+    ]
+    for ifg in ifgs:
+        args.append('-I')
+        args.append(ifg)
+    return JavaProcess(jar, args)
+
+
+def JavaEvalRRDM(jar, mets, ifgs, parameter, loglvl="INFO"):
+    args = [
+        '-c', 'evaluate-rrdm',
+        '--mets', mets,
+        '--log-level', loglvl,
+        '--parameter', parameter
+    ]
+    for ifg in ifgs:
+        args.append('-I')
+        args.append(ifg)
+    return JavaProcess(jar, args)
+
+
 class JavaProcess:
     def __init__(self, jar, args):
         self.jar = jar
