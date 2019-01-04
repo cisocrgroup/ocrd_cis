@@ -19,7 +19,8 @@ def JavaAligner(jar, n, loglvl="INFO"):
     return JavaProcess(jar, args)
 
 
-def JavaProfiler(jar, exe, backend, lang, loglvl="INFO"):
+def JavaProfiler(jar, exe, backend, lang,
+                 addlex=None, loglvl="INFO"):
     d = {
         'executable': exe,
         'backend': backend,
@@ -30,6 +31,9 @@ def JavaProfiler(jar, exe, backend, lang, loglvl="INFO"):
         "--log-level", loglvl,
         '-D', "{}".format(json.dumps(d))
     ]
+    if addlex is not None:
+        args.append('-addlex')
+        args.append(addlex)
     return JavaProcess(jar, args)
 
 
