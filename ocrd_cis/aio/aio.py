@@ -28,8 +28,15 @@ def unpack(fromdir, todir):
     '''extract all zips into temp dir'''
     n = 1
     _, _, files = os.walk(fromdir).__next__()
+
+    #for checking if zips are already unpacked
+    if os.path.exists(todir):
+        _, dirs, _ = os.walk(todir).__next__()
+    else:
+        dirs = []
+
     for file in files:
-        if '.zip' in file:
+        if '.zip' in file and file not in dirs:
             if n == 0:
                 break
             n -= 1
@@ -148,14 +155,16 @@ def addtoworkspace(wsdir, gtdir):
     old_cwd = os.getcwd()
     os.chdir(wsdir)
 
-    initcmd = 'ocrd workspace init {}'.format(wsdir)
-    subprocess_cmd(initcmd)
+    _, _, files = os.walk(wsdir).__next__()
+    if 'mets.xml' not in files:
+        initcmd = 'ocrd workspace init {}'.format(wsdir)
+        subprocess_cmd(initcmd)
 
-    # setidcmd = 'ocrd workspace set-id {}'.format(wsid)
-    # subprocess_cmd(setidcmd)
 
     # walk through unpacked zipfiles and add tifs and xmls to workspace
     _, dirs, _ = os.walk(tempdir).__next__()
+    _, wsdirs, _ = os.walk(wsdir).__next__()
+
     for d in dirs:
         filedir = os.path.join(tempdir, d, d)
         if not os.path.exists(filedir):
@@ -195,7 +204,8 @@ def addtoworkspace(wsdir, gtdir):
                 --mimetype {mimetype} \
                 {fdir}'''.format(filegrp=filegrp, fileid=fileid,
                                  mimetype=mimetype, fdir=tifdir)
-                subprocess_cmd(imgcmd)
+                if filegrp not in wsdirs:
+                    subprocess_cmd(imgcmd)
 
                 # add xml to workspace
                 filegrp = 'OCR-D-GT-' + d
@@ -207,7 +217,8 @@ def addtoworkspace(wsdir, gtdir):
                 --mimetype {mimetype} \
                 {fdir}'''.format(filegrp=filegrp, fileid=fileid,
                                  mimetype=mimetype, fdir=xmldir)
-                subprocess_cmd(xmlcmd)
+                if filegrp not in wsdirs:
+                    subprocess_cmd(xmlcmd)
 
                 # rename filepaths in xml into file-urls
                 sedcmd = '''
@@ -250,7 +261,10 @@ def runtesserocr(wsdir, configdir, fgrpdict):
         --parameter {parameter}
         '''.format(mets=wsdir, parameter=configdir,
                    ifg=input_file_group, ofg=output_file_group)
-        subprocess_cmd(tesserocrcmd)
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(tesserocrcmd)
 
     return fgrpdict
 
@@ -274,9 +288,78 @@ def runocropy(wsdir, configdir, fgrpdict):
         --parameter {parameter}
         '''.format(mets=wsdir, parameter=configdir,
                    ifg=input_file_group, ofg=output_file_group)
-        subprocess_cmd(ocropycmd)
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(ocropycmd)
 
     return fgrpdict
+
+def runcutter(wsdir, configdir, fgrpdict):
+    for fgrp in fgrpdict:
+        input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
+        cuttercmd = '''
+        ocrd-cis-cutter \
+        --input-file-grp {ifg} \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(mets=wsdir, parameter=configdir,
+                   ifg=input_file_group)
+        subprocess_cmd(cuttercmd)
+
+
+def runcalamari(wsdir, configdir, fgrpdict):
+    import json
+    with open(configdir) as f:
+        data = json.load(f)
+    linesdir = data['linesdir']
+    models = []
+    models.append(data['model1'])
+    models.append(data['model2'])
+    models.append(data['model3'])
+    models.append(data['model4'])
+
+    root, _, files = os.walk(linesdir).__next__()
+
+    pngs = []
+    for file in files:
+        if '.png' in file:
+            pngs.append(root + '/' + file)
+
+    filestr = ' '.join(pngs)
+    modelstr = ' '.join(models)
+
+
+    calamaricmd = '''
+    calamari-predict\
+     --checkpoint {models}\
+     --files {files}
+    '''.format(models=modelstr, files=filestr)
+    subprocess_cmd(calamaricmd)
+
+
+    for fgrp in fgrpdict:
+
+        input_file_group = 'OCR-D-GT-{fgrp}'.format(fgrp=fgrp)
+        output_file_group = 'OCR-D-Calamari-{fgrp}'.format(fgrp=fgrp)
+        fgrpdict[fgrp].append(output_file_group)
+
+        importercmd = '''
+        ocrd-cis-importer \
+        --input-file-grp {ifg} \
+        --output-file-grp {ofg} \
+        --mets {mets}/mets.xml \
+        --parameter {parameter}
+        '''.format(mets=wsdir, parameter=configdir,
+                   ifg=input_file_group, ofg=output_file_group)
+
+
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(importercmd)
+
+
 
 
 def runalligner(wsdir, configdir, fgrpdict):
@@ -294,7 +377,10 @@ def runalligner(wsdir, configdir, fgrpdict):
         --log-level DEBUG
         '''.format(ifg=input_file_group, ofg=output_file_group,
                    mets=wsdir, parameter=configdir)
-        subprocess_cmd(alignercmd)
+
+        _, wsdirs, _ = os.walk(wsdir).__next__()
+        if output_file_group not in wsdirs:
+            subprocess_cmd(alignercmd)
     return alignfilegrps
 
 
@@ -333,7 +419,7 @@ def getstats(wsdir, alignfilegrps):
     return stats
 
 
-def getFileLanguage(workspace, filegroup, index=0):
+def getFileLanguage(workspace, filegroup, stopwordspath, index=0):
 
     fgrppath = workspace + '/' + filegroup
     _, _, files = os.walk(fgrppath).__next__()
@@ -355,7 +441,7 @@ def getFileLanguage(workspace, filegroup, index=0):
         for region in regions:
             pagetext += region.get_TextEquiv()[index].Unicode + ' '
 
-        lang = detect_language(pagetext)
+        lang = detect_language(pagetext, stopwordspath)
         fgrp[lang] += 1
 
     return max(fgrp, key=lambda k: fgrp[k])
@@ -369,55 +455,18 @@ def tokenize(text):
         .translate(remove_punct).lower().strip().split()
     return tokenList
 
-def detect_language(text):
+def detect_language(text, stopwordspath):
     languages_ratios = {}
     words = tokenize(text)
     words_set = set(words)
 
-
-    germanstopwords = 'aber, als, am, an, auch, auf, aus, bei, bin, bis, bist, da, dadurch, daher, darum, ' \
-                      'das, daß, dass, dein, deine, dem, den, der, des, dessen, deshalb, die, dies, dieser, ' \
-                      'dieses, doch, dort, du, durch, ein, eine, einem, einen, einer, eines, er, es, euer, ' \
-                      'eure, für, hatte, hatten, hattest, hattet, hier, hinter, ich, ihr, ihre, im, in, ist, ' \
-                      'ja, jede, jedem, jeden, jeder, jedes, jener, jenes, jetzt, kann, kannst, können, könnt, ' \
-                      'machen, mein, meine, mit, muß, mußt, musst, müssen, müßt, nach, nachdem, nein, nicht, ' \
-                      'nun, oder, seid, sein, seine, sich, sie, sind, soll, sollen, sollst, sollt, sonst, ' \
-                      'soweit, sowie, und, unser, unsere, unter, vom, von, vor, wann, warum, was, weiter, ' \
-                      'weitere, wenn, wer, werde, werden, werdet, weshalb, wie, wieder, wieso, wir, wird, ' \
-                      'wirst, wo, woher, wohin, zu, zum, zur, über'
-
-    englishstopwords = "a, about, above, after, again, against, all, am, an, and, any, are, aren't, as, at, " \
-                       "be, because, been, before, being, below, between, both, but, by, can't, cannot, could, " \
-                       "couldn't, did, didn't, do, does, doesn't, doing, don't, down, during, each, few, for, " \
-                       "from, further, had, hadn't, has, hasn't, have, haven't, having, he, he'd, he'll, he's, " \
-                       "her, here, here's, hers, herself, him, himself, his, how, how's, i, i'd, i'll, i'm, " \
-                       "i've, if, in, into, is, isn't, it, it's, its, itself, let's, me, more, most, mustn't, " \
-                       "my, myself, no, nor, not, of, off, on, once, only, or, other, ought, our, ours, ourselves, " \
-                       "out, over, own, same, shan't, she, she'd, she'll, she's, should, shouldn't, so, some, such, " \
-                       "than, that, that's, the, their, theirs, them, themselves, then, there, there's, these, they, " \
-                       "they'd, they'll, they're, they've, this, those, through, to, too, under, until, up, very, " \
-                       "was, wasn't, we, we'd, we'll, we're, we've, were, weren't, what, what's, when, when's, " \
-                       "where, where's, which, while, who, who's, whom, why, why's, with, won't, would, wouldn't, " \
-                       "you, you'd, you'll, you're, you've, your, yours, yourself, yourselves"
-
-    latinstopwords = 'ab, ac, ad, adhic, aliqui, aliquis, an, ante, apud, at, atque, aut, autem, cum, cur, de, ' \
-                     'deinde, dum, ego, enim, ergo, es, est, et, etiam, etsi, ex, fio, haud, hic, iam, idem, ' \
-                     'igitur, ille, in, infra, inter, interim, ipse, is, ita, magis, modo, mox, nam, ne, nec, ' \
-                     'necque, neque, nisi, non, nos, o, ob, per, possum, post, pro, quae, quam, quare, qui, ' \
-                     'quia, quicumque, quidem, quilibet, quis, quisnam, quisquam, quisque, quisquis, quo, ' \
-                     'quoniam, sed, si, sic, sive, sub, sui, sum, super, suus, tam, tamen, trans, tu, tum, ' \
-                     'ubi, uel, uero'
-
-    languages = {'german':germanstopwords, 'englisch':englishstopwords, 'latin':latinstopwords}
+    with open(stopwordspath, encoding='utf-8') as f:
+        languages = json.load(f)
 
     for language in languages:
             stopwords_set = set(languages[language])
             common_elements = words_set.intersection(stopwords_set)
             languages_ratios[language] = len(common_elements)
-
-    stopwords_set = set(latinstopwords.split(', '))
-    common_elements = words_set.intersection(stopwords_set)
-    languages_ratios['latin'] = len(common_elements)
 
     most_rated_language = max(languages_ratios, key=languages_ratios.get)
 
@@ -460,6 +509,11 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
     fgrpdict = dict()
     for p in projects:
         fgrpdict[p] = []
+
+
+    #runcutter(workspacepath, parameter['cutterparampath'], fgrpdict)
+    #runcalamari(workspacepath, parameter['importerparampath'], fgrpdict)
+
 
     for ocr in parameter['ocr']:
         if ocr['type'] == 'tesseract':
