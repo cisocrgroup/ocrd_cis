@@ -25,11 +25,6 @@ Use `virtualenv` to install dependencies:
 * `source env/bin/activate`
 * `pip install -e path/to/dir/containing/setup.py`
 
-
-
-
-
-
 ### OCR-D workspace
 
 * Create a new (empty) workspace: `ocrd workspace init workspace-dir`
@@ -115,11 +110,13 @@ pip install -r requirements.txt
 pip install .
 ```
 
-Download and move tesseract models from: 
+Download and move tesseract models from:
 https://github.com/tesseract-ocr/tesseract/wiki/Data-Files
 or use your own models
 place them into: /usr/share/tesseract-ocr/4.00/tessdata
 
+Tesserocr v2.4.0 seems broken for tesseract 4.0.0-beta. Install
+Version v2.3.1 instead: `pip install tesseract==2.3.1`.
 
 
 
