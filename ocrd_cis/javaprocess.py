@@ -1,5 +1,5 @@
+import threading
 import subprocess
-import logging
 import json
 from ocrd.utils import getLogger
 from ocrd.logging import _overrideLogLevel
@@ -81,10 +81,10 @@ class JavaProcess:
             return output
 
     def log_stderr(self, err):
-        for line in err.decode('utf-8').split("\n"):
-            if "DEBUG:" in line:
+        for line in err.decode("utf-8").split("\n"):
+            if line.startswith("DEBUG"):
                 self.log.debug(line[6:])
-            elif "INFO:" in line:
+            elif line.startswith("INFO"):
                 self.log.info(line[5:])
 
     def get_cmd(self):
