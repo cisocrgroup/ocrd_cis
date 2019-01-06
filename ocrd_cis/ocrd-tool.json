@@ -122,6 +122,11 @@
 				"index": {
 					"type": "integer",
 					"default": 0
+				},
+				"dynamiclex": {
+					"type": "string",
+					"required": false,
+					"default": ""
 				}
 			}
 		},

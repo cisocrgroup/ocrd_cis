@@ -94,10 +94,14 @@ class Profiler(Processor):
 
         lang = self.get_most_frequent_language(langs)
         lang = "deutsch"  # set default for now
+        dynamiclex = self.parameter['dynamiclex']
+        if dynamiclex == "":
+            dynamiclex = None
         p = JavaProfiler(
             jar=self.parameter['cisOcrdJar'],
             exe=self.parameter['executable'],
             backend=self.parameter['backend'],
+            addlex=dynamiclex,
             lang=lang)
         return p.run("\n".join(_input))
 
