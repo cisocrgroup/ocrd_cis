@@ -5,6 +5,10 @@ import shutil
 import subprocess
 from zipfile import ZipFile
 from collections import defaultdict
+import glob
+from ocrd_cis import JavaTrain
+from ocrd_cis import JavaEvalDLE
+from ocrd_cis import JavaEvalRRDM
 
 import string
 
@@ -309,7 +313,6 @@ def runcutter(wsdir, configdir, fgrpdict):
 
 
 def runcalamari(wsdir, configdir, fgrpdict):
-    import json
     with open(configdir) as f:
         data = json.load(f)
     linesdir = data['linesdir']
@@ -473,7 +476,71 @@ def detect_language(text, stopwordspath):
     return most_rated_language
 
 
+def runeval(parameter, workspace, evaldir):
+    mimetype = 'application/vnd.prima.page+xml'
+    for pagexml in glob.glob(os.path.join(evaldir, "*.xml")):
+        fileid = os.path.basename(pagexml)[0:-4]
+        cmd = '''ocrd workspace add \
+        --file-grp {filegrp} \
+        --file-id {fileid} \
+        --mimetype {mimetype} \
+        {fdir}'''.format(filegrp='OCR-D-GT-EVAL', fileid=fileid,
+                         mimetype=mimetype, fdir=pagexml)
+        subprocess_cmd(cmd)
 
+    fgrpdict = {'OCR-D-GT-EVAL': []}
+    for ocr in parameter['ocr']:
+        if ocr['type'] == 'tesseract':
+            fgrpdict = runtesserocr(workspace, ocr['path'], fgrpdict)
+        elif ocr['type'] == 'ocropy':
+            fgrpdict = runocropy(workspace, ocr['path'], fgrpdict)
+        else:
+            raise Exception('invalid ocr type: {typ}'.format(typ=ocr['type']))
+    fgrpdict['OCR-D-GT-EVAL'].append('OCR-D-GT-EVAL')
+    alignfgrps = runalligner(workspace, parameter['alignparampath'], fgrpdict)
+
+    update_profiler_configuration(
+        parameter['profilerparampath'], "dynamiclex", "")
+    profilerfgrps = []
+    for fg in alignfgrps:
+        ofg = runprofiler(workspace, parameter['profilerparampath'], fg)
+        profilerfgrps.append(ofg)
+
+    with open(parameter['evalparampath']) as f:
+        evalparameter = json.load(f)
+
+    for fg in profilerfgrps:
+        p = JavaEvalDLE(
+            evalparameter['cisOcrJar'],
+            os.path.join(workspace, 'mets.xml'),
+            [fg],
+            parameter['evalparampath'],
+            'DEBUG')
+        p.run('')
+
+    dynamiclex = evalparameter['dleTraining']['dynamicLexicon']
+    update_profiler_configuration(
+        parameter['profilerparampath'], "dynamiclex", dynamiclex)
+    profilerfgrps = []
+    for fg in alignfgrps:
+        ofg = runprofiler(workspace, parameter['profilerparampath'], fg)
+        profilerfgrps.append(ofg)
+
+    for fg in profilerfgrps:
+        p = JavaEvalRRDM(
+            evalparameter['cisOcrJar'],
+            os.path.join(workspace, 'mets.xml'),
+            [fg],
+            parameter['evalparampath'],
+            'DEBUG')
+        p.run('')
+
+def update_profiler_configuration(path, key, val):
+    with open(path) as f:
+        params = json.load(f)
+    params[key] = val
+    with open(path, 'w') as f:
+        json.dump(params, f)
 
 def AllInOne(actualfolder, parameterfile, verbose, download):
 
@@ -537,6 +604,7 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
     for fg in alignfgrps:
         ofg = runprofiler(workspacepath, parameter['profilerparampath'], fg)
         profilerfgrps.append(ofg)
+
     print(basestats)
 
     stats = getstats(workspacepath, alignfgrps)
@@ -544,3 +612,20 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
     for k, v in stats.items():
         if k != "gt":
             print(k + ' : ' + str(1-v/gtstats))
+
+    # train on aligned profiler file groups
+    if parameter['train']:
+        with open(parameter['trainparampath']) as f:
+            trainparameter = json.load(f)
+        p = JavaTrain(
+            trainparameter['cisOcrdJar'],
+            os.path.join(workspacepath, 'mets.xml'),
+            profilerfgrps,
+            parameter['trainparampath'],
+            'DEBUG')
+        p.run('')
+    runeval(parameter, workspacepath, parameter['evaldir'])
+
+
+
+    # eval
