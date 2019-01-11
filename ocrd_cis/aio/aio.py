@@ -334,9 +334,10 @@ def runcalamari(wsdir, configdir, fgrpdict):
 
 
     calamaricmd = '''
-    calamari-predict\
-     --checkpoint {models}\
-     --files {files}
+    calamari-predict \
+     --checkpoint {models} \
+     --files {files} \
+     --extended_prediction_data
     '''.format(models=modelstr, files=filestr)
     subprocess_cmd(calamaricmd)
 
