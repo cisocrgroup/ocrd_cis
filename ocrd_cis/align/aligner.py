@@ -67,9 +67,11 @@ class Aligner(Processor):
                           line.input_file.input_file_group)
             if i != 0:
                 lines[0].region.add_TextEquiv(line.region.get_TextEquiv()[0])
-                lines[0].region.get_TextEquiv()[i].set_dataType("ocrd-cis-line-alignment")
+                lines[0].region.get_TextEquiv()[i].set_dataType(
+                    "ocrd-cis-line-alignment")
             else:
-                lines[0].region.get_TextEquiv()[i].set_dataType("ocrd-cis-line-alignment-master-ocr")
+                lines[0].region.get_TextEquiv()[i].set_dataType(
+                    "ocrd-cis-line-alignment-master-ocr")
             lines[0].region.get_TextEquiv()[i].set_comments(
                 line.input_file.input_file_group + "/" + line.region.get_id())
         self.align_words(lines)
@@ -93,7 +95,8 @@ class Aligner(Processor):
                 others.append(match)
                 oregion[i] = rest
             words = list()
-            words.append(Alignment(lines[0].input_file, master, lines[0].alignment))
+            words.append(
+                Alignment(lines[0].input_file, master, lines[0].alignment))
             for i, other in enumerate(others):
                 words.append(Alignment(
                     lines[i+1].input_file,
@@ -102,7 +105,8 @@ class Aligner(Processor):
             self.align_word_regions(words)
 
     def align_word_regions(self, words):
-        te0 = lambda x: x.get_TextEquiv()[0]
+        def te0(x):
+            return x.get_TextEquiv()[0]
         for i, word in enumerate(words):
             _str = " ".join([te0(x).Unicode for x in word.region])
             _id = ",".join([x.get_id() for x in word.region])
@@ -144,7 +148,7 @@ class Aligner(Processor):
         return tuple([None, regions])
 
     def match_tokens(self, tokens, regions, i):
-        f = lambda a, b: a in b
+        def f(a, b): return a in b
         return self.match_tokens_lambda(tokens, regions, i, f)
 
     def match_tokens_lev(self, tokens, regions, i):
@@ -220,6 +224,7 @@ class Aligner(Processor):
         n = len(ifs)
         p = JavaAligner(self.parameter['cisOcrdJar'], n)
         return p.run("\n".join(_input))
+
 
 class FileAlignment:
     def __init__(self, ifile, ifg):
