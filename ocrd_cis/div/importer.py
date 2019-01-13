@@ -184,9 +184,18 @@ class Importer(Processor):
                                 word_bbox = [box[0]+wordbounding[0], box[1], box[2]+wordbounding[1], box[3]]
 
                                 word_id = '%s_word%04d' % (line.id, w_no)
-                                word = WordType(id=word_id, Coords=CoordsType(
-                                    points_from_x0y0x1y1(word_bbox)))
+                                word = WordType(id=word_id, Coords=CoordsType(points_from_x0y0x1y1(word_bbox)))
 
                                 line.add_Word(word)
-                                word.add_TextEquiv(TextEquivType(
-                                    Unicode=w, conf=wconfs[w_no]))
+                                word.add_TextEquiv(TextEquivType(Unicode=w, conf=wconfs[w_no]))
+
+                                if self.maxlevel == 'glyph':
+                                    for glyph_no, g in enumerate(w):
+                                        glyphbounding = (line_pos[w_no][glyph_no][0], line_pos[w_no][glyph_no][-1])
+                                        glyph_bbox = [box[0]+glyphbounding[0], box[1], box[2]+glyphbounding[1], box[3]]
+
+                                        glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
+                                        glyph = GlyphType(id=glyph_id, Coords=CoordsType(points_from_x0y0x1y1(glyph_bbox)))
+
+                                        word.add_Glyph(glyph)
+                                        glyph.add_TextEquiv(TextEquivType(Unicode=g, conf=line_conf[w_no][glyph_no]))
