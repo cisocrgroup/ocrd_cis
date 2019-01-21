@@ -80,35 +80,28 @@ class Importer(Processor):
 ########################################################################################
 
 
-
         # self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
             # self.log.info("INPUT FILE %i / %s", n, input_file)
             pcgts = from_file(self.workspace.download_file(input_file))
 
-            self.log.info("Recognizing text in page '%s'", pcgts.get_pcGtsId())
+            self.log.info("Processing text in page '%s'", pcgts.get_pcGtsId())
             page = pcgts.get_Page()
 
             index = input_file.url.rfind('/') + 1
             fgrp = input_file.url[index:-4]
-            fgrplen = len(fgrp)
-
-
-            regionfiles = []
-            for file in predfiles:
-                if len(file) >= fgrplen and fgrp in file[:fgrplen]:
-                    regionfiles.append(file)
 
             # region, line, word, or glyph level:
             regions = page.get_TextRegion()
             if not regions:
                 self.log.warning("Page contains no text regions")
 
-            self.process_regions(regions, regionfiles, fgrplen)
+            self.process_regions(regions, predfiles, fgrp)
 
             ID = concat_padded(self.output_file_grp, n)
             self.log.info('creating file id: %s, name: %s, file_grp: %s',
                           ID, input_file.basename, self.output_file_grp)
+
             # Use the input file's basename for the new file
             # this way the files retain the same basenames.
             out = self.workspace.add_file(
@@ -120,35 +113,27 @@ class Importer(Processor):
             )
             self.log.info('created file %s', out)
 
-    def process_regions(self, regions, regionfiles, fgrplen):
+
+    def process_regions(self, regions, predfiles, fgrp):
         for region in regions:
-            self.log.info("Recognizing text in region '%s'", region.id)
-            regionlen = len(region.id)
+            self.log.info("Processing text in region '%s'", region.id)
 
             textlines = region.get_TextLine()
             if not textlines:
                 self.log.warning(
                     "Region '%s' contains no text lines", region.id)
             else:
-                linefiles = []
-                frlen = fgrplen + regionlen
-                for file in regionfiles:
-                    if len(file) >= frlen and region.id in file[fgrplen:regionlen]:
-                        linefiles.append(f)
+                self.process_lines(textlines, predfiles, fgrp, region.id)
 
-                self.process_lines(textlines, linefiles, frlen)
-
-    def process_lines(self, textlines, linefiles, frlen):
+    def process_lines(self, textlines, predfiles, fgrp, regionid):
 
         for line in textlines:
-            self.log.info("Recognizing text in line '%s'", line.id)
-            lidlen = line.id
 
+            for file in predfiles:
+                if file == '-'.join([fgrp, regionid, line.id]):
+                    self.log.info("Processing text in line '%s'", line.id)
 
-            for file in linefiles:
-                if len(file) >= lidlen + frlen and line.id in file:
-
-                    filepath = self.root + '/' + file + '/' + '.json'
+                    filepath = self.root + '/' + file + '.json'
                     with open(filepath) as f:
                         data = json.load(f)
                         
@@ -167,8 +152,7 @@ class Importer(Processor):
                             char_conf = d['chars'][0]['probability']
                             char_pos = (d['globalStart'], d['globalEnd'])
 
-
-                            if char == ' ' or i == len(positions)-1:
+                            if char == ' ':
                                 words.append(w)
                                 w = ''
                                 line_conf.append(word_conf)
@@ -179,13 +163,16 @@ class Importer(Processor):
                                 w += char
                                 word_conf.append(char_conf)
                                 word_pos.append(char_pos)
-
-
+                                if i == len(positions) - 1:
+                                    words.append(w)
+                                    line_conf.append(word_conf)
+                                    line_pos.append(word_pos)
 
                         wconfs = [(min(conf)+max(conf))/2 for conf in line_conf]
-                        lineconf = [(min(wconfs)+max(wconfs))/2]
+                        lineconf = (min(wconfs)+max(wconfs))/2
 
                         line.replace_TextEquiv_at(0, TextEquivType(Unicode=linepred, conf=lineconf))
+
 
                         if self.maxlevel == 'word' or 'glyph':
                             box = bounding_box(line.get_Coords().points)
@@ -197,9 +184,18 @@ class Importer(Processor):
                                 word_bbox = [box[0]+wordbounding[0], box[1], box[2]+wordbounding[1], box[3]]
 
                                 word_id = '%s_word%04d' % (line.id, w_no)
-                                word = WordType(id=word_id, Coords=CoordsType(
-                                    points_from_x0y0x1y1(word_bbox)))
+                                word = WordType(id=word_id, Coords=CoordsType(points_from_x0y0x1y1(word_bbox)))
 
                                 line.add_Word(word)
-                                word.add_TextEquiv(TextEquivType(
-                                    Unicode=w, conf=wconfs[w_no]))
+                                word.add_TextEquiv(TextEquivType(Unicode=w, conf=wconfs[w_no]))
+
+                                if self.maxlevel == 'glyph':
+                                    for glyph_no, g in enumerate(w):
+                                        glyphbounding = (line_pos[w_no][glyph_no][0], line_pos[w_no][glyph_no][-1])
+                                        glyph_bbox = [box[0]+glyphbounding[0], box[1], box[2]+glyphbounding[1], box[3]]
+
+                                        glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
+                                        glyph = GlyphType(id=glyph_id, Coords=CoordsType(points_from_x0y0x1y1(glyph_bbox)))
+
+                                        word.add_Glyph(glyph)
+                                        glyph.add_TextEquiv(TextEquivType(Unicode=g, conf=line_conf[w_no][glyph_no]))
