@@ -26,7 +26,7 @@ class Stats(Processor):
                     if ddt.startswith('OCR-D-GT'):
                         return i
                     i += 1
-        raise ValueError("cannot determine gt-index")
+        return -1
 
     def process(self):
         """
@@ -51,16 +51,20 @@ class Stats(Processor):
 
             # find index of GT
             gti = self.get_gt_index(regions)
+            if gti == -1:
+                # sigh. just give up for this file
+                continue
             if gti not in d:
-                d[gti] = 0
+                d['gt'] = 0
 
             for region in regions:
                 lines = region.get_TextLine()
 
                 for line in lines:
-
+                    if len(line.get_TextEquiv()) <= gti:
+                        continue
                     gtline = line.get_TextEquiv()[gti].Unicode
-                    d[gti] += len(gtline)
+                    d['gt'] += len(gtline)
 
                     #Type = line.get_TextEquiv()[0].dataType[9:]
 
