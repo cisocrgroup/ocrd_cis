@@ -181,17 +181,26 @@ class OcropyRecognize(Processor):
             self.log.info("Recognizing text in line '%s'", line.id)
 
             # get box from points
+            if line.get_Coords().points == '':
+                self.log.warn("empty bounding box")
+                continue
             box = bounding_box(line.get_Coords().points)
 
             # crop word from page
             croped_image = pil_image.crop(box=box)
 
             # binarize with Otsu's thresholding after Gaussian filtering
-            bin_image = binarize(croped_image)
+            # bin_image = binarize(croped_image)
+            bin_image = croped_image
 
             # resize image to 48 pixel height
             final_img = resize_keep_ratio(bin_image)
-
+            w, _ = final_img.size
+            if w > 5000:
+                self.log.warn("final image too long: %d", w)
+                continue
+            # print("w = {}, h = {}".format(w, h))
+            # final_img.save('/tmp/foo.png')
             # save temp image
             imgpath = os.path.join(filepath, 'temp/temp.png')
             final_img.save(imgpath)
