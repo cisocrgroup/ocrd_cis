@@ -19,10 +19,10 @@ class Profiler(Processor):
         self.log = getLogger('cis.Processor.Profiler')
 
     def process(self):
-        profile = json.loads(self.read_profile())
+        profile = self.read_profile()
         files = self.add_suggestions(profile)
         for (pcgts, ifile) in files:
-            self.add_output_file(
+            self.workspace.add_file(
                 ID="{}_{}".format(ifile.ID, self.output_file_grp),
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
@@ -49,13 +49,17 @@ class Profiler(Processor):
         dataTypeDetails="`json of the according profiler suggestion`".
 
         """
+        maxc = self.parameter['maxCandidates']
         i = self.parameter['index']
         _unicode = word.get_TextEquiv()[i].Unicode
         clean = re.sub(r'^\W*(.*?)\W*$', r'\1', _unicode)
         lower = clean.lower()
-        if lower not in profile['data']:
+        if lower not in profile: # ['data']:
             return
-        for cand in profile['data'][lower]['Candidates']:
+        for cand in profile[lower]['Candidates']:
+            if maxc == 0:
+                break
+            maxc -= 1
             eq = TextEquivType(
                 dataType='ocrd-cis-profiler-candidate',
                 dataTypeDetails=json.dumps(cand),
@@ -64,8 +68,8 @@ class Profiler(Processor):
             )
             eq.set_index(len(word.get_TextEquiv()) + 1)
             word.add_TextEquiv(eq)
-            self.log.debug("suggestion: [%s] %s (%f)",
-                           clean, eq.Unicode, cand['Weight'])
+            # self.log.debug("suggestion: [%s] %s (%f)",
+            #                clean, eq.Unicode, cand['Weight'])
 
     def format_candidate(self, origin, cand):
         """
@@ -81,29 +85,28 @@ class Profiler(Processor):
         return res
 
     def read_profile(self):
-        _input = []
-        i = self.parameter['index']
-        langs = dict()
-        for (line, _, _) in self.get_all_lines():
-            _input.append(line.get_TextEquiv()[i].Unicode)
-            plang = line.get_primaryLanguage()
-            if plang is not None and plang in langs:
-                langs[line.get_primaryLanguage().lower()] += 1
-            elif plang is not None:
-                langs[line.get_primaryLanguage().lower()] = 1
+        # _input = []
+        # i = self.parameter['index']
+        # langs = dict()
+        # for (line, _, _) in self.get_all_lines():
+        #     _input.append(line.get_TextEquiv()[i].Unicode)
+        #     plang = line.get_primaryLanguage()
+        #     if plang is not None and plang in langs:
+        #         langs[line.get_primaryLanguage().lower()] += 1
+        #     elif plang is not None:
+        #         langs[line.get_primaryLanguage().lower()] = 1
 
-        lang = self.get_most_frequent_language(langs)
-        lang = "deutsch"  # set default for now
-        dynamiclex = self.parameter['dynamiclex']
-        if dynamiclex == "":
-            dynamiclex = None
-        p = JavaProfiler(
-            jar=self.parameter['cisOcrdJar'],
-            exe=self.parameter['executable'],
-            backend=self.parameter['backend'],
-            addlex=dynamiclex,
-            lang=lang)
-        return p.run("\n".join(_input))
+        # lang = self.get_most_frequent_language(langs)
+        # lang = "german"  # set default for now
+        # p = JavaProfiler(
+        #     jar=self.parameter['cisOcrdJar'],
+        #     exe=self.parameter['executable'],
+        #     backend=self.parameter['backend'],
+        #     args=self.parameter['args'],
+        #     lang=lang)
+        # p.run("\n".join(_input))
+        with open('/tmp/profile.json', encoding='utf-8') as f:
+            return json.load(f)
 
     def get_all_lines(self):
         """Returns a list of tuples of lines, their parent and

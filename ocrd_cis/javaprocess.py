@@ -1,4 +1,3 @@
-import threading
 import subprocess
 import json
 from ocrd.utils import getLogger
@@ -8,7 +7,7 @@ from pathlib import Path
 MAIN = "de.lmu.cis.ocrd.cli.Main"
 
 
-def JavaAligner(jar, n, loglvl="INFO"):
+def JavaAligner(jar, n, loglvl="DEBUG"):
     """Create a java process that calls -c align -D '{"n":n}'"""
     d = {'n': n}
     args = [
@@ -20,24 +19,22 @@ def JavaAligner(jar, n, loglvl="INFO"):
 
 
 def JavaProfiler(jar, exe, backend, lang,
-                 addlex=None, loglvl="INFO"):
+                 args, loglvl="DEBUG"):
     d = {
         'executable': exe,
         'backend': backend,
         'language': lang,
+        'args': args,
     }
     args = [
         '-c', 'profile',
         "--log-level", loglvl,
         '-D', "{}".format(json.dumps(d))
     ]
-    if addlex is not None:
-        args.append('-addlex')
-        args.append(addlex)
     return JavaProcess(jar, args)
 
 
-def JavaTrain(jar, mets, ifgs, parameter, loglvl="INFO"):
+def JavaTrain(jar, mets, ifgs, parameter, loglvl="DEBUG"):
     args = [
         "-c", "train",
         "--mets", mets,
@@ -50,7 +47,7 @@ def JavaTrain(jar, mets, ifgs, parameter, loglvl="INFO"):
     return JavaProcess(jar, args)
 
 
-def JavaEvalDLE(jar, mets, ifgs, parameter, loglvl="INFO"):
+def JavaEvalDLE(jar, mets, ifgs, parameter, loglvl="DEBUG"):
     args = [
         '-c', 'evaluate-dle',
         '--mets', mets,
@@ -63,7 +60,7 @@ def JavaEvalDLE(jar, mets, ifgs, parameter, loglvl="INFO"):
     return JavaProcess(jar, args)
 
 
-def JavaEvalRRDM(jar, mets, ifgs, parameter, loglvl="INFO"):
+def JavaEvalRRDM(jar, mets, ifgs, parameter, loglvl="DEBUG"):
     args = [
         '-c', 'evaluate-rrdm',
         '--mets', mets,
@@ -92,6 +89,7 @@ class JavaProcess:
         """
         cmd = self.get_cmd()
         self.log.info('command: %s', " ".join(cmd))
+        self.log.info('input: %s', _input)
         with subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -108,6 +106,7 @@ class JavaProcess:
                 raise ValueError(
                     "cannot execute {}: {}\n{}"
                     .format(" ".join(cmd), retval, err.decode('utf-8')))
+            # self.log.info('output: %s', output)
             return output
 
     def log_stderr(self, err):
@@ -118,6 +117,7 @@ class JavaProcess:
                 self.log.info(line[5:])
 
     def get_cmd(self):
-        cmd = ['java', '-cp', self.jar, self.main]
+        cmd = ['java', '-Dfile.encoding=UTF-8',
+               '-Xmx3g', '-cp', self.jar, self.main]
         cmd.extend(self.args)
         return cmd
