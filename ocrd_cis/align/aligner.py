@@ -49,8 +49,16 @@ class Aligner(Processor):
         i = 0
         for mi, mr in enumerate(pcgtst[0].get_Page().get_TextRegion()):
             for mj, _ in enumerate(mr.get_TextLine()):
+                for iiii, u in enumerate(mr.get_TextLine()[mj].get_TextEquiv()):
+                    self.log.debug("[%d] %s", iiii, u.Unicode)
+                for xx in mr.get_TextLine()[mj].get_Word():
+                    for iiii, u in enumerate(xx.get_TextEquiv()):
+                        self.log.debug("[%d] %s", iiii, u.Unicode)
+
                 lines = []
                 for ii, t in enumerate(ift):
+                    if i >= len(alignments):
+                        break
                     tr = pcgtst[ii].get_Page().get_TextRegion()
                     region = tr[mi].get_TextLine()[mj]
                     lines.append(Alignment(t, region, alignments[i]))
@@ -60,38 +68,48 @@ class Aligner(Processor):
 
     def align_lines(self, lines):
         """align the given line alignment with the lines"""
+        if not lines:
+            return
+        if len(lines[0].region.get_TextEquiv()) > 1:
+            del lines[0].region.get_TextEquiv()[1:]
         for i, line in enumerate(lines):
             self.log.info('line alignment: %s [%s - %s]',
                           line.region.get_TextEquiv()[0].Unicode,
                           line.region.get_id(),
                           line.input_file.input_file_group)
+            ddt = line.input_file.input_file_group + "/" + line.region.get_id()
             if i != 0:
-                lines[0].region.add_TextEquiv(line.region.get_TextEquiv()[0])
-                lines[0].region.get_TextEquiv()[i].set_dataType(
-                    "ocrd-cis-line-alignment")
+                te = TextEquivType(
+                    Unicode=line.region.get_TextEquiv()[0].Unicode,
+                    conf=line.region.get_TextEquiv()[0].conf,
+                    dataType="ocrd-cis-line-alignment",
+                    dataTypeDetails=ddt)
+                lines[0].region.add_TextEquiv(te)
             else:
                 lines[0].region.get_TextEquiv()[i].set_dataType(
                     "ocrd-cis-line-alignment-master-ocr")
-            lines[0].region.get_TextEquiv()[i].set_comments(
-                line.input_file.input_file_group + "/" + line.region.get_id())
+            lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(ddt)
+            lines[0].region.get_TextEquiv()[i].set_index(i+1)
         self.align_words(lines)
 
     def align_words(self, lines):
-        self.log.info(json.dumps(lines[0].alignment))
+        # self.log.info(json.dumps(lines[0].alignment))
         mregion = lines[0].region.get_Word()
         oregion = [lines[i].region.get_Word() for i in range(1, len(lines))]
-
         for word in lines[0].alignment['words']:
             self.log.debug("aligning word %s", word['master'])
             master, rest = self.find_word([word['master']], mregion, "master")
             mregion = rest
             if master is None or len(master) != 1:
-                raise Exception("cannot find {}".format(word['master']))
+                self.log.warn("cannot find {}; giving up".format(word['master']))
+                # raise Exception("cannot find {}; giving up".format(word['master']))
+                return
             others = list()
             for i, other in enumerate(word['alignments']):
                 match, rest = self.find_word(other, oregion[i])
                 if match is None:
-                    raise Exception("cannot find {}".format(other))
+                    self.log.warn("cannot find {}; giving up".format(other))
+                    return
                 others.append(match)
                 oregion[i] = rest
             words = list()
@@ -108,13 +126,22 @@ class Aligner(Processor):
         def te0(x):
             return x.get_TextEquiv()[0]
         for i, word in enumerate(words):
+            if not word.region:
+                ifg = word.input_file.input_file_group
+                self.log.info("(empty) word alignment: [%s]", ifg)
+                te = TextEquivType(
+                    dataType="ocrd-cis-empty-word-alginment",
+                    dataTypeDetails=ifg)
+                words[0].region[0].add_TextEquiv(te)
+                words[0].region[0].get_TextEquiv()[i].set_index(i+1)
+                continue
             _str = " ".join([te0(x).Unicode for x in word.region])
             _id = ",".join([x.get_id() for x in word.region])
+            ifg = word.input_file.input_file_group
+            ddt = word.input_file.input_file_group + "/" + _id
             # if conf is none it is most likely ground truth data
             conf = min([te0(x).get_conf() or 1 for x in word.region])
-            ifg = word.input_file.input_file_group
             self.log.info("word alignment: %s [%s - %s]", _str, _id, ifg)
-            ddt = word.input_file.input_file_group + "/" + _id
             if i != 0:
                 te = TextEquivType(
                     Unicode=_str,
@@ -144,18 +171,35 @@ class Aligner(Processor):
             if n == 0:
                 continue
             return tuple([regions[i:n], regions[i:]])
+        # not found try again to match token within another one
+        self.log.warn(
+            "could not find tokens = %s [%s]; trying again",
+            tokens, t)
+        for i, _ in enumerate(regions):
+            n = self.match_tokens_within(tokens, regions, i)
+            if n == 0:
+                continue
+            return tuple([regions[i:n], regions[i:]])
+
         # nothing could be found
         return tuple([None, regions])
 
     def match_tokens(self, tokens, regions, i):
-        def f(a, b): return a in b
+        def f(a, b):
+            return a in b
         return self.match_tokens_lambda(tokens, regions, i, f)
 
     def match_tokens_lev(self, tokens, regions, i):
         def f(a, b):
-            k = int(len(a)/3)
+            k = 3  # int(len(a)/3)
             d = Levenshtein.distance(a, b)
+            self.log.debug("lev %s <=> %s: %d (%d)", a, b, d, d)
             return d <= 1 or d <= k
+        return self.match_tokens_lambda(tokens, regions, i, f)
+
+    def match_tokens_within(self, tokens, regions, i):
+        def f(a, b):
+            return a in b
         return self.match_tokens_lambda(tokens, regions, i, f)
 
     def match_tokens_lambda(self, tokens, regions, i, f):
@@ -164,7 +208,7 @@ class Aligner(Processor):
         Returns 0 if nothing could be matched.
         """
         for j, token in enumerate(tokens):
-            if j + i > len(regions):
+            if j + i >= len(regions):
                 return 0
             self.log.debug('checking %s with %s', token,
                            regions[i+j].get_TextEquiv()[0].Unicode)
