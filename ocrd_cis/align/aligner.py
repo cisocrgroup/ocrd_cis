@@ -266,7 +266,7 @@ class Aligner(Processor):
         for i in _input:
             self.log.debug("input line: %s", i)
         n = len(ifs)
-        p = JavaAligner(self.parameter['cisOcrdJar'], n)
+        p = JavaAligner(self.parameter['jar'], n)
         return p.run("\n".join(_input))
 
 

@@ -21,7 +21,7 @@ class Trainer(Processor):
         self.setup_model_dirs()
         ifgs = self.input_file_grp.split(",")
         JavaTrain(
-            jar=self.parameter["cisOcrdJar"],
+            jar=self.parameter["jar"],
             mets=self.mpath,
             parameter=self.ppath,
             ifgs=ifgs,

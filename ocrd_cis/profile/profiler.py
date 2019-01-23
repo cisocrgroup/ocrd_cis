@@ -99,7 +99,7 @@ class Profiler(Processor):
         # lang = self.get_most_frequent_language(langs)
         # lang = "german"  # set default for now
         # p = JavaProfiler(
-        #     jar=self.parameter['cisOcrdJar'],
+        #     jar=self.parameter['jar'],
         #     exe=self.parameter['executable'],
         #     backend=self.parameter['backend'],
         #     args=self.parameter['args'],

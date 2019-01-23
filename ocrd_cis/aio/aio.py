@@ -619,7 +619,7 @@ def AllInOne(actualfolder, parameterfile, verbose, download):
         with open(parameter['trainparampath']) as f:
             trainparameter = json.load(f)
         p = JavaTrain(
-            trainparameter['cisOcrdJar'],
+            trainparameter['jar'],
             os.path.join(workspacepath, 'mets.xml'),
             profilerfgrps,
             parameter['trainparampath'],

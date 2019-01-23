@@ -40,7 +40,7 @@
 			],
 			"description": "Align multiple OCRs and/or GTs",
 			"parameters": {
-				"cisOcrdJar": {
+				"jar": {
 					"type": "string",
 					"required": true
 				}
@@ -107,7 +107,7 @@
 			],
 			"description": "Add correction suggestions to suspicious tokens",
 			"parameters": {
-				"cisOcrdJar": {
+				"jar": {
 					"type": "string",
 					"required": true
 				},
@@ -140,7 +140,7 @@
 			],
 			"description": "Train post correction model",
 			"parameters": {
-				"cisOcrdJar": {
+				"jar": {
 					"type": "string",
 					"required": true
 				}
