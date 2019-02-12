@@ -30,8 +30,12 @@ class Aligner(Processor):
         for _id, ift in enumerate(ifts):
             alignments = json.loads(self.run_java_aligner(ift))
             pcgts = self.align(alignments, ift)
-            ID = concat_padded(self.output_file_grp, _id+1)
             basename = os.path.basename(ift[0].input_file.url)
+            # keep the right part after OCR-D-...-filename
+            # and prepend output_file_grp
+            # ID = concat_padded(self.output_file_grp, _id+1)
+            basename = os.path.basename(ift[0].input_file.url)
+            ID = self.output_file_grp + '-' + basename.replace('.xml', '')
             out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,

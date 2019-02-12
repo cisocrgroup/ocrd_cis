@@ -149,11 +149,12 @@ class OcropyRecognize(Processor):
 
             self.process_regions(regions, maxlevel, args)
 
-            ID = concat_padded(self.output_file_grp, n)
-            self.log.info('creating file id: %s, name: %s, file_grp: %s',
-                          ID, input_file.basename, self.output_file_grp)
             # Use the input file's basename for the new file
             # this way the files retain the same basenames.
+            # ID = concat_padded(self.output_file_grp, n)
+            ID = self.output_file_grp + '-' + input_file.basename.replace('.xml', '')
+            self.log.info('creating file id: %s, name: %s, file_grp: %s',
+                          ID, input_file.basename, self.output_file_grp)
             out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,
