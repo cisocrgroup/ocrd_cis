@@ -99,10 +99,7 @@ def OcropyRec(fromdir, todir, model):
 
     for (n, png) in enumerate(pngs):
 
-        try:
-            image = Image.open(png)
-        except:
-            continue
+        image = Image.open(png)
         w, _ = image.size
 
         #(h, w = image.shape)

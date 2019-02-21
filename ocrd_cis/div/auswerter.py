@@ -4,6 +4,8 @@ import subprocess
 import os
 import re
 import sys
+from PIL import Image
+
 
 def cmd_to_string(cmd):
     """remove unneded whitepsace from command strings"""
@@ -98,6 +100,15 @@ def main():
 
         for file in files:
             if '.png' in file[-4:]:
+
+                image = Image.open(file)
+                w, _ = image.size
+
+                # (h, w = image.shape)
+                if w > 5000:
+                    print("final image too long: %d", w)
+                    continue
+
                 pngs.append(root+'/'+file)
 
 
