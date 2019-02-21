@@ -67,6 +67,22 @@
 				}
 			}
 		},
+		"ocrd-cis-ocropy-rec": {
+			"executable": "ocrd-cis-ocropy-rec",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"recognition/text-recognition"
+			],
+			"description": "Recognize text snippets",
+			"parameters": {
+				"model": {
+					"type": "string",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+				}
+			}
+		},
 		"cis-ocrd-ocropy-train": {
 			"executable": "ocrd-cis-ocropy-train",
 			"categories": [
