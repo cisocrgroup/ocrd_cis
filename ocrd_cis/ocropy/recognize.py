@@ -11,11 +11,11 @@ import numpy as np
 from PIL import Image
 
 from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd_models.ocrd_page import page_from_file
-from ocrd.model.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
-from ocrd.model.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
-from ocrd import Processor, MIMETYPE_PAGE
-
+from ocrd_modelfactory import page_from_file
+from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
+from ocrd_models.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
+from ocrd import Processor
+from ocrd_utils import MIMETYPE_PAGE
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
