@@ -3,8 +3,9 @@ from __future__ import absolute_import
 import sys, os.path, cv2
 
 
-from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd.model.ocrd_page import from_file, to_xml, TextEquivType, CoordsType, GlyphType
+from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
+from ocrd_models.ocrd_page import page_from_file
+from ocrd.model.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType
 from ocrd import Processor, MIMETYPE_PAGE
 
 from ocrd_cis import get_ocrd_tool
@@ -75,11 +76,11 @@ class OcropyTrain(Processor):
         #print(self.parameter)
         if self.parameter['textequiv_level'] not in ['line', 'word', 'glyph']:
             raise Exception("currently only implemented at the line/glyph level")
-        
+
         filepath = os.path.dirname(os.path.abspath(__file__))
 
 
-            
+
 
         if 'model' in self.parameter:
             model = self.parameter['model']
@@ -106,7 +107,7 @@ class OcropyTrain(Processor):
         #self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
             #self.log.info("INPUT FILE %i / %s", n, input_file)
-            pcgts = from_file(self.workspace.download_file(input_file))
+            pcgts = page_from_file(self.workspace.download_file(input_file))
             pil_image = self.workspace.resolve_image_as_pil(pcgts.get_Page().imageFilename)
 
 
@@ -118,10 +119,10 @@ class OcropyTrain(Processor):
 
                     if self.parameter['textequiv_level'] == 'line':
                         self.log.debug("Recognizing text in line '%s'", line.id)
-                        
+
                         #get box from points
                         box = bounding_box(line.get_Coords().points)
-                            
+
                         #crop word from page
                         croped_image = pil_image.crop(box=box)
 
@@ -142,7 +143,7 @@ class OcropyTrain(Processor):
                         gt = line.get_TextEquiv()[0].Unicode.strip()
                         gtpath = path + '.gt.txt'
                         with open(gtpath, "w", encoding='utf-8') as f:
-                            f.write(gt) 
+                            f.write(gt)
 
 
 
@@ -154,7 +155,7 @@ class OcropyTrain(Processor):
 
                                 #get box from points
                                 box = bounding_box(word.get_Coords().points)
-                                
+
                                 #crop word from page
                                 croped_image = pil_image.crop(box=box)
 
@@ -184,7 +185,7 @@ class OcropyTrain(Processor):
 
                                     #get box from points
                                     box = bounding_box(glyph.get_Coords().points)
-                                    
+
                                     #crop word from page
                                     croped_image = pil_image.crop(box=box)
 
@@ -205,7 +206,7 @@ class OcropyTrain(Processor):
                                     gt = glyph.get_TextEquiv()[0].Unicode.strip()
                                     with open(gtpath, "w", encoding='utf-8') as f:
                                         f.write(gt)
-        
+
 
         rtrain(filelist, modelpath, outputpath, ntrain)
         deletefiles(filelist)

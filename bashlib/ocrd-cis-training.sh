@@ -76,6 +76,7 @@ for dir in downloads/*; do
 			echo $tif $xml
 			pushd $workspace
 			fileid=$(basename $tif)
+
 			filegrp="OCR-D-IMG-TRAIN-$basefilegrp"
 			mimetype="img/tif"
 			tifpath="$filegrp/$fileid"

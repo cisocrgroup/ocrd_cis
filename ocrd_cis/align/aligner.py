@@ -3,13 +3,13 @@ import json
 import os
 import Levenshtein
 from ocrd import Processor
-from ocrd import MIMETYPE_PAGE
-from ocrd.utils import getLogger
-from ocrd.utils import concat_padded
-from ocrd.model.ocrd_page import from_file
-from ocrd.model.ocrd_page import to_xml
-from ocrd.model.ocrd_page_generateds import TextEquivType
-from ocrd.model.ocrd_page_generateds import parse
+from ocrd_utils import MIMETYPE_PAGE
+from ocrd_utils import getLogger
+from ocrd_utils import concat_padded
+from ocrd_modelfactory import page_from_file
+from ocrd_models.ocrd_page import to_xml
+from ocrd_models.ocrd_page_generateds import TextEquivType
+from ocrd_models.ocrd_page_generateds import parse
 from ocrd_cis import JavaAligner
 from ocrd_cis import get_ocrd_tool
 

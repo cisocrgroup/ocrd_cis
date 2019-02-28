@@ -12,7 +12,7 @@ from ocrd_cis import JavaEvalRRDM
 
 import string
 
-from ocrd.utils import getLogger
+from ocrd_utils import getLogger
 from ocrd.model.ocrd_page_generateds import parse
 
 

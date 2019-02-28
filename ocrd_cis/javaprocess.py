@@ -1,7 +1,7 @@
 import subprocess
 import json
-from ocrd.utils import getLogger
-from ocrd.logging import _overrideLogLevel
+from ocrd_utils import getLogger
+from ocrd_utils.logging import _overrideLogLevel
 from pathlib import Path
 
 MAIN = "de.lmu.cis.ocrd.cli.Main"

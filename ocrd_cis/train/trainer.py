@@ -1,5 +1,5 @@
 from ocrd import Processor
-from ocrd.utils import getLogger
+from ocrd_utils import getLogger
 from ocrd_cis import JavaTrain
 from ocrd_cis import get_ocrd_tool
 import ocrd_cis.train.config as config

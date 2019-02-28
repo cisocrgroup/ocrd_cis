@@ -11,8 +11,9 @@ from PIL import Image
 import subprocess
 
 
-from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd.model.ocrd_page import from_file, to_xml, TextEquivType, CoordsType, GlyphType, WordType
+from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
+from ocrd_modelfactory import page_from_file
+from ocrd.model.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
 from ocrd import Processor, MIMETYPE_PAGE
 
 
@@ -69,7 +70,7 @@ class Cutter(Processor):
         # self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
             # self.log.info("INPUT FILE %i / %s", n, input_file)
-            pcgts = from_file(self.workspace.download_file(input_file))
+            pcgts = page_from_file(self.workspace.download_file(input_file))
             pil_image = self.workspace.resolve_image_as_pil(
                 pcgts.get_Page().imageFilename)
 

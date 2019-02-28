@@ -2,8 +2,8 @@ import json
 import re
 from ocrd import Processor
 from ocrd import MIMETYPE_PAGE
-from ocrd.utils import getLogger
-from ocrd.model.ocrd_page import from_file
+from ocrd_utils import getLogger
+from ocrd_modelfactory import page_from_file
 from ocrd.model.ocrd_page_generateds import TextEquivType
 from ocrd.model.ocrd_page import to_xml
 from ocrd_cis import get_ocrd_tool
@@ -117,7 +117,7 @@ class Profiler(Processor):
             key=lambda ifile: ifile.ID
         )
         for ifile in ifs:
-            pcgts = from_file(
+            pcgts = page_from_file(
                 self.workspace.download_file(ifile)
             )
             for region in pcgts.get_Page().get_TextRegion():

@@ -109,8 +109,18 @@ ocrd-cis-run-ocr() {
 					--log-level $LOG_LEVEL
 				;;
 			"TESSERACT")
-						echo "not implemented: tesseract $path"
-				exit 1
+				ocrd-cis-log ocrd-tesserocr-recognize \
+					--input-file-grp $ifg \
+					--output-file-grp $xofg \
+					--mets "$mets" \
+					--parameter $path \
+					--log-level $LOG_LEVEL
+				ocrd-tesserocr-recognize \
+					--input-file-grp $ifg \
+					--output-file-grp $xofg \
+					--mets "$mets" \
+					--parameter $path \
+					--log-level $LOG_LEVEL
 				;;
 			*)
 				echo "invalid ocr type: $utype"
@@ -139,4 +149,25 @@ ocrd-cis-find-image-for-xml() {
 		done
 	done
 	return 1
+}
+
+# Add the content of a zip file to a workspace.  Usage:
+# `ocrd-cis-add-zip-to-workspace zip workspace pxml-file-grp
+# image-file-grp`
+ocrd-cis-add-zip-to-workspace() {
+	local zip=$1
+	local workspace=$2
+	local pfg=$3
+	local ifg=$4
+
+	unzip -u $zip
+	for tif in $(find ${zip/.zip/} -type f -name '*.tif'); do
+		echo tif: $tif
+		dir=$(dirname "$tif")
+		name=$(basename "$tif")
+		name=${name/.tif/.xml}
+		pxml="$dir/page/$name"
+		echo $pxml $tif
+		ocrd-cis-add-pagexml-and-image-to-workspace "$workspace" "$pfg" "$pxml" "$ifg" "$tif"
+	done
 }

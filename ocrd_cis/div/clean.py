@@ -1,6 +1,7 @@
 from __future__ import absolute_import
-from ocrd.utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd.model.ocrd_page import from_file, to_xml, TextEquivType, CoordsType, GlyphType, WordType
+from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
+from ocrd_modelfactory import page_from_file
+from ocrd.model.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
 from ocrd import Processor, MIMETYPE_PAGE
 from ocrd_cis import get_ocrd_tool
 from ocrd.model.ocrd_page_generateds import parse, parsexml_, parsexmlstring_
