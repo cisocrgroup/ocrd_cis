@@ -39,7 +39,8 @@ class Aligner(Processor):
             out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,
-                basename=self.output_file_grp + '-' + basename,
+                basename=basename,
+                local_filename=os.path.join(self.output_file_grp, basename),
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
             )
@@ -248,7 +249,7 @@ class Aligner(Processor):
             for i in ifiles:
                 self.log.info("sorted file: %s %s",
                               os.path.basename(i.url), i.ID)
-            ifiles = [FileAlignment(x, ifg) for x in ifiles]
+            ifiles = [FileAlignment(self.workspace, x, ifg) for x in ifiles]
             files.append(ifiles)
         return zip(*files)
 
@@ -275,14 +276,15 @@ class Aligner(Processor):
 
 
 class FileAlignment:
-    def __init__(self, ifile, ifg):
+    def __init__(self, workspace, ifile, ifg):
+        self.workspace = workspace
         self.input_file = ifile
         self.input_file_group = ifg
         self.log = getLogger('cis.FileAlignment')
 
     def open(self):
         self.log.info("opening: %s", os.path.basename(self.input_file.url))
-        return parse(self.input_file.url, True)
+        return page_from_file(self.workspace.download_file(self.input_file))
 
 
 class Alignment:

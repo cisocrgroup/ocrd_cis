@@ -159,7 +159,8 @@ class OcropyRecognize(Processor):
             out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,
-                basename=self.output_file_grp + '-' + input_file.basename,
+                basename=input_file.basename,
+                local_filename=os.path.join(self.output_file_grp, input_file.basename),
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
             )
