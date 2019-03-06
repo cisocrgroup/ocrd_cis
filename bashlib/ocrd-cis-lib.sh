@@ -190,12 +190,10 @@ ocrd-cis-run-ocr-and-align() {
 	local gt=$5
 	local workspace=$(dirname "$mets")
 
-	echo "DIR: $dir"
 	for xml in $(find "$dir" -type f -name '*.xml'); do
 		if [[ "$xml" == *"alto"* ]]; then # skip alto xml files in gt archives
 		   continue
 		fi
-		echo "XML: $xml"
 		local img=$(ocrd-cis-find-image-for-xml "$dir" "$xml")
 		ocrd-cis-add-xml-image-pair "$mets" "$xml" "OCR-D-$gt-$fg" "$img" "OCR-D-IMG-$fg"
 	done
