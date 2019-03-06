@@ -26,8 +26,11 @@ ocrd-cis-getopt() {
 	exit 1
 }
 
-# Download the ocrd.jar.
+# Download the ocrd.jar if it does not exist.
 ocrd-cis-download-jar() {
+	if [[ -f "$1" ]]; then
+		return 0
+	fi
 	local jar=http://www.cis.lmu.de/~finkf/ocrd.jar
 	local dir=$(/usr/bin/dirname $1)
 	pushd $dir
