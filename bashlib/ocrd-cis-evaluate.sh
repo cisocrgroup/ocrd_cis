@@ -2,7 +2,7 @@
 
 set -e
 
-source ocrd-cis.sh
+source "$(dirname $0)/ocrd-cis-lib.sh"
 
 config=$(ocrd-cis-getopt -P --parameter $*)
 ifg=$(ocrd-cis-getopt -I --input-file-grp $*)
@@ -10,6 +10,12 @@ mets=$(ocrd-cis-getopt -M --mets $*)
 workspace=$(/usr/bin/dirname "$mets")
 jar=$(cat "$config" | jq --raw-output '.jar')
 LOG_LEVEL=DEBUG
+
+echo ifg $ifg
+echo mets $mets
+echo workspace $workspace
+echo jar $jar
+echo config $config
 
 ########################
 # download newest jar  #

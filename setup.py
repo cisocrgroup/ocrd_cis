@@ -27,7 +27,7 @@ setup(
     license='MIT',
     packages=find_packages(),
     install_requires=[
-        'ocrd>=0.7.2',
+        'ocrd>=1.0.0b5',
         'click',
         'scipy',
         'matplotlib',

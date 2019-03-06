@@ -171,3 +171,19 @@ ocrd-cis-add-zip-to-workspace() {
 		ocrd-cis-add-pagexml-and-image-to-workspace "$workspace" "$pfg" "$pxml" "$ifg" "$tif"
 	done
 }
+
+ocrd-cis-align() {
+	local mets=$1
+	local dir=$2
+	local fg=$3
+	local gt=$4
+	local workspace=$(dirname "$mets")
+
+	for pxml in $(find "$dir" -type f -name '.xml'); do
+		local img=$(ocrd-cis-find-image-for-xml "$pxml")
+		local mimet=$(ocrd-cis-get-mimetype-by-extension "$img")
+		ocrd workspace add --fileg-grp "OCR-D-IMG-$fg" --mimetype "$mimet"
+		ocrd workspace add --file-grp "$pagexmlfg" --file-id "$fileid" --mimetype "$mime" "../$pagexml"
+
+	done
+}

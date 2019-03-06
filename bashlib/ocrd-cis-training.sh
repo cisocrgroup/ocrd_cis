@@ -3,7 +3,7 @@
 set -e
 # set -x
 
-source ocrd-cis.sh
+source "$(dirname $0)/ocrd-cis-lib.sh"
 
 config=$(ocrd-cis-getopt -P --parameter $*)
 workspace=$(cat $config | jq --raw-output '.workspace')
@@ -34,7 +34,7 @@ popd
 if [[ ! -d $workspace ]]; then
 	mkdir -p $workspace
 	pushd $workspace
-	ocrd $workspace init .
+	ocrd workspace init .
 	popd
 fi
 
