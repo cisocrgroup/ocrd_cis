@@ -132,6 +132,48 @@ ocrd-cis-find-image-for-xml() {
 	return 1
 }
 
+# Add a pagexml and image file pair to a workspace.  The according
+# imageFilename attribute of the page xml file is set accordingly.
+# The basename of the given files are used as file ids.  Usage:
+# `ocrd-cis-add-xml-image-pair mets xml xmlfg img imgfg`.
+# * mets:   path to the workspace's mets file
+# * xml:    path to the page xml file
+# * xmlfg:  file group of the xml file
+# * img:    path to the imaage file
+# * imgfg:  file group of the image file
+ocrd-cis-add-xml-image-pair() {
+	local mets=$1
+	local xml=$2
+	local xmlfg=$3
+	local img=$4
+	local imgfg=$5
+
+	local imgmt=$(ocrd-cis-get-mimetype-by-extension "$img")
+	local xmlmt=$(ocrd-cis-get-mimetype-by-extension "$xml")
+	local workspace=$(dirname "$mets")
+	local absxml=$(realpath "$xml")
+	local absimg=$(realpath "$img")
+
+	pushd $workspace
+	# add image file
+	ocrd workspace add \
+		 --file-grp "$imgfg" \
+		 --mimetype "$imgmt" \
+		 --file-id "$(basename "$img")" \
+		 --force "$absimg"
+	# add xml file
+	ocrd workspace add \
+		 --file-grp "$xmlfg" \
+		 --mimetype "$xmlmt" \
+		 --file-id "$(basename "$xml")" \
+		 --force "$absxml"
+	# fix filepath
+	local relxml="OCR-D-$gt-$fg/$(basename $xml)"
+	local relimg="OCR-D-IMG-$fg/$(basename $img)"
+	sed -i "s#imageFilename=\"\([^\"]*\)\"#imageFilename=\"$relimg\"#" "$relxml"
+	popd
+}
+
 # Given a directory add image and base xml files, run additional ocrs
 # and align them.  Sets ALGINFILEGRP to the alignment file group.
 # Usage: `ocrd-cis-run-ocr-and-align config mets dir fg gt`.
@@ -155,26 +197,7 @@ ocrd-cis-run-ocr-and-align() {
 		fi
 		echo "XML: $xml"
 		local img=$(ocrd-cis-find-image-for-xml "$dir" "$xml")
-		local imgmt=$(ocrd-cis-get-mimetype-by-extension "$img")
-		local xmlmt=$(ocrd-cis-get-mimetype-by-extension "$xml")
-		echo "IMG: $img"
-		echo "workspace: $workspace"
-		pushd $workspace
-		ocrd workspace add \
-			 --file-grp "OCR-D-IMG-$fg" \
-			 --mimetype "$imgmt" \
-			 --file-id "$(basename "$img")" \
-			 --force "../$img"
-		# fix filepath
-		local xmlpath="OCR-D-$gt-$fg/$(basename $xml)"
-		local imgpath="OCR-D-IMG-$fg/$(basename $img)"
-		ocrd workspace add \
-			 --file-grp "OCR-D-$gt-$fg" \
-			 --mimetype "$xmlmt" \
-			 --file-id "$(basename "$xml")" \
-			 --force "../$xml"
-		sed -i "s#imageFilename=\"\([^\"]*\)\"#imageFilename=\"$imgpath\"#" "$xmlpath"
-		popd
+		ocrd-cis-add-xml-image-pair "$mets" "$xml" "OCR-D-$gt-$fg" "$img" "OCR-D-IMG-$fg"
 	done
 	OCRFILEGRPS=""
 	ocrd-cis-run-ocr "$config" "$mets" "OCR-D-$gt-$fg" "OCR-D-XXX-$fg"
