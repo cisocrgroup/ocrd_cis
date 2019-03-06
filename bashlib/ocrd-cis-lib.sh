@@ -38,36 +38,8 @@ ocrd-cis-download-jar() {
 	popd
 }
 
-# Add OCR page XML and its image to the workspace. Usage:
-# `ocrd-cis-add-pagexml-and-image-to-workspace workspace pagexmlfg
-# pagexml imagefg image`.
-ocrd-cis-add-pagexml-and-image-to-workspace() {
-	local workspace=$1
-	local pagexmlfg=$2
-	local pagexml=$3
-	local imagefg=$4
-	local image=$5
-
-	pushd "$workspace"
-	# add image
-	local mime=$(ocrd-cis-get-mimetype-by-extension $image)
-	local fileid=$(basename $image)
-	local addpath="$imagefg/$fileid"
-	ocrd-cis-log ocrd workspace add --file-grp "$imagefg" --file-id "$fileid" --mimetype "$mime" "../$image"
-	ocrd workspace add --file-grp "$imagefg" --file-id "$fileid" --mimetype "$mime" "../$image"
-
-	# add page xml
-	local mime=$(ocrd-cis-get-mimetype-by-extension $pagexml)
-	local fileid=$(basename $pagexml)
-	ocrd-cis-log ocrd workspace add --file-grp "$pagexmlfg" --file-id "$fileid" --mimetype "$mime" "../$pagexml"
-	ocrd workspace add --file-grp "$pagexmlfg" --file-id "$fileid" --mimetype "$mime" "../$pagexml"
-
-	# fix imageFilepath in page xml
-	local absimgpath=$(realpath $addpath)
-	sed -i "$pagexmlfg/$fileid" -e "s#imageFilename=\"[^\"]*\"#imageFilename=\"$absimgpath\"#"
-	popd
-}
-
+# Get the mimetype of a given path.  The mimetype is determined using
+# the file's extension.
 ocrd-cis-get-mimetype-by-extension() {
 	case $(echo $1 | tr '[:upper:]' '[:lower:]') in
 		*.tif | *.tiff) echo "image/tif";;
@@ -134,17 +106,23 @@ ocrd-cis-run-ocr() {
 }
 
 # Search for the associated image file for the given xml file in the
-# given directory. The given xml file must end with .xml. Usage:
+# given directory.  The given xml file must end with .xml. Usage:
 # `ocrd-cis-find-image-for-xml dir xy.xml`
 ocrd-cis-find-image-for-xml() {
 	local dir=$1
 	local xml=$2
 
 	for pre in .bin .dew ""; do # prefer binary before descewed before normal images
-		for ext in .jpg .jpeg .JPG .JPEG .png .tiff; do
-			local name=${xml/.xml/$pre$ext}
-			local file=$(find $dir -type f -name $name)
-			if [[ ! -z $file ]]; then
+		for ext in .jpg .jpeg .JPG .JPEG .png .tiff .tif; do
+			# strict search based on the xml file's name
+			# try also using the xml file's number, e.g xyz_123.xml -> 123.bin.png
+			local name=$(basename "$xml")
+			local name=${name/.xml/$pre$ext}
+			local numname=$(echo $name | sed -e 's/.*[-_]\([0-9]*\.\)/\1/')
+			local file=$(find "$dir" -type f -name "$name" -o -type f -name "$numname")
+			# echo find "$dir" -type f -name "$name" -o -type f -name "$numname"
+			# echo file $file
+			if [[ ! -z "$file" ]]; then
 				ocrd-cis-log "[$xml]" found $file
 				echo $file
 				return 0
@@ -152,27 +130,6 @@ ocrd-cis-find-image-for-xml() {
 		done
 	done
 	return 1
-}
-
-# Add the content of a zip file to a workspace.  Usage:
-# `ocrd-cis-add-zip-to-workspace zip workspace pxml-file-grp
-# image-file-grp`
-ocrd-cis-add-zip-to-workspace() {
-	local zip=$1
-	local workspace=$2
-	local pfg=$3
-	local ifg=$4
-
-	unzip -u $zip
-	for tif in $(find ${zip/.zip/} -type f -name '*.tif'); do
-		echo tif: $tif
-		dir=$(dirname "$tif")
-		name=$(basename "$tif")
-		name=${name/.tif/.xml}
-		pxml="$dir/page/$name"
-		echo $pxml $tif
-		ocrd-cis-add-pagexml-and-image-to-workspace "$workspace" "$pfg" "$pxml" "$ifg" "$tif"
-	done
 }
 
 # Given a directory add image and base xml files, run additional ocrs
@@ -189,34 +146,51 @@ ocrd-cis-run-ocr-and-align() {
 	local dir=$3
 	local fg=$4
 	local gt=$5
+	local workspace=$(dirname "$mets")
 
-	for xml in $(find "$dir" -type f -name '.xml'); do
-		if [[ "$xml" == "*alto*" ]]; then # skip alto xml files in gt archives
+	echo "DIR: $dir"
+	for xml in $(find "$dir" -type f -name '*.xml'); do
+		if [[ "$xml" == *"alto"* ]]; then # skip alto xml files in gt archives
 		   continue
 		fi
-		local img=$(ocrd-cis-find-image-for-xml "$pxml")
+		echo "XML: $xml"
+		local img=$(ocrd-cis-find-image-for-xml "$dir" "$xml")
 		local imgmt=$(ocrd-cis-get-mimetype-by-extension "$img")
 		local xmlmt=$(ocrd-cis-get-mimetype-by-extension "$xml")
+		echo "IMG: $img"
+		echo "workspace: $workspace"
+		pushd $workspace
 		ocrd workspace add \
-			 --fileg-grp "OCR-D-IMG-$fg" \
+			 --file-grp "OCR-D-IMG-$fg" \
 			 --mimetype "$imgmt" \
 			 --file-id "$(basename "$img")" \
-			 --force "$img"
+			 --force "../$img"
+		# fix filepath
+		local xmlpath="OCR-D-$gt-$fg/$(basename $xml)"
+		local imgpath="OCR-D-IMG-$fg/$(basename $img)"
 		ocrd workspace add \
-			 --fileg-grp "OCR-D-$gt-$fg" \
+			 --file-grp "OCR-D-$gt-$fg" \
 			 --mimetype "$xmlmt" \
 			 --file-id "$(basename "$xml")" \
-			 --force "$xml"
+			 --force "../$xml"
+		sed -i "s#imageFilename=\"\([^\"]*\)\"#imageFilename=\"$imgpath\"#" "$xmlpath"
+		popd
 	done
 	OCRFILEGRPS=""
 	ocrd-cis-run-ocr "$config" "$mets" "OCR-D-$gt-$fg" "OCR-D-XXX-$fg"
-	if [[ $(tr '[[:upper:]]' '[[:lower:]]' "$gt") == "gt" ]]; then
-		OCRFILEGRPS="$OCRFILEGRPS $OCR-D-$gt-$fg"
+	if [[ $(echo "$gt" | tr '[[:upper:]]' '[[:lower:]]') == "gt" ]]; then
+		OCRFILEGRPS="$OCRFILEGRPS OCR-D-$gt-$fg"
 	else
-		OCRFILEGRPS="$OCR-D-$gt-$fg $OCRFILEGRPS"
+		OCRFILEGRPS="OCR-D-$gt-$fg $OCRFILEGRPS"
 	fi
 	OCRFILEGRPS=$(ocrd-cis-join-by , $OCRFILEGRPS)
-	ALGINFILEGRP="OCR-D-ALIGN-$fg"
+	ALIGNFILEGRP="OCR-D-ALIGN-$fg"
+	ocrd-cis-log ocrd-cis-align \
+		--input-file-grp "$OCRFILEGRPS" \
+		--output-file-grp "$ALIGNFILEGRP" \
+		--mets "$mets" \
+		--parameter $(cat "$config" | jq --raw-output ".alignparampath") \
+		--log-level $LOG_LEVEL
 	ocrd-cis-align \
 		--input-file-grp "$OCRFILEGRPS" \
 		--output-file-grp "$ALIGNFILEGRP" \
