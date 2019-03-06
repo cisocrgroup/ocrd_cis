@@ -152,7 +152,7 @@ for d in $workspace/*; do
 done
 main="de.lmu.cis.ocrd.cli.Main"
 jar=$(cat "$config" | jq --raw-output '.jar')
-echo java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main --log-level $LOG_LEVEL \
+ocrd-cis-log java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main --log-level $LOG_LEVEL \
 	 -c train --mets $workspace/mets.xml --parameter $trainconfig $trainfilegrps
 java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main --log-level $LOG_LEVEL \
 	 -c train --mets $workspace/mets.xml --parameter $trainconfig $trainfilegrps

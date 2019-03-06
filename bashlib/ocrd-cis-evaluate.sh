@@ -61,22 +61,22 @@ for pxml in $(find "$inputdir" -type f -name '*.xml'); do
 	fi
 done
 
-echo $ALIGNFILEGRPS
+echo $OCRFILEGRPS
 ocrd-cis-run-ocr "$config" "$mets" "OCR-D-GT-EVAL-$ifg" "OCR-D-OCR-EVAL-XXX-$ifg"
-echo $ALIGNFILEGRPS
-ALIGNFILEGRPS="$ALIGNFILEGRPS OCR-D-GT-EVAL-$ifg"
-echo $ALIGNFILEGRPS
-ALIGNFILEGRPS=$(ocrd-cis-join-by , $ALIGNFILEGRPS)
-echo $ALIGNFILEGRPS
+echo $OCRFILEGRPS
+OCRFILEGRPS="$OCRFILEGRPS OCR-D-GT-EVAL-$ifg"
+echo $OCRFILEGRPS
+OCRFILEGRPS=$(ocrd-cis-join-by , $OCRFILEGRPS)
+echo $OCRFILEGRPS
 ocrd-cis-log ocrd-cis-align \
-    --input-file-grp "$ALIGNFILEGRPS" \
+    --input-file-grp "$OCRFILEGRPS" \
     --output-file-grp "OCR-D-ALIGN-EVAL-$ifg" \
     --mets "$mets"\
     --parameter $(cat "$config" | jq --raw-output ".alignparampath") \
     --log-level $LOG_LEVEL
 
 ocrd-cis-align \
-    --input-file-grp "$ALIGNFILEGRPS" \
+    --input-file-grp "$OCRFILEGRPS" \
     --output-file-grp "OCR-D-ALIGN-EVAL-$ifg" \
     --mets "$mets" \
     --parameter $(cat "$config" | jq --raw-output ".alignparampath") \

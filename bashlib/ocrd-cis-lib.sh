@@ -78,21 +78,21 @@ ocrd-cis-get-mimetype-by-extension() {
 # Run multiple OCRs over a file group.  Usage: `ocrd-cis-run-ocr
 # configfile mets ifg ofg`.  A XXX in the ofg is replaced with the
 # ocr-type and number.  This function sets the global variable
-# $ALIGNFILEGRPS to a space-separated list of the ocr output file
+# $OCRFILEGRPS to a space-separated list of the ocr output file
 # groups.
 ocrd-cis-run-ocr() {
 	local config=$1
 	local mets=$2
 	local ifg=$3
 	local ofg=$4
-	ALIGNFILEGRPS=""
+	OCRFILEGRPS=""
 
 	for i in $(seq 0 $(cat "$config" | jq ".ocr | length-1")); do
-		type=$(cat "$config" | jq --raw-output ".ocr[$i].type")
-		path=$(cat "$config" | jq --raw-output ".ocr[$i].path")
-		utype=$(echo $type | tr '[:lower:]' '[:upper:]')
-		xofg=${ofg/XXX/$utype-$((i+1))}
-		ALIGNFILEGRPS="$ALIGNFILEGRPS $xofg"
+		local type=$(cat "$config" | jq --raw-output ".ocr[$i].type")
+		local path=$(cat "$config" | jq --raw-output ".ocr[$i].path")
+		local utype=$(echo $type | tr '[:lower:]' '[:upper:]')
+		local xofg=${ofg/XXX/$utype-$((i+1))}
+		OCRFILEGRPS="$OCRFILEGRPS $xofg"
 		case $utype in
 			"OCROPY")
 				ocrd-cis-log ocrd-cis-ocropy-recognize \
@@ -137,7 +137,7 @@ ocrd-cis-find-image-for-xml() {
 	local dir=$1
 	local xml=$2
 
-	for pre in "" .dew .bin; do
+	for pre in .bin .dew ""; do # prefer binary before descewed before normal images
 		for ext in .jpg .jpeg .JPG .JPEG .png .tiff; do
 			local name=${xml/.xml/$pre$ext}
 			local file=$(find $dir -type f -name $name)
@@ -172,18 +172,52 @@ ocrd-cis-add-zip-to-workspace() {
 	done
 }
 
-ocrd-cis-align() {
-	local mets=$1
-	local dir=$2
-	local fg=$3
-	local gt=$4
-	local workspace=$(dirname "$mets")
+# Given a directory add image and base xml files, run additional ocrs
+# and align them.  Sets ALGINFILEGRP to the alignment file group.
+# Usage: `ocrd-cis-run-ocr-and-align config mets dir fg gt`.
+# * config	: path to the main config file
+# * mets		: path to the mets file
+# * dir		: path to the directory
+# * fg		: base name of filegroups
+# * gt		: gt=GT if xml files are ground truth; anythin else if not
+ocrd-cis-run-ocr-and-align() {
+	local config=$1
+	local mets=$2
+	local dir=$3
+	local fg=$4
+	local gt=$5
 
-	for pxml in $(find "$dir" -type f -name '.xml'); do
+	for xml in $(find "$dir" -type f -name '.xml'); do
+		if [[ "$xml" == "*alto*" ]]; then # skip alto xml files in gt archives
+		   continue
+		fi
 		local img=$(ocrd-cis-find-image-for-xml "$pxml")
-		local mimet=$(ocrd-cis-get-mimetype-by-extension "$img")
-		ocrd workspace add --fileg-grp "OCR-D-IMG-$fg" --mimetype "$mimet"
-		ocrd workspace add --file-grp "$pagexmlfg" --file-id "$fileid" --mimetype "$mime" "../$pagexml"
-
+		local imgmt=$(ocrd-cis-get-mimetype-by-extension "$img")
+		local xmlmt=$(ocrd-cis-get-mimetype-by-extension "$xml")
+		ocrd workspace add \
+			 --fileg-grp "OCR-D-IMG-$fg" \
+			 --mimetype "$imgmt" \
+			 --file-id "$(basename "$img")" \
+			 --force "$img"
+		ocrd workspace add \
+			 --fileg-grp "OCR-D-$gt-$fg" \
+			 --mimetype "$xmlmt" \
+			 --file-id "$(basename "$xml")" \
+			 --force "$xml"
 	done
+	OCRFILEGRPS=""
+	ocrd-cis-run-ocr "$config" "$mets" "OCR-D-$gt-$fg" "OCR-D-XXX-$fg"
+	if [[ $(tr '[[:upper:]]' '[[:lower:]]' "$gt") == "gt" ]]; then
+		OCRFILEGRPS="$OCRFILEGRPS $OCR-D-$gt-$fg"
+	else
+		OCRFILEGRPS="$OCR-D-$gt-$fg $OCRFILEGRPS"
+	fi
+	OCRFILEGRPS=$(ocrd-cis-join-by , $OCRFILEGRPS)
+	ALGINFILEGRP="OCR-D-ALIGN-$fg"
+	ocrd-cis-align \
+		--input-file-grp "$OCRFILEGRPS" \
+		--output-file-grp "$ALIGNFILEGRP" \
+		--mets "$mets" \
+		--parameter $(cat "$config" | jq --raw-output ".alignparampath") \
+		--log-level $LOG_LEVEL
 }
