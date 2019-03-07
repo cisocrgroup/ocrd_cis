@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -e
+# global default log-level
+LOG_LEVEL=DEBUG
 
 ocrd-cis-log() {
 	echo $(date +%R:%S.%N) $LOG_LEVEL $* >&2
