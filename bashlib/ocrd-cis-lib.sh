@@ -5,7 +5,7 @@ set -e
 LOG_LEVEL=DEBUG
 
 ocrd-cis-log() {
-	echo $(date +%R:%S.%N) $LOG_LEVEL $* >&2
+	echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') $LOG_LEVEL $* >&2
 }
 
 # utility function to join strings with a given string
