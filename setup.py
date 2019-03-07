@@ -2,7 +2,6 @@
 Installs:
     - ocrd-cis-align
     - ocrd-cis-profile
-    - ocrd-cis-train
     - ocrd-cis-ocropy-recognize
     - ocrd-cis-ocropy-train
     - ocrd-cis-aio
@@ -41,7 +40,6 @@ setup(
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
             'ocrd-cis-profile=ocrd_cis.profile.cli:cis_ocrd_profile',
-            'ocrd-cis-train=ocrd_cis.train.cli:cis_ocrd_train',
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_recognize',
             'ocrd-cis-ocropy-rec=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_rec',
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
