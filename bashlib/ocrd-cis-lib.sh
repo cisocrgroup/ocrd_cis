@@ -3,7 +3,7 @@
 set -e
 
 ocrd-cis-log() {
-	echo LOG: $* >&2
+	echo $(date +%R:%S.%N) $LOG_LEVEL $* >&2
 }
 
 # utility function to join strings with a given string
