@@ -287,3 +287,23 @@ ocrd-cis-run-evaluation() {
 			 --log-level $LOG_LEVEL
 	done
 }
+
+# Download the ground truth archives and unzip them into a dedicated
+# directory.  Usage: `ocrd-cis-download-and-extract-ground-truth url
+# dir`.
+# * url: URL of the archives
+# * dir: output directory for the extracted archives
+ocrd-cis-download-and-extract-ground-truth() {
+	local url=$1
+	local dir=$2
+	mkdir -p "$dir"
+	pushd "$dir"
+	ocrd-cis-log "downloading $url"
+	wget -r -np -l1 -nd -N -A zip -erobots=off "$url" || true # ignore exit status of wget
+	for zip in *.zip; do
+		# this archive is broken
+		if [[ "$(basename $zip)" == "bißmarck_carmina_1657.zip" ]]; then continue; fi
+		unzip -u -o $zip
+	done
+	popd
+}

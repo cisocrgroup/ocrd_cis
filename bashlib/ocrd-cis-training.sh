@@ -12,25 +12,7 @@ LOG_LEVEL=DEBUG
 gtlink=$(cat $config | jq --raw-output '.gtlink')
 
 function prepare() {
-	#########################
-	# download ground truth #
-	#########################
-	mkdir -p downloads
-	pushd downloads
-	echo "downloading $gtlink"
-	wget -r -np -l1 -nd -N -A zip -erobots=off $gtlink || true # ignore exit status of wget
-	popd
-
-	##################
-	# unzip archives #
-	##################
-	pushd downloads
-	for zip in *.zip; do
-		# this archive is broken
-		if [[ "$(basename $zip)" == "bißmarck_carmina_1657.zip" ]]; then continue; fi
-		unzip -u -o $zip
-	done
-	popd
+	ocrd-cis-download-and-extract-ground-truth "$gtlink" downloads
 
 	####################
 	# create workspace #
