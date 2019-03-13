@@ -221,3 +221,69 @@ ocrd-cis-run-ocr-and-align() {
 		--parameter $(cat "$config" | jq --raw-output ".alignparampath") \
 		--log-level $LOG_LEVEL
 }
+
+# Run the training over the `-ALIGN-` filegroups in the workspace
+# directory of the given mets.xml file.  Usage: `ocrd-cis-run-training
+# config mets`.
+# * config: path to the configuration file
+# * mets:   path to the mets file
+ocrd-cis-run-training() {
+	local config=$1
+	local mets=$2
+	local workspace=$(dirname "$mets")
+	local main="de.lmu.cis.ocrd.cli.Main"
+	local jar=$(cat "$config" | jq --raw-output '.jar')
+	local trainconfig=$(cat "$config" | jq --raw-output '.trainparampath')
+
+	# get -ALIGN- filegroups
+	pushd "$workspace"
+	local trainfilegrps=""
+	for fg in $(ocrd workspace list-group); do
+		if [[ $fg == *"-ALIGN-"* ]]; then
+			trainfilegrps="$trainfilegrps -I $(basename $fg)"
+		fi
+	done
+	popd
+	# run training
+	ocrd-cis-log java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main --log-level $LOG_LEVEL \
+				 -c train --mets "$mets" --parameter $trainconfig $trainfilegrps
+	java -Dfile.encoding=UTF-8 -Xmx3g -cp "$jar" "$main" --log-level "$LOG_LEVEL" \
+		 -c train --mets "$mets" --parameter "$trainconfig" $trainfilegrps
+}
+
+# Run the evaluation over the `-ALIGN-` filegroups in the workspace
+# directory of the given mets.xml file.  Usage:
+# `ocrd-cis-run-evaluation config mets`.
+# * config: path to the configuration file
+# * mets:   path to the mets file
+ocrd-cis-run-evaluation() {
+	local config=$1
+	local mets=$2
+	local workspace=$(dirname "$mets")
+	local main="de.lmu.cis.ocrd.cli.Main"
+	local jar=$(cat "$config" | jq --raw-output '.jar')
+	local evalconfig=$(cat "$config" | jq --raw-output '.evalparampath')
+
+	# get -ALIGN- filegroups
+	pushd "$workspace"
+	local trainfilegrps=""
+	for fg in $(ocrd workspace list-group); do
+		if [[ $fg == *"-ALIGN-"* ]]; then
+			trainfilegrps="$trainfilegrps -I $(basename $fg)"
+		fi
+	done
+	popd
+	# run evaluation
+	for cmd in evaluate-dle evaluate-rrdm; do
+		ocrd-cis-log java -Dfile.encoding=UTF-8 -Xmx3g -cp "$jar" "$main" -c "$cmd" \
+			 --mets "$mets" \
+			 --parameter "$param" \
+			 $trainfilegrps \
+			 --log-level $LOG_LEVEL
+		java -Dfile.encoding=UTF-8 -Xmx3g -cp "$jar" "$main" -c "$cmd" \
+			 --mets "$mets" \
+			 --parameter "$evalconfig" \
+			 $trainfilegrps \
+			 --log-level $LOG_LEVEL
+	done
+}
