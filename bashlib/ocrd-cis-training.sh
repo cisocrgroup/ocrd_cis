@@ -26,6 +26,8 @@ function prepare() {
 	##################
 	pushd downloads
 	for zip in *.zip; do
+		# this archive is broken
+		if [[ "$(basename $zip)" == "bißmarck_carmina_1657.zip" ]]; then continue; fi
 		unzip -u -o $zip
 	done
 	popd
