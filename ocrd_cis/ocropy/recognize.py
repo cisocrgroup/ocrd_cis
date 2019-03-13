@@ -205,10 +205,10 @@ class OcropyRecognize(Processor):
             # print("w = {}, h = {}".format(w, h))
             # final_img.save('/tmp/foo.png')
             # save temp image
-            imgpath = os.path.join(filepath, 'temp/temp.png')
+            imgpath = os.path.join(filepath, 'temp/temp_' + str(os.getpid()) + '.png')
             final_img.save(imgpath)
 
-            # process ocropy
+            # process ocropy; temp file is deleted in process1
             linepred, clist, rlist, confidlist = process1(
                 imgpath, pad, lnorm, network)
 
