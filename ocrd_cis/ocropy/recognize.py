@@ -211,7 +211,8 @@ class OcropyRecognize(Processor):
             # process ocropy; temp file is deleted in process1
             linepred, clist, rlist, confidlist = process1(
                 imgpath, pad, lnorm, network)
-
+            self.log.debug("gt   '%s': '%s'", line.id, line.TextEquiv[0].Unicode)
+            self.log.debug("line '%s': '%s'", line.id, linepred)
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
             # lists in list for every word with r-position and confidence of each glyph
