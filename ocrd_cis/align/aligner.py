@@ -192,6 +192,9 @@ class Aligner(Processor):
     def match_tokens(self, tokens, regions, i):
         def f(a, b):
             return a in b
+            # if a and b:
+            #     return a in b
+            # return False
         return self.match_tokens_lambda(tokens, regions, i, f)
 
     def match_tokens_lev(self, tokens, regions, i):
@@ -214,6 +217,9 @@ class Aligner(Processor):
         """
         for j, token in enumerate(tokens):
             if j + i >= len(regions):
+                return 0
+            if not regions[i+j].get_TextEquiv()[0].Unicode:
+                self.log.warn("cannot find %s", token)
                 return 0
             self.log.debug('checking %s with %s', token,
                            regions[i+j].get_TextEquiv()[0].Unicode)
@@ -273,6 +279,9 @@ class Aligner(Processor):
         n = len(ifs)
         p = JavaAligner(self.parameter['jar'], n)
         return p.run("\n".join(_input))
+
+# # line_tuple_ok check whether a given tuple of lines (last entry is gt)
+# def line_tuple_ok(t):
 
 
 class FileAlignment:

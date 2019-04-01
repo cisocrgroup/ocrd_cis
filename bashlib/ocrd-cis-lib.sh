@@ -52,6 +52,34 @@ ocrd-cis-get-mimetype-by-extension() {
 	esac
 }
 
+# Check if given file-id exists in the given mets file.  Usage:
+# `ocrd-cis-file-id-exists mets fileid`.
+# * mets:   path to the mets file
+# * fileid: the file id
+ocrd-cis-file-id-exists() {
+	local workspace=$(dirname "$1")
+	local fileid=$2
+	pushd "$workspace"
+	local check=$(ocrd workspace find --file-id "$fileid")
+	popd
+	if [[ -z "$check" ]]; then return 1; fi
+	return 0
+}
+
+# Check if given file-grp exists in the given mets file.  Usage:
+# `ocrd-cis-file-grp-exists mets filegrp`.
+# * mets:    path to the mets file
+# * filegrp: the file grp
+ocrd-cis-file-grp-exists() {
+	local workspace=$(dirname "$1")
+	local filegrp=$2
+	pushd "$workspace"
+	local check=$(ocrd workspace find --file-grp "$filegrp")
+	popd
+	if [[ -z "$check" ]]; then return 1; fi
+	return 0
+}
+
 # Run multiple OCRs over a file group.  Usage: `ocrd-cis-run-ocr
 # configfile mets ifg ofg`.  A XXX in the ofg is replaced with the
 # ocr-type and number.  This function sets the global variable
@@ -70,6 +98,13 @@ ocrd-cis-run-ocr() {
 		local utype=$(echo $type | tr '[:lower:]' '[:upper:]')
 		local xofg=${ofg/XXX/$utype-$((i+1))}
 		OCRFILEGRPS="$OCRFILEGRPS $xofg"
+		if ocrd-cis-file-grp-exists "$mets" "$xofg"; then
+			ocrd-cis-log skipping ocr for $xofg
+			continue
+		# else
+		# 	ocrd-cis-log $xofg does not exist.
+		# 	exit 1
+		fi
 		case $utype in
 			"OCROPY")
 				ocrd-cis-log ocrd-cis-ocropy-recognize \
@@ -125,7 +160,7 @@ ocrd-cis-find-image-for-xml() {
 			# echo find "$dir" -type f -name "$name" -o -type f -name "$numname"
 			# echo file $file
 			if [[ ! -z "$file" ]]; then
-				ocrd-cis-log "[$xml]" found $file
+				ocrd-cis-log found image: $file for xml: $xml
 				echo $file
 				return 0
 			fi
@@ -156,6 +191,11 @@ ocrd-cis-add-xml-image-pair() {
 	local absxml=$(realpath "$xml")
 	local absimg=$(realpath "$img")
 
+	if ocrd-cis-file-id-exists "$mets" "$(basename "$img")"; then
+		ocrd-cis-log skipping add to workspace for $img and $xml
+		return
+	fi
+
 	pushd $workspace
 	# add image file
 	ocrd workspace add \
@@ -180,10 +220,10 @@ ocrd-cis-add-xml-image-pair() {
 # and align them.  Sets ALGINFILEGRP to the alignment file group.
 # Usage: `ocrd-cis-run-ocr-and-align config mets dir fg gt`.
 # * config	: path to the main config file
-# * mets		: path to the mets file
+# * mets	: path to the mets file
 # * dir		: path to the directory
 # * fg		: base name of filegroups
-# * gt		: gt=GT if xml files are ground truth; anythin else if not
+# * gt		: gt=GT if xml files are ground truth; anything else if not
 ocrd-cis-run-ocr-and-align() {
 	local config=$1
 	local mets=$2
@@ -208,6 +248,10 @@ ocrd-cis-run-ocr-and-align() {
 	fi
 	OCRFILEGRPS=$(ocrd-cis-join-by , $OCRFILEGRPS)
 	ALIGNFILEGRP="OCR-D-ALIGN-$fg"
+	if ocrd-cis-file-grp-exists "$mets" "$ALIGNFILEGRP"; then
+		ocrd-cis-log skipping aligning of $ALIGNFILEGRP
+		return
+	fi
 	ocrd-cis-log ocrd-cis-align \
 		--input-file-grp "$OCRFILEGRPS" \
 		--output-file-grp "$ALIGNFILEGRP" \
@@ -220,6 +264,21 @@ ocrd-cis-run-ocr-and-align() {
 		--mets "$mets" \
 		--parameter $(cat "$config" | jq --raw-output ".alignparampath") \
 		--log-level $LOG_LEVEL
+	# change long s (ſ) to normal s if the ground truth
+	# does not contain long s
+	fixlongs=$(cat "$config" | jq --raw-output '.fixLongS')
+	if [[ "$fixlongs" == "true" ]]; then
+		pushd "$workspace"
+		ocrd-cis-log "fixing long s in file"
+		for fg in $(ocrd workspace list-group | grep 'ALIGN'); do
+			ocrd-cis-log "fixing long s in filegroup $fg"
+			for xml in "$fg"/*; do
+				ocrd-cis-log "fixing long s in file $xml"
+				sed -i -e 's/ſ/s/g' "$xml"
+			done
+		done
+		popd
+	fi
 }
 
 # Run the training over the `-ALIGN-` filegroups in the workspace
