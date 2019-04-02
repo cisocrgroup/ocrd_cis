@@ -21,7 +21,7 @@ if [[ ! -d "$odir/trainws" ]]; then
 	popd
 fi
 
-gtlink=$(cat "$config" | jq --raw-ouput '.gtlink')
+gtlink=$(cat "$config" | jq --raw-output '.gtlink')
 ocrd-cis-download-and-extract-ground-truth "$gtlink" downloads
 for dir in downloads/*; do
 	if [[ ! -d "$dir" ]]; then continue; fi
