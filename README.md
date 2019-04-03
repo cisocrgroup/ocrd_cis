@@ -25,6 +25,8 @@ Use `virtualenv` to install dependencies:
 * `source env/bin/activate`
 * `pip install -e path/to/dir/containing/setup.py`
 
+Use `deactivate` to deactivate the virtualenv again.
+
 ### OCR-D workspace
 
 * Create a new (empty) workspace: `ocrd workspace init workspace-dir`
