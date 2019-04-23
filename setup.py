@@ -29,7 +29,8 @@ setup(
         'ocrd>=1.0.0b5',
         'click',
         'scipy',
-        'matplotlib',
+        'pillow==5.4.1',
+        'matplotlib>3.0.0',
         'python-Levenshtein',
         'calamari_ocr'
     ],
