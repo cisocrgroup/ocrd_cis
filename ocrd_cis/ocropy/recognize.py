@@ -6,8 +6,10 @@ from ocrd_cis import get_ocrd_tool
 
 import sys
 import os.path
+import tempfile
 import cv2
 import numpy as np
+from scipy.ndimage import measurements
 from PIL import Image
 
 from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
@@ -52,27 +54,43 @@ def binarize(pil_image):
     return bin_img
 
 
-def deletefile(file):
-    if os.path.exists(file):
-        os.remove(file)
+def check_line(image):
+    if len(image.shape)==3: return "input image is color image %s"%(image.shape,)
+    if np.mean(image)<np.median(image): return "image may be inverted"
+    h,w = image.shape
+    if h<20: return "image not tall enough for a text line %s"%(image.shape,)
+    if h>200: return "image too tall for a text line %s"%(image.shape,)
+    if w<1.5*h: return "line too short %s"%(image.shape,)
+    if w>4000: return "line too long %s"%(image.shape,)
+    ratio = w*1.0/h
+    _,ncomps = measurements.label(image>np.mean(image))
+    lo = int(0.5*ratio+0.5)
+    hi = int(4*ratio)+1
+    if ncomps<lo: return "too few connected components (got %d, wanted >=%d)"%(ncomps,lo)
+    if ncomps>hi*ratio: return "too many connected components (got %d, wanted <=%d)"%(ncomps,hi)
+    return None
 
-
-def process1(fname, pad, lnorm, network):
-    base, _ = ocrolib.allsplitext(fname)
+def process1(fname, pad, lnorm, network, check=True, dewarp=True):
     line = ocrolib.read_image_gray(fname)
-    deletefile(fname)
 
     raw_line = line.copy()
     if np.prod(line.shape) == 0:
-        return None
+        raise Exception('image dimensions are zero')
     if np.amax(line) == np.amin(line):
-        return None
+        raise Exception('image is blank')
 
+    # dewarp:
     temp = np.amax(line)-line
-    temp = temp*1.0/np.amax(temp)
-    lnorm.measure(temp)
-    line = lnorm.normalize(line, cval=np.amax(line))
+    if check:
+        report = check_line(temp)
+        if report:
+            raise Exception(report)
+    if dewarp:
+        temp = temp*1.0/np.amax(temp)
+        lnorm.measure(temp)
+        line = lnorm.normalize(line, cval=np.amax(line))
 
+    # recognize:
     line = lstm.prepare_line(line, pad)
     pred = network.predictString(line)
 
@@ -133,7 +151,7 @@ class OcropyRecognize(Processor):
 
         # self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
-            # self.log.info("INPUT FILE %i / %s", n, input_file)
+            self.log.info("INPUT FILE %i / %s", n, input_file)
             pcgts = page_from_file(self.workspace.download_file(input_file))
             pil_image = self.workspace.resolve_image_as_pil(
                 pcgts.get_Page().imageFilename)
@@ -182,6 +200,7 @@ class OcropyRecognize(Processor):
 
         for line in textlines:
             self.log.info("Recognizing text in line '%s'", line.id)
+            self.log.debug("gt   '%s': '%s'", line.id, line.TextEquiv[0].Unicode)
 
             # get box from points
             if line.get_Coords().points == '':
@@ -190,28 +209,27 @@ class OcropyRecognize(Processor):
             box = bounding_box(line.get_Coords().points)
 
             # crop word from page
-            croped_image = pil_image.crop(box=box)
+            cropped_image = pil_image.crop(box=box)
 
             # binarize with Otsu's thresholding after Gaussian filtering
-            # bin_image = binarize(croped_image)
-            bin_image = croped_image
+            bin_image = binarize(cropped_image)
+            #bin_image = cropped_image
 
             # resize image to 48 pixel height
             final_img = resize_keep_ratio(bin_image)
-            w, _ = final_img.size
-            if w > 5000:
-                self.log.warn("final image too long: %d", w)
-                continue
-            # print("w = {}, h = {}".format(w, h))
-            # final_img.save('/tmp/foo.png')
-            # save temp image
-            imgpath = os.path.join(filepath, 'temp/temp_' + str(os.getpid()) + '.png')
-            final_img.save(imgpath)
+            
+            with tempfile.NamedTemporaryFile(prefix=__name__, suffix='.png') as imgfile:
+                # save temp image
+                final_img.save(imgfile.name)
 
-            # process ocropy; temp file is deleted in process1
-            linepred, clist, rlist, confidlist = process1(
-                imgpath, pad, lnorm, network)
-            self.log.debug("gt   '%s': '%s'", line.id, line.TextEquiv[0].Unicode)
+                # process ocropy; temp file is deleted in process1
+                try:
+                    linepred, clist, rlist, confidlist = process1(
+                        imgfile.name, pad, lnorm, network,
+                        check=True, dewarp=False)
+                except Exception as e:
+                    self.log.error(e)
+                    continue
             self.log.debug("line '%s': '%s'", line.id, linepred)
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
