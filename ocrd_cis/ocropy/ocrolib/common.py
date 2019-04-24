@@ -139,7 +139,7 @@ def array2pil(a):
         else:
             raise OcropusException("bad image rank")
     elif a.dtype==dtype('float32'):
-        return PIL.Image.fromstring("F",(a.shape[1],a.shape[0]),a.tostring())
+        return PIL.Image.frombytes("F",(a.shape[1],a.shape[0]),a.tostring())
     else:
         raise OcropusException("unknown image type")
 

@@ -6,11 +6,15 @@ from ocrd_cis import get_ocrd_tool
 
 import sys
 import os.path
-import tempfile
+import warnings
 import cv2
 import numpy as np
-from scipy.ndimage import measurements
+from scipy.ndimage import filters, interpolation, measurements, morphology
+from scipy import stats
 from PIL import Image
+
+import Levenshtein
+#import kraken.binarization
 
 from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
 from ocrd_modelfactory import page_from_file
@@ -21,6 +25,7 @@ from ocrd_utils import MIMETYPE_PAGE
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+LOG = getLogger('processor.OcropyRecognize')
 
 def bounding_box(coord_points):
     point_list = [[int(p) for p in pair.split(',')]
@@ -35,23 +40,156 @@ def resize_keep_ratio(image, baseheight=48):
     image = image.resize((wsize, baseheight), Image.ANTIALIAS)
     return image
 
+# method similar to ocrolib.read_image_gray:
+def pil2array(image):
+    assert isinstance(image, Image.Image), "not a PIL.Image"
+    array = ocrolib.pil2array(image)
+    if array.dtype == np.uint8:
+        array = array / 255.0
+    if array.dtype == np.int8:
+        array = array / 127.0
+    elif array.dtype == np.uint16:
+        array = array / 65536.0
+    elif array.dtype == np.int16:
+        array = array / 32767.0
+    elif np.issubdtype(array.dtype, np.floating):
+        pass
+    else:
+        raise Exception("unknown image type: " + array.dtype)
+    if array.ndim == 3:
+        array = np.mean(array, 2)
+    return array
 
-def binarize(pil_image):
-    # Convert RGB to OpenCV
-    img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
+def array2pil(array):
+    assert isinstance(array, np.ndarray), "not a numpy array"
+    array = np.array(255.0 * array, np.uint8)
+    return ocrolib.array2pil(array)
 
-    # global thresholding
-    # ret1,th1 = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
+# methods from ocropy-nlbin:
+def estimate_local_whitelevel(image, zoom=0.5, perc=80, range_=20):
+    '''flatten it by estimating the local whitelevel
+    zoom for page background estimation, smaller=faster, default: %(default)s
+    percentage for filters, default: %(default)s
+    range for filters, default: %(default)s
+    '''
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        m = interpolation.zoom(image, zoom)
+        m = filters.percentile_filter(m, perc, size=(range_, 2))
+        m = filters.percentile_filter(m, perc, size=(2, range_))
+        m = interpolation.zoom(m, 1. / zoom)
+    w, h = np.minimum(np.array(image.shape), np.array(m.shape))
+    flat = np.clip(image[:w, :h] - m[:w, :h] + 1, 0, 1)
+    return flat
+def estimate_skew_angle(image, angles):
+    estimates = []
+    for a in angles:
+        v = np.mean(interpolation.rotate(image, a, order=0, mode='constant'), axis=1)
+        v = np.var(v)
+        estimates.append((v, a))
+    _, a = max(estimates)
+    return a
+def estimate_skew(flat, bignore=0.1, maxskew=2, skewsteps=8):
+    ''' estimate skew angle and rotate'''
+    d0, d1 = flat.shape
+    o0, o1 = int(bignore * d0), int(bignore * d1) # border ignore
+    flat = np.amax(flat) - flat
+    flat -= np.amin(flat)
+    est = flat[o0:d0 - o0, o1:d1 - o1]
+    ma = maxskew
+    ms = int(2 * maxskew * skewsteps)
+    # print(linspace(-ma,ma,ms+1))
+    angle = estimate_skew_angle(est, np.linspace(-ma, ma, ms + 1))
+    flat = interpolation.rotate(flat, angle, mode='constant', reshape=0)
+    flat = np.amax(flat) - flat
+    return flat, angle
+def estimate_thresholds(flat, bignore=0.1, escale=1.0, lo=5, hi=90):
+    '''# estimate low and high thresholds
+    ignore this much of the border for threshold estimation, default: %(default)s
+    scale for estimating a mask over the text region, default: %(default)s
+    lo percentile for black estimation, default: %(default)s
+    hi percentile for white estimation, default: %(default)s
+    '''
+    d0, d1 = flat.shape
+    o0, o1 = int(bignore * d0), int(bignore * d1)
+    est = flat[o0:d0 - o0, o1:d1 - o1]
+    if escale > 0:
+        # by default, we use only regions that contain
+        # significant variance; this makes the percentile
+        # based low and high estimates more reliable
+        e = escale
+        v = est - filters.gaussian_filter(est, e * 20.0)
+        v = filters.gaussian_filter(v ** 2, e * 20.0) ** 0.5
+        v = (v > 0.3 * np.amax(v))
+        v = morphology.binary_dilation(v, structure=np.ones((int(e * 50), 1)))
+        v = morphology.binary_dilation(v, structure=np.ones((1, int(e * 50))))
+        est = est[v]
+    lo = stats.scoreatpercentile(est.ravel(), lo)
+    hi = stats.scoreatpercentile(est.ravel(), hi)
+    return lo, hi
 
-    # Otsu's thresholding
-    # ret2,th2 = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+def binarize(pil_image, method='none'):
+    if method == 'none':
+        return pil_image
+    # equivalent to ocropy, but without deskewing:
+    # elif method == 'kraken':
+    #     image = kraken.binarization.nlbin(pil_image)
+    #     return image
+    elif method == 'ocropy':
+        # parameter defaults from ocropy-nlbin:
+        args = {
+            'threshold': 0.5,
+            'zoom': 0.5,
+            'escale': 1.0,
+            'bignore': 0.1,
+            'perc': 80,
+            'range': 20,
+            'maxskew': 2,
+            'lo': 5,
+            'hi': 90,
+            'skewsteps': 8
+        }
+        # process1 from ocropy-nlbin:
+        image = pil2array(pil_image)
+        extreme = (np.sum(image < 0.05) + np.sum(image > 0.95)) * 1.0 / np.prod(image.shape)
+        if extreme > 0.95:
+            comment = "no-normalization"
+            flat = image
+        else:
+            comment = ""
+            # if not, we need to flatten it by estimating the local whitelevel
+            flat = estimate_local_whitelevel(image, args['zoom'], args['perc'], args['range'])
+        if args['maxskew'] > 0:
+            flat, angle = estimate_skew(flat, args['bignore'], args['maxskew'], args['skewsteps'])
+        else:
+            angle = 0
+        lo, hi = estimate_thresholds(flat, args['bignore'], args['escale'], args['lo'], args['hi'])
+        # rescale the image to get the gray scale image
+        flat -= lo
+        flat /= (hi - lo)
+        flat = np.clip(flat, 0, 1)
+        bin = 1 * (flat > args['threshold'])
+        #LOG.debug("binarization: lo-hi (%.2f %.2f) angle %4.1f %s", lo, hi, angle, comment)
+        
+        return array2pil(bin)
+    else:
+        # Convert RGB to OpenCV
+        img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
 
-    # Otsu's thresholding after Gaussian filtering
-    blur = cv2.GaussianBlur(img, (5, 5), 0)
-    ret3, th3 = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-
-    bin_img = Image.fromarray(th3)
-    return bin_img
+        if method == 'global':
+            # global thresholding
+            _, th = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
+        elif method == 'otsu':
+            # Otsu's thresholding
+            _, th = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        elif method == 'gauss-otsu':
+            # Otsu's thresholding after Gaussian filtering
+            blur = cv2.GaussianBlur(img, (5, 5), 0)
+            _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        else:
+            raise Exception('unknown binarization method %s', method)
+        
+        return Image.fromarray(th)
 
 
 def check_line(image):
@@ -60,7 +198,7 @@ def check_line(image):
     h,w = image.shape
     if h<20: return "image not tall enough for a text line %s"%(image.shape,)
     if h>200: return "image too tall for a text line %s"%(image.shape,)
-    if w<1.5*h: return "line too short %s"%(image.shape,)
+    if w<1.2*h: return "line too short %s"%(image.shape,)
     if w>4000: return "line too long %s"%(image.shape,)
     ratio = w*1.0/h
     _,ncomps = measurements.label(image>np.mean(image))
@@ -70,8 +208,8 @@ def check_line(image):
     if ncomps>hi*ratio: return "too many connected components (got %d, wanted <=%d)"%(ncomps,hi)
     return None
 
-def process1(fname, pad, lnorm, network, check=True, dewarp=True):
-    line = ocrolib.read_image_gray(fname)
+def process1(image, pad, lnorm, network, check=True, dewarp=True):
+    line = pil2array(image)
 
     raw_line = line.copy()
     if np.prod(line.shape) == 0:
@@ -86,7 +224,7 @@ def process1(fname, pad, lnorm, network, check=True, dewarp=True):
         if report:
             raise Exception(report)
     if dewarp:
-        temp = temp*1.0/np.amax(temp)
+        temp = temp * 1.0 / np.amax(temp)
         lnorm.measure(temp)
         line = lnorm.normalize(line, cval=np.amax(line))
 
@@ -122,13 +260,14 @@ class OcropyRecognize(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-recognize']
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
-        self.log = getLogger('OcropyRecognize')
 
     def process(self):
         """
         Performs the (text) recognition.
         """
         # print(self.parameter)
+        dewarping = self.parameter['dewarping']
+        binarization = self.parameter['binarization']
         maxlevel = self.parameter['textequiv_level']
         if maxlevel not in ['line', 'word', 'glyph']:
             raise Exception(
@@ -149,22 +288,22 @@ class OcropyRecognize(Processor):
 
         pad = 16  # default: 16
 
-        # self.log.info("Using model %s in %s for recognition", model)
+        # LOG.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
-            self.log.info("INPUT FILE %i / %s", n, input_file)
+            LOG.info("INPUT FILE %i / %s", n, input_file)
             pcgts = page_from_file(self.workspace.download_file(input_file))
             pil_image = self.workspace.resolve_image_as_pil(
                 pcgts.get_Page().imageFilename)
 
-            self.log.info("Recognizing text in page '%s'", pcgts.get_pcGtsId())
+            LOG.info("Recognizing text in page '%s'", pcgts.get_pcGtsId())
             page = pcgts.get_Page()
 
             # region, line, word, or glyph level:
             regions = page.get_TextRegion()
             if not regions:
-                self.log.warning("Page contains no text regions")
+                LOG.warning("Page contains no text regions")
 
-            args = [lnorm, network, pil_image, filepath, pad]
+            args = [lnorm, network, pil_image, filepath, pad, dewarping, binarization]
 
             self.process_regions(regions, maxlevel, args)
 
@@ -172,8 +311,8 @@ class OcropyRecognize(Processor):
             # this way the files retain the same basenames.
             # ID = concat_padded(self.output_file_grp, n)
             ID = self.output_file_grp + '-' + input_file.basename.replace('.xml', '')
-            self.log.info('creating file id: %s, name: %s, file_grp: %s',
-                          ID, input_file.basename, self.output_file_grp)
+            LOG.info('creating file id: %s, name: %s, file_grp: %s',
+                     ID, input_file.basename, self.output_file_grp)
             out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,
@@ -182,55 +321,64 @@ class OcropyRecognize(Processor):
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
             )
-            self.log.info('created file %s', out)
+            LOG.info('created file %s', out)
 
     def process_regions(self, regions, maxlevel, args):
+        edits = 0
+        lengs = 0
         for region in regions:
-            self.log.info("Recognizing text in region '%s'", region.id)
+            LOG.info("Recognizing text in region '%s'", region.id)
 
             textlines = region.get_TextLine()
             if not textlines:
-                self.log.warning(
-                    "Region '%s' contains no text lines", region.id)
+                LOG.warning("Region '%s' contains no text lines", region.id)
             else:
-                self.process_lines(textlines, maxlevel, args)
+                edits_, lengs_ = self.process_lines(textlines, maxlevel, args)
+                edits += edits_
+                lengs += lengs_
+        LOG.info('CER: %.1f%%', 100.0 * edits / lengs if lengs > 0 else 0.)
 
     def process_lines(self, textlines, maxlevel, args):
-        lnorm, network, pil_image, filepath, pad = args
-
+        lnorm, network, pil_image, filepath, pad, dewarping, binarization = args
+        
+        edits = 0
+        lengs = 0
         for line in textlines:
-            self.log.info("Recognizing text in line '%s'", line.id)
-            self.log.debug("gt   '%s': '%s'", line.id, line.TextEquiv[0].Unicode)
+            LOG.info("Recognizing text in line '%s'", line.id)
+            linegt = line.TextEquiv[0].Unicode
+            LOG.debug("GT  '%s': '%s'", line.id, linegt)
 
             # get box from points
             if line.get_Coords().points == '':
-                self.log.warn("empty bounding box")
+                LOG.warn("empty bounding box at line %s", line.id)
                 continue
             box = bounding_box(line.get_Coords().points)
 
             # crop word from page
             cropped_image = pil_image.crop(box=box)
+            if cropped_image.size[1] < 32:
+                LOG.warn("bounding box is too narrow at line %s", line.id)
+                continue
 
             # binarize with Otsu's thresholding after Gaussian filtering
-            bin_image = binarize(cropped_image)
-            #bin_image = cropped_image
+            bin_image = binarize(cropped_image, method=binarization)
+            #bin_image.save('/tmp/ocrd-cis-ocropy-recognize_%s.bin.png' % line.id)
 
             # resize image to 48 pixel height
             final_img = resize_keep_ratio(bin_image)
             
-            with tempfile.NamedTemporaryFile(prefix=__name__, suffix='.png') as imgfile:
-                # save temp image
-                final_img.save(imgfile.name)
-
-                # process ocropy; temp file is deleted in process1
-                try:
-                    linepred, clist, rlist, confidlist = process1(
-                        imgfile.name, pad, lnorm, network,
-                        check=True, dewarp=False)
-                except Exception as e:
-                    self.log.error(e)
-                    continue
-            self.log.debug("line '%s': '%s'", line.id, linepred)
+            # process ocropy:
+            try:
+                linepred, clist, rlist, confidlist = process1(
+                    final_img, pad, lnorm, network,
+                    check=True, dewarp=dewarping)
+            except Exception as e:
+                LOG.error('error processing line "%s": %s', line.id, e)
+                continue
+            LOG.debug("OCR '%s': '%s'", line.id, linepred)
+            edits += Levenshtein.distance(linepred, linegt)
+            lengs += len(linegt)
+            
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
             # lists in list for every word with r-position and confidence of each glyph
@@ -297,3 +445,4 @@ class OcropyRecognize(Processor):
                             word.add_Glyph(glyph)
                             glyph.add_TextEquiv(TextEquivType(
                                 Unicode=g, conf=word_conf_list[w_no][glyph_no]))
+        return edits, lengs

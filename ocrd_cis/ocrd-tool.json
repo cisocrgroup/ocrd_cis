@@ -56,6 +56,16 @@
 			],
 			"description": "Recognize text in lines with ocropy",
 			"parameters": {
+                                "dewarping": {
+                                    "type": "boolean",
+                                    "description": "enable line normalization",
+                                    "default": true
+                                },
+                                "binarization": {
+                                    "type": "string",
+                                    "enum": ["none", "global", "otsu", "gauss-otsu", "ocropy"],
+                                    "default": "none"
+                                },
 				"textequiv_level": {
 					"type": "string",
 					"enum": ["line", "word", "glyph"],
