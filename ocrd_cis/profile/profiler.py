@@ -27,6 +27,7 @@ class Profiler(Processor):
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
                 file_grp=self.output_file_grp,
+                pageId=ifile.pageId,
                 basename=ifile.basename,
             )
         self.workspace.save_mets()

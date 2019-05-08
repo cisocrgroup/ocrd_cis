@@ -39,6 +39,7 @@ class Aligner(Processor):
             out = self.workspace.add_file(
                 ID=ID,
                 file_grp=self.output_file_grp,
+                pageId=ift[0].input_file.pageId,
                 basename=basename,
                 local_filename=os.path.join(self.output_file_grp, basename),
                 mimetype=MIMETYPE_PAGE,
