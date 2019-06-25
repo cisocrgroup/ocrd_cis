@@ -69,23 +69,56 @@ ocrd-cis-align \
 
 
 ### ocrd-cis-ocropy-train
-The ocropy-train tool can be used to train lstm models.
-The tool takes the ground truth from a workspace and safes the snippets from the corresponding page.
-Then the model is trained on all snippets for 1 million randomized iterations or the given number from the parameter file.
+The ocropy-train tool can be used to train LSTM models.
+It takes ground truth from the workspace and saves (image+text) snippets from the corresponding pages.
+Then a model is trained on all snippets for 1 million (or the given number of) randomized iterations from the parameter file.
 ```sh
 ocrd-cis-ocropy-train \
-  --input-file-grp 'OCR-D-XML' \
+  --input-file-grp OCR-D-GT-SEG-LINE \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
+### ocrd-cis-ocropy-deskew
+The ocropy-deskew tool can be used to deskew regions of a workspace.
+It runs the Ocropy thresholding and deskewing estimation on every text region of every PAGE in the input file group and annotated the orientation angle in the output PAGE.
+```sh
+ocrd-cis-ocropy-deskew \
+  --input-file-grp OCR-D-SEG-LINE \
+  --output-file-grp OCR-D-SEG-LINE-DES \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
+### ocrd-cis-ocropy-binarize
+The ocropy-binarize tool can be used to grayscale-normalize and deskew pages / regions / lines of a workspace.
+It runs the Ocropy thresholding and deskewing estimation on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.)
+```sh
+ocrd-cis-ocropy-binarize \
+  --input-file-grp OCR-D-SEG-LINE \
+  --output-file-grp OCR-D-SEG-LINE-BIN \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
+### ocrd-cis-ocropy-dewarp
+The ocropy-dewarp tool can be used to dewarp text lines of a workspace.
+It runs the Ocropy baseline estimation and dewarping on every line in every text region of every PAGE in the input file group and references the resulting line image files in the output PAGE (as AlternativeImage).
+```sh
+ocrd-cis-ocropy-dewarp \
+  --input-file-grp OCR-D-SEG-LINE-BIN \
+  --output-file-grp OCR-D-SEG-LINE-DEW \
   --mets mets.xml
   --parameter file:///path/to/config.json
 ```
 
 ### ocrd-cis-ocropy-recognize
 The ocropy-recognize tool can be used to recognize lines / words / glyphs from pages of a workspace.
-The tool runs the ocropy optical character recognition for each "region" given in the XML file of the workspace.
+It runs the Ocropy optical character recognition on every line in every text region of every PAGE in the input file group and adds the resulting text annotation in the output PAGE.
 ```sh
 ocrd-cis-ocropy-recognize \
-  --input-file-grp 'OCR-D-XML' \
-  --output-file-grp 'OCR-D-OCROPY' \
+  --input-file-grp OCR-D-SEG-LINE-DEW \
+  --output-file-grp OCR-D-OCR-OCRO \
   --mets mets.xml
   --parameter file:///path/to/config.json
 ```
