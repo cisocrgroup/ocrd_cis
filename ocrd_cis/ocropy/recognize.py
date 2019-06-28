@@ -140,7 +140,7 @@ class OcropyRecognize(Processor):
             regions = page.get_TextRegion()
             if not regions:
                 LOG.warning("Page '%s' contains no text regions", page_id)
-            self.process_regions(regions, maxlevel, page_image, page_xywh, page_id)
+            self.process_regions(regions, maxlevel, page_image, page_xywh)
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
@@ -157,31 +157,30 @@ class OcropyRecognize(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def process_regions(self, regions, maxlevel, page_image, page_xywh, page_id):
+    def process_regions(self, regions, maxlevel, page_image, page_xywh):
         edits = 0
         lengs = 0
         for region in regions:
             region_image, region_xywh = image_from_region(
-                self.workspace, region, page_image, page_xywh, page_id)
+                self.workspace, region, page_image, page_xywh)
             
             LOG.info("Recognizing text in region '%s'", region.id)
             textlines = region.get_TextLine()
             if not textlines:
                 LOG.warning("Region '%s' contains no text lines", region.id)
             else:
-                edits_, lengs_ = self.process_lines(textlines, maxlevel, region_image, region_xywh,
-                                                    region.id, page_id)
+                edits_, lengs_ = self.process_lines(textlines, maxlevel, region_image, region_xywh)
                 edits += edits_
                 lengs += lengs_
         if lengs > 0:
             LOG.info('CER: %.1f%%', 100.0 * edits / lengs)
 
-    def process_lines(self, textlines, maxlevel, region_image, region_xywh, region_id, page_id):
+    def process_lines(self, textlines, maxlevel, region_image, region_xywh):
         edits = 0
         lengs = 0
         for line in textlines:
             line_image, line_xywh = image_from_line(
-                self.workspace, line, region_image, region_xywh, region_id, page_id)
+                self.workspace, line, region_image, region_xywh)
             
             LOG.info("Recognizing text in line '%s'", line.id)
             if line.get_TextEquiv():

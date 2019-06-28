@@ -25,6 +25,7 @@ from .common import (
     pil2array, array2pil,
     check_line, check_page,
     # binarize,
+    compute_line_labels,
     borderclean,
     remove_noise)
 
@@ -123,17 +124,26 @@ class OcropyBinarize(Processor):
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
                     region_image, region_xywh = image_from_region(
-                        self.workspace, region, page_image, page_xywh, page_id)
+                        self.workspace, region, page_image, page_xywh)
                     if level == 'region':
                         self.process_region(region, region_image, region_xywh,
                                             input_file.pageId, file_id + '_' + region.id)
                         continue
+                    region_labels = None
+                    if region_xywh['w'] > 100 and region_xywh['h'] > 100:
+                        try:
+                            region_array = pil2array(region_image)
+                            region_bin, _ = common.binarize(region_array, maxskew=0)
+                            region_labels = compute_line_labels(region_bin)
+                        except Exception as err:
+                            LOG.warning('cannot line-segment region "%s": %s', region.id, err)
                     lines = region.get_TextLine()
                     if not lines:
                         LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     for line in lines:
                         line_image, line_xywh = image_from_line(
-                            self.workspace, line, region_image, region_xywh, region.id, page_id)
+                            self.workspace, line, region_image, region_xywh,
+                            segmentation=region_labels)
                         self.process_line(line, line_image, line_xywh,
                                           input_file.pageId, region.id,
                                           file_id + '_' + region.id + '_' + line.id)

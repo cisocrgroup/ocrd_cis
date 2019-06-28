@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import os.path
+import sys
 import io
 import warnings
 
@@ -636,8 +637,7 @@ def image_from_page(workspace, page,
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
 def image_from_region(workspace, region,
-                      page_image, page_xywh,
-                      page_id):
+                      page_image, page_xywh):
     """Extract the TextRegion image from a Page image.
     
     Given a PIL.Image of the page, `page_image`,
@@ -662,9 +662,9 @@ def image_from_region(workspace, region,
     alternative_image = region.get_AlternativeImage()
     if alternative_image:
         # (e.g. from region-level cropping, binarization, deskewing or despeckling)
-        LOG.debug("Using AlternativeImage %d (%s) for page '%s' region '%s'",
+        LOG.debug("Using AlternativeImage %d (%s) for region '%s'",
                   len(alternative_image), alternative_image[-1].get_comments(),
-                  page_id, region.id)
+                  region.id)
         region_image = workspace.resolve_image_as_pil(
             alternative_image[-1].get_filename())
     else:
@@ -673,9 +673,15 @@ def image_from_region(workspace, region,
                  region_xywh['y'] - page_xywh['y'],
                  region_xywh['x'] - page_xywh['x'] + region_xywh['w'],
                  region_xywh['y'] - page_xywh['y'] + region_xywh['h']))
+        # FIXME: mask any overlapping regions (esp. Separator/Noise/Image)
+        # but we might need overlapping rules: e.g. an ImageRegion which
+        # properly contains our TextRegion should be completely ignored, but
+        # an ImageRegion which is properly contained in our TextRegion should
+        # be completely masked, while partial overlap may be more difficult
+        # to decide (use polygons?)
         if region_xywh['angle']:
-            LOG.info("About to rotate page '%s' region '%s' by %.1f°",
-                      page_id, region.id, region_xywh['angle'])
+            LOG.info("About to rotate region '%s' by %.2f°",
+                      region.id, region_xywh['angle'])
             region_image = region_image.rotate(region_xywh['angle'],
                                                expand=True,
                                                #resample=Image.BILINEAR,
@@ -688,7 +694,7 @@ def image_from_region(workspace, region,
 # to be refactored into core (as method of ocrd.workspace.Workspace):
 def image_from_line(workspace, line,
                     region_image, region_xywh,
-                    region_id, page_id):
+                    segmentation=None):
     """Extract the TextLine image from a TextRegion image.
     
     Given a PIL.Image of the region, `region_image`,
@@ -725,9 +731,9 @@ def image_from_line(workspace, line,
     alternative_image = line.get_AlternativeImage()
     if alternative_image:
         # (e.g. from line-level cropping, deskewing or despeckling)
-        LOG.debug("Using AlternativeImage %d (%s) for page '%s' region '%s' line '%s'",
+        LOG.debug("Using AlternativeImage %d (%s) for line '%s'",
                   len(alternative_image), alternative_image[-1].get_comments(),
-                  page_id, region_id, line.id)
+                  line.id)
         line_image = workspace.resolve_image_as_pil(
             alternative_image[-1].get_filename())
     else:
@@ -737,16 +743,10 @@ def image_from_line(workspace, line,
                                       orig={'x': 0.5 * region_image.width,
                                             'y': 0.5 * region_image.height})
         line_mask = polygon_mask(region_image, line_polygon)
-        if region_xywh['w'] > 100 and region_xywh['h'] > 100:
+        if isinstance(segmentation, np.ndarray):
             # modify mask from (ad-hoc) line segmentation of region
             # (shrink to largest label spread in that area):
-            try:
-                region_array = pil2array(region_image)
-                region_bin, _ = binarize(region_array, maxskew=0)
-                region_labels = compute_line_labels(region_bin)
-                line_mask = resegment(line_mask, region_labels)
-            except Exception as err:
-                LOG.warning('cannot line-segment region "%s": %s', region_id, err)
+            line_mask = resegment(line_mask, segmentation)
         # create a background image from its median color
         # (in case it has not been binarized yet):
         region_array = np.asarray(region_image)
@@ -755,18 +755,157 @@ def image_from_line(workspace, line,
         line_image = Image.fromarray(region_array)
         line_image.paste(region_image, mask=line_mask)
         # recrop into a line:
-        left, upper, right, lower = line_mask.getbbox()
-        # keep upper/lower, regardless of h (no vertical padding)
-        # pad left/right if target width w is larger:
-        margin_x = (line_xywh['w'] - right + left) // 2
-        left = max(0, left - margin_x)
-        right = min(line_mask.width, left + line_xywh['w'])
+        bbox = line_mask.getbbox()
+        if bbox:
+            left, upper, right, lower = bbox
+            # keep upper/lower, regardless of h (no vertical padding)
+            # pad left/right if target width w is larger:
+            margin_x = (line_xywh['w'] - right + left) // 2
+            left = max(0, left - margin_x)
+            right = min(line_mask.width, left + line_xywh['w'])
+        else:
+            left = line_xywh['x'] - region_xywh['x']
+            upper = line_xywh['y'] - region_xywh['y']
+            right = left + line_xywh['w']
+            lower = upper + line_xywh['h']
         line_image = line_image.crop(box=(left, upper, right, lower))
     # subtract offset from any increase in binary line size over source:
     line_xywh['x'] -= 0.5 * max(0, line_image.width  - line_xywh['w'])
     line_xywh['y'] -= 0.5 * max(0, line_image.height - line_xywh['h'])
     return line_image, line_xywh
                 
+# to be refactored into core (as method of ocrd.workspace.Workspace):
+def image_from_word(workspace, word,
+                    line_image, line_xywh):
+    """Extract the Word image from a TextLine image.
+    
+    Given a PIL.Image of the line, `line_image`,
+    and its coordinates relative to the region, `line_xywh`,
+    and a Word object logically contained in it, `word`,
+    extract its PIL.Image from AlternativeImage (if it exists),
+    or via cropping from `line_image`.
+    
+    When cropping, mind the difference between annotated
+    and actual size of the line (usually from deskewing), by
+    a respective offset into the image. Cropping uses a polygon
+    mask (not just the rectangle).
+    
+    If the resulting word image is larger than the annotated word,
+    pass down the word's box coordinates with an offset of half
+    the width/height difference.
+    
+    Return the extracted image, and the word's box coordinates,
+    relative to the line image (for passing down).
+    """
+    word_points = word.get_Coords().points
+    word_xywh = xywh_from_points(word_points)
+    word_polygon = [(x - line_xywh['x'],
+                     y - line_xywh['y'])
+                    for x, y in polygon_from_points(word_points)]
+    alternative_image = word.get_AlternativeImage()
+    if alternative_image:
+        # (e.g. from word-level cropping or binarization)
+        LOG.debug("Using AlternativeImage %d (%s) for word '%s'",
+                  len(alternative_image), alternative_image[-1].get_comments(),
+                  word.id)
+        word_image = workspace.resolve_image_as_pil(
+            alternative_image[-1].get_filename())
+    else:
+        # create a mask from the word polygon:
+        word_mask = polygon_mask(line_image, word_polygon)
+        # create a background image from its median color
+        # (in case it has not been binarized yet):
+        line_array = np.asarray(line_image)
+        background = np.median(line_array, axis=[0, 1], keepdims=True)
+        line_array = np.broadcast_to(background.astype(np.uint8), line_array.shape)
+        word_image = Image.fromarray(line_array)
+        word_image.paste(line_image, mask=word_mask)
+        # recrop into a line:
+        bbox = word_mask.getbbox()
+        if bbox:
+            left, upper, right, lower = bbox
+            # keep upper/lower, regardless of h (no vertical padding)
+            # pad left/right if target width w is larger:
+            margin_x = (word_xywh['w'] - right + left) // 2
+            left = max(0, left - margin_x)
+            right = min(word_mask.width, left + word_xywh['w'])
+        else:
+            left = word_xywh['x'] - line_xywh['x']
+            upper = word_xywh['y'] - line_xywh['y']
+            right = left + word_xywh['w']
+            lower = upper + word_xywh['h']
+        word_image = word_image.crop(box=(left, upper, right, lower))
+    # subtract offset from any increase in binary line size over source:
+    word_xywh['x'] -= 0.5 * max(0, word_image.width  - word_xywh['w'])
+    word_xywh['y'] -= 0.5 * max(0, word_image.height - word_xywh['h'])
+    return word_image, word_xywh
+
+# to be refactored into core (as method of ocrd.workspace.Workspace):
+def image_from_glyph(workspace, glyph,
+                    word_image, word_xywh):
+    """Extract the Glyph image from a Word image.
+    
+    Given a PIL.Image of the word, `word_image`,
+    and its coordinates relative to the line, `word_xywh`,
+    and a Glyph object logically contained in it, `glyph`,
+    extract its PIL.Image from AlternativeImage (if it exists),
+    or via cropping from `word_image`.
+    
+    When cropping, mind the difference between annotated
+    and actual size of the word (usually from deskewing), by
+    a respective offset into the image. Cropping uses a polygon
+    mask (not just the rectangle).
+    
+    If the resulting glyph image is larger than the annotated glyph,
+    pass down the glyph's box coordinates with an offset of half
+    the width/height difference.
+    
+    Return the extracted image, and the glyph's box coordinates,
+    relative to the word image (for passing down).
+    """
+    glyph_points = glyph.get_Coords().points
+    glyph_xywh = xywh_from_points(glyph_points)
+    glyph_polygon = [(x - word_xywh['x'],
+                      y - word_xywh['y'])
+                     for x, y in polygon_from_points(glyph_points)]
+    alternative_image = glyph.get_AlternativeImage()
+    if alternative_image:
+        # (e.g. from glyph-level cropping or binarization)
+        LOG.debug("Using AlternativeImage %d (%s) for glyph '%s'",
+                  len(alternative_image), alternative_image[-1].get_comments(),
+                  glyph.id)
+        glyph_image = workspace.resolve_image_as_pil(
+            alternative_image[-1].get_filename())
+    else:
+        # create a mask from the glyph polygon:
+        glyph_mask = polygon_mask(word_image, glyph_polygon)
+        # create a background image from its median color
+        # (in case it has not been binarized yet):
+        word_array = np.asarray(word_image)
+        background = np.median(word_array, axis=[0, 1], keepdims=True)
+        word_array = np.broadcast_to(background.astype(np.uint8), word_array.shape)
+        glyph_image = Image.fromarray(word_array)
+        glyph_image.paste(word_image, mask=glyph_mask)
+        # recrop into a word:
+        bbox = glyph_mask.getbbox()
+        if bbox:
+            left, upper, right, lower = bbox
+            # keep upper/lower, regardless of h (no vertical padding)
+            # pad left/right if target width w is larger:
+            margin_x = (glyph_xywh['w'] - right + left) // 2
+            left = max(0, left - margin_x)
+            right = min(glyph_mask.width, left + glyph_xywh['w'])
+        else:
+            left = glyph_xywh['x'] - word_xywh['x']
+            upper = glyph_xywh['y'] - word_xywh['y']
+            right = left + glyph_xywh['w']
+            lower = upper + glyph_xywh['h']
+        glyph_image = glyph_image.crop(box=(left, upper, right, lower))
+    # subtract offset from any increase in binary word size over source:
+    glyph_xywh['x'] -= 0.5 * max(0, glyph_image.width  - glyph_xywh['w'])
+    glyph_xywh['y'] -= 0.5 * max(0, glyph_image.height - glyph_xywh['h'])
+    return glyph_image, glyph_xywh
+
 # to be refactored into core (as method of ocrd.workspace.Workspace):
 def save_image_file(workspace, image,
                     file_id,
@@ -798,3 +937,56 @@ def save_image_file(workspace, image,
     LOG.info('created file ID: %s, file_grp: %s, path: %s',
              file_id, file_grp, out.local_filename)
     return file_path
+
+# to be refactored into core (as function in ocrd_utils):
+def bbox_from_points(points):
+    """Constructs a numeric list representing a bounding box from polygon coordinates in page representation."""
+    xys = [[int(p) for p in pair.split(',')] for pair in points.split(' ')]
+    minx = sys.maxsize
+    miny = sys.maxsize
+    maxx = 0
+    maxy = 0
+    for xy in xys:
+        if xy[0] < minx:
+            minx = xy[0]
+        if xy[0] > maxx:
+            maxx = xy[0]
+        if xy[1] < miny:
+            miny = xy[1]
+        if xy[1] > maxy:
+            maxy = xy[1]
+    return minx, miny, maxx, maxy
+
+# to be refactored into core (as function in ocrd_utils):
+def points_from_bbox(minx, miny, maxx, maxy):
+    """Constructs polygon coordinates in page representation from a numeric list representing a bounding box."""
+    return "%i,%i %i,%i %i,%i %i,%i" % (
+        minx, miny, maxx, miny, maxx, maxy, minx, maxy)
+
+# to be refactored into core (as function in ocrd_utils):
+def xywh_from_bbox(minx, miny, maxx, maxy):
+    """Converts a bounding box from a numeric list to a numeric dict representation."""
+    return {
+        'x': minx,
+        'y': miny,
+        'w': maxx - minx,
+        'h': maxy - miny,
+    }
+
+# to be refactored into core (as function in ocrd_utils):
+def bbox_from_xywh(xywh):
+    """Converts a bounding box from a numeric dict to a numeric list representation."""
+    return (
+        xywh['x'],
+        xywh['y'],
+        xywh['x'] + xywh['w'],
+        xywh['y'] + xywh['h']
+    )
+
+# to be refactored into core (as function in ocrd_utils):
+def points_from_polygon(polygon):
+    """Converts polygon coordinates from a numeric list representation to a page representation."""
+    return " ".join("%i,%i" % (x, y) for x, y in polygon)
+
+def membername(class_, val):
+    return next((k for k, v in class_.__dict__.items() if v == val), str(val))

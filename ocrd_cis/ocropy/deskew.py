@@ -75,23 +75,22 @@ class OcropyDeskew(Processor):
                 LOG.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
                 if region.get_orientation():
-                    LOG.error('Page "%s" region "%s" already has non-zero orientation: %.1f',
-                              page_id, region.id, region.get_orientation())
+                    LOG.error('Region "%s" already has non-zero orientation: %.1f',
+                              region.id, region.get_orientation())
                     # it would be dangerous to proceed here, because
                     # the angle could already have been applied to the image
                     # and our new estimate would (or would not) be additive
                     continue
                 # process region:
                 region_image, region_xywh = image_from_region(
-                    self.workspace, region, page_image, page_xywh, page_id)
-                LOG.info("About to deskew page '%s' region '%s'",
-                         page_id, region.id)
+                    self.workspace, region, page_image, page_xywh)
+                LOG.info("About to deskew region '%s'", region.id)
                 angle = deskew(region_image, maxskew=maxskew)
                 # region angle: PAGE orientation is defined clockwise,
                 # whereas PIL/ndimage rotation is in mathematical direction:
                 region.set_orientation(-angle)
-                LOG.info("Found angle for page '%s' region '%s': %.1f",
-                         page_id, region.id, angle)
+                LOG.info("Found angle for region '%s': %.1f",
+                         region.id, angle)
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,

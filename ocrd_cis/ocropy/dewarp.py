@@ -101,7 +101,7 @@ class OcropyDewarp(Processor):
             for region in regions:
                 # process region:
                 region_image, region_xywh = image_from_region(
-                    self.workspace, region, page_image, page_xywh, page_id)
+                    self.workspace, region, page_image, page_xywh)
                 
                 lines = region.get_TextLine()
                 if not lines:
@@ -109,8 +109,7 @@ class OcropyDewarp(Processor):
                 for line in lines:
                     # process line:
                     line_image, _ = image_from_line(
-                        self.workspace, line, region_image, region_xywh,
-                        region.id, page_id)
+                        self.workspace, line, region_image, region_xywh)
                     
                     LOG.info("About to dewarp page '%s' region '%s' line '%s'",
                              page_id, region.id, line.id)
