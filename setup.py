@@ -2,6 +2,11 @@
 Installs:
     - ocrd-cis-align
     - ocrd-cis-profile
+    - ocrd-cis-ocropy-clip
+    - ocrd-cis-ocropy-deskew
+    - ocrd-cis-ocropy-binarize
+    - ocrd-cis-ocropy-resegment
+    - ocrd-cis-ocropy-dewarp
     - ocrd-cis-ocropy-recognize
     - ocrd-cis-ocropy-train
     - ocrd-cis-aio
@@ -17,7 +22,7 @@ from setuptools import find_packages
 
 setup(
     name='cis-ocrd',
-    version='0.0.2',
+    version='0.0.3',
     description='description',
     long_description='long description',
     author='Florian Fink, Tobias Englmeier, Christoph Weber',
@@ -41,8 +46,13 @@ setup(
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
             'ocrd-cis-profile=ocrd_cis.profile.cli:cis_ocrd_profile',
+            'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_binarize',
+            'ocrd-cis-ocropy-clip=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_clip',
+            'ocrd-cis-ocropy-deskew=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_deskew',
+            'ocrd-cis-ocropy-dewarp=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_dewarp',
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_recognize',
             'ocrd-cis-ocropy-rec=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_rec',
+            'ocrd-cis-ocropy-resegment=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_resegment',
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
             'ocrd-cis-aio=ocrd_cis.aio.cli:cis_ocrd_aio',
             'ocrd-cis-stats=ocrd_cis.div.cli:cis_ocrd_stats',
