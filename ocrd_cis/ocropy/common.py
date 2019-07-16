@@ -4,11 +4,12 @@ import os.path
 import sys
 import io
 import warnings
+import logging
 
 import numpy as np
 from scipy.ndimage import measurements, filters, interpolation, morphology
 from scipy import stats
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageStat
 
 from ocrd_cis.ocropy import ocrolib
 from ocrd_cis.ocropy.ocrolib import lineest, morph, psegutils, sl
@@ -76,15 +77,19 @@ def estimate_local_whitelevel(image, zoom=0.5, perc=80, range_=20):
     flat = np.nan_to_num(np.clip(image - m + 1, 0, 1))
     return flat
 
-# from ocropy-nlbin
+# from ocropy-nlbin, but with threshold on variance
 def estimate_skew_angle(image, angles):
-    estimates = []
-    for a in angles:
+    estimates = np.zeros_like(angles)
+    for i, a in enumerate(angles):
         v = np.mean(interpolation.rotate(image, a, order=0, mode='constant'), axis=1)
         v = np.var(v)
-        estimates.append((v, a))
-    _, a = max(estimates)
-    return a
+        estimates[i] = v
+    # only return the angle of the largest entropy,
+    # if it is considerably larger than the average:
+    if np.amax(estimates) / np.mean(estimates) > 1.5:
+        return angles[np.argmax(estimates)]
+    else:
+        return 0
 
 # from ocropy-nlbin, but with reshape=True
 def estimate_skew(flat, bignore=0.1, maxskew=2, skewsteps=8):
@@ -135,7 +140,7 @@ def estimate_thresholds(flat, bignore=0.1, escale=1.0, lo=5, hi=90):
     hi = stats.scoreatpercentile(est.ravel(), hi)
     return lo, hi
 
-# from ocropy-nlbin process1, but reshape when rotating
+# from ocropy-nlbin process1, but reshape when rotating, and catch NaN
 def binarize(image, 
              perc=90, # percentage for local whitelevel filters (ocropy: 80)
              range=10, # range (in pixels) for local whitelevel filters (ocropy: 20)
@@ -160,9 +165,13 @@ def binarize(image,
     else:
         angle = 0
     lo, hi = estimate_thresholds(flat, bignore, escale, lo, hi)
-    # rescale the image to get the gray scale image
-    flat -= lo
-    flat /= (hi - lo)
+    if np.isnan(lo) or np.isnan(hi):
+        LOG.warning("cannot estimate binarization thresholds (is the image empty?)")
+    else:
+        # normalize the image:
+        flat -= lo
+        if hi - lo:
+            flat /= (hi - lo)
     flat = np.clip(flat, 0, 1)
     bin = 1 * (flat > threshold)
     LOG.debug("binarization: lo-hi (%.2f %.2f) angle %4.1f %s", lo, hi, angle, comment)
@@ -176,48 +185,67 @@ def borderclean(array, margin=4):
     find and remove those black components that do not exceed
     the top/bottom margins.
     (This can be used to get rid of ascenders and descenders from
-    neighbouring regions/lines, which cannot be found by resegment().
-    But this should happen before deskewing, because this increases
+    neighbouring regions/lines, which cannot be found by resegment()
+    within the region/line.
+    
+    This should happen before deskewing, because the latter increases
     the margins by an unpredictable amount.)
     
-    Return a Numpy array.
+    Return a Numpy array (with 0 for black and 1 for white).
     """
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
-    h, w = array.shape
+    return np.maximum(borderclean_bin(binary, margin=margin), array)
+
+def borderclean_bin(binary, margin=4):
+    """Remove components that are only contained within the margin.
+    
+    Given a binarized, inverted image as Numpy array `binary`, 
+    find those foreground components that do not exceed
+    the top/bottom margins, and return a mask to remove them.
+    (This can be used to get rid of ascenders and descenders from
+    neighbouring regions/lines, which cannot be found by resegment()
+    within the region/line.
+    
+    This should happen before deskewing, because the latter increases
+    the margins by an unpredictable amount.)
+    
+    Return a Numpy array (with 0 for stay and 1 for remove).
+    """
+    h, w = binary.shape
     h1, w1 = min(margin, h//2 - 4), min(margin, w//2 - 4)
     h2, w2 = -h1 if h1 else h, -w1 if w1 else w
-    mask = np.zeros(array.shape, 'i')
-    #mask[h1:h2, w1:w2] = 1
+    mask = np.zeros(binary.shape, 'i')
+    mask[h1:h2, w1:w2] = 1
     # use only the vertical margins (to which recognition is sensitive):
-    mask[h1:h2, :] = 1
+    # mask[h1:h2, :] = 1
     _, ncomps_before = morph.label(binary)
     binary = morph.keep_marked(binary, mask)
     _, ncomps_after = morph.label(binary)
     LOG.debug('black components before/after borderclean (margin=%d): %d/%d',
               margin, ncomps_before, ncomps_after)
-    return np.maximum((1 - binary)*(1 - mask), array)
+    return (1 - binary)*(1 - mask)
 
-# from ocropus-rpred
-def check_line(array):
-    """Validate array as a plausible text line image.
+# from ocropus-rpred, but with zoom parameter
+def check_line(binary, zoom=1.0):
+    """Validate binary as a plausible text line image.
     
-    Given a binarized, inverted image as Numpy array `array`
+    Given a binarized, inverted image as Numpy array `binary`
     (with 0 for white and 1 for black),
     check the array has the right dimensions, is in fact inverted,
     and does not have too few or too many connected black components.
     
     Returns an error report, or None if valid.
     """
-    if len(array.shape)==3: return "input image is color image %s"%(array.shape,)
-    if np.mean(array)<np.median(array): return "image may be inverted"
-    h,w = array.shape
-    if h<20: return "image not tall enough for a text line %s"%(array.shape,)
-    if h>200: return "image too tall for a text line %s"%(array.shape,)
-    #if w<1.5*h: return "line too short %s"%(array.shape,)
-    if w<1.5*h and w<32: return "line too short %s"%(array.shape,)
-    if w>4000: return "line too long %s"%(array.shape,)
+    if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
+    if np.mean(binary)<np.median(binary): return "image may be inverted"
+    h,w = binary.shape
+    if h<20/zoom: return "image not tall enough for a text line %s"%(binary.shape,)
+    if h>200/zoom: return "image too tall for a text line %s"%(binary.shape,)
+    #if w<1.5*h: return "line too short %s"%(binary.shape,)
+    if w<1.5*h and w<32/zoom: return "line too short %s"%(binary.shape,)
+    if w>4000/zoom: return "line too long %s"%(binary.shape,)
     ratio = w*1.0/h
-    _,ncomps = measurements.label(array>np.mean(array))
+    _, ncomps = measurements.label(binary)
     lo = int(0.5*ratio+0.5)
     hi = int(4*ratio)+1
     if ncomps<lo: return "too few connected components (got %d, wanted >=%d)"%(ncomps,lo)
@@ -226,49 +254,49 @@ def check_line(array):
     return None
 
 # inspired by ocropus-gpageseg check_page
-def check_region(array):
-    """Validate array as a plausible text region image.
+def check_region(binary, zoom=1.0):
+    """Validate binary as a plausible text region image.
     
-    Given a binarized, inverted image as Numpy array `array`
+    Given a binarized, inverted image as Numpy array `binary`
     (with 0 for white and 1 for black),
     check the array has the right dimensions, is in fact inverted,
     and does not have too few or too many connected black components.
     
     Returns an error report, or None if valid.
     """
-    if len(array.shape)==3: return "input image is color image %s"%(array.shape,)
-    if np.mean(array)<np.median(array): return "image may be inverted"
-    h,w = array.shape
-    if h<100: return "image not tall enough for a region image %s"%(array.shape,)
-    if h>5000: return "image too tall for a region image %s"%(array.shape,)
-    if w<100: return "image too narrow for a region image %s"%(array.shape,)
-    if w>5000: return "line too wide for a region image %s"%(array.shape,)
-    slots = int(w*h*1.0/(30*30))
-    _,ncomps = measurements.label(array>np.mean(array))
+    if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
+    if np.mean(binary)<np.median(binary): return "image may be inverted"
+    h,w = binary.shape
+    if h<60/zoom: return "image not tall enough for a region image %s"%(binary.shape,)
+    if h>5000/zoom: return "image too tall for a region image %s"%(binary.shape,)
+    if w<100/zoom: return "image too narrow for a region image %s"%(binary.shape,)
+    if w>5000/zoom: return "line too wide for a region image %s"%(binary.shape,)
+    slots = int(w*h*1.0/(30*30)*zoom*zoom)
+    _,ncomps = measurements.label(binary)
     if ncomps<5: return "too few connected components for a region image (got %d)"%(ncomps,)
     if ncomps>slots*2 and ncomps>10: return "too many connnected components for a region image (%d > %d)"%(ncomps,slots)
     return None
 
-# from ocropus-gpageseg
-def check_page(array):
-    """Validate array as a plausible printed text page image.
+# from ocropus-gpageseg, but with zoom parameter
+def check_page(binary, zoom=1.0):
+    """Validate binary as a plausible printed text page image.
     
-    Given a binarized, inverted image as Numpy array `array`
+    Given a binarized, inverted image as Numpy array `binary`
     (with 0 for white and 1 for black),
     check the array has the right dimensions, is in fact inverted,
     and does not have too few or too many connected black components.
     
     Returns an error report, or None if valid.
     """
-    if len(array.shape)==3: return "input image is color image %s"%(array.shape,)
-    if np.mean(array)<np.median(array): return "image may be inverted"
-    h,w = array.shape
-    if h<600: return "image not tall enough for a page image %s"%(array.shape,)
-    if h>10000: return "image too tall for a page image %s"%(array.shape,)
-    if w<600: return "image too narrow for a page image %s"%(array.shape,)
-    if w>10000: return "line too wide for a page image %s"%(array.shape,)
-    slots = int(w*h*1.0/(30*30))
-    _,ncomps = measurements.label(array>np.mean(array))
+    if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
+    if np.mean(binary)<np.median(binary): return "image may be inverted"
+    h,w = binary.shape
+    if h<600/zoom: return "image not tall enough for a page image %s"%(binary.shape,)
+    if h>10000/zoom: return "image too tall for a page image %s"%(binary.shape,)
+    if w<600/zoom: return "image too narrow for a page image %s"%(binary.shape,)
+    if w>10000/zoom: return "line too wide for a page image %s"%(binary.shape,)
+    slots = int(w*h*1.0/(30*30)*zoom*zoom)
+    _,ncomps = measurements.label(binary)
     if ncomps<10: return "too few connected components for a page image (got %d)"%(ncomps,)
     if ncomps>slots and ncomps>10: return "too many connnected components for a page image (%d > %d)"%(ncomps,slots)
     return None
@@ -278,9 +306,11 @@ def odd(num):
 
 # from ocropus-gpageseg
 def DSAVE(title,array):
+    logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import patches as mpatches
     if type(array)==list:
+        # 3 inputs, one for each RGB channel
         assert len(array)==3
         array = np.transpose(np.array(array),[1,2,0])
     #plt.imshow(array.astype('float'))
@@ -289,22 +319,40 @@ def DSAVE(title,array):
     fname = title+".png"
     plt.imsave(fname,array.astype('float'))
 
-# from ocropus-gpageseg    
+# from ocropus-gpageseg, but with extra height criterion
+def remove_hlines(binary,scale,maxsize=10):
+    labels,_ = morph.label(binary)
+    objects = morph.find_objects(labels)
+    for i,b in enumerate(objects):
+        if (sl.width(b)>maxsize*scale and 
+            sl.height(b)<scale):
+            labels[b][labels[b]==i+1] = 0
+    result = np.array(labels!=0,'B')
+    #DSAVE('hlines', binary-result)
+    return result
+
+# from ocropus-gpageseg, but with different thresholds, and remove only connected components fully inside seps
 def compute_separators_morph(binary,scale, sepwiden=10, maxseps=0):
     """Finds vertical black lines corresponding to column separators."""
+    # FIXME: make zoomable
     d0 = int(max(5,scale/4))
     d1 = int(max(5,scale))+ sepwiden
     thick = morph.r_dilation(binary,(d0,d1))
-    vert = morph.rb_opening(thick,(10*scale,1))
+    # 5 instead of 10, because black colseps can also be discontinous:
+    vert = morph.rb_opening(thick,(5*scale,1))
     vert = morph.r_erosion(vert,(d0//2, sepwiden))
     vert = morph.select_regions(vert,sl.dim1,min=3,nbest=2* maxseps)
-    vert = morph.select_regions(vert,sl.dim0,min=20*scale,nbest=maxseps)
+    # 8 instead of 20, because black colseps can also be discontinous:
+    vert = morph.select_regions(vert,sl.dim0,min=8*scale,nbest=maxseps)
+    # reduce to the connected components properly contained in seps:
+    vert = morph.propagate_labels(binary, vert+1, conflict=0)-1
     return vert
 
 # from ocropus-gpagseg
 def compute_colseps_conv(binary,scale=1.0, csminheight=10, maxcolseps=2):
     """Find column separators by convolution and
     thresholding."""
+    # FIXME: make zoomable
     h,w = binary.shape
     # find vertical whitespace by thresholding
     smoothed = filters.gaussian_filter(1.0*binary,(scale,scale*0.5))
@@ -334,17 +382,16 @@ def compute_colseps(binary,scale, maxcolseps=3, maxseps=0):
     #DSAVE("colwsseps",0.7*colseps+0.3*binary)
     if maxseps > 0:
         LOG.debug("considering at most %g black column separators", maxseps)
-        seps = compute_separators_morph(binary,scale, maxseps=maxseps)
-        #DSAVE("colseps",0.7*seps+0.3*binary)
+        seps = compute_separators_morph(binary,scale/2, maxseps=maxseps)
+        #DSAVE("colseps", [binary, colseps, seps])
         #colseps = compute_colseps_morph(binary,scale)
         colseps = np.maximum(colseps,seps)
         binary = np.minimum(binary,1-seps)
     #binary,colseps = apply_mask(binary,colseps)
     return colseps,binary
 
-# from ocropus-gpageseg, but with additional option vsticky
+# from ocropus-gpageseg, but with smaller box minsize and less horizontal blur
 def compute_gradmaps(binary,scale,
-                     vsticky=False,
                      usegauss=False,vscale=1.0,hscale=1.0):
     # use gradient filtering to find baselines
     # do not use the default boxmap scale thresholds (0.5,4),
@@ -361,7 +408,8 @@ def compute_gradmaps(binary,scale,
         grad = filters.gaussian_filter(
             1.0*cleaned,
             (vscale*0.3*scale,
-             hscale*6*scale),
+             hscale*scale),
+            #hscale*6*scale),
             order=(1,0))
     else:
         # this uses non-Gaussian oriented filters
@@ -372,59 +420,97 @@ def compute_gradmaps(binary,scale,
             order=(1,0))
         grad = filters.uniform_filter(
             grad,
-            (vscale,hscale*6*scale))
-        if vsticky:
-            # make gradient stick at top and bottom
-            # so chopped off lines will be used as well
-            grad[0, :] = 0.01
-            grad[-1, :] = -0.01
+            (vscale,hscale*scale))
+            #(vscale,hscale*6*scale))
     #DSAVE("grad", grad)
     bottom = ocrolib.norm_max((grad<0)*(-grad))
     top = ocrolib.norm_max((grad>0)*grad)
-    #DSAVE("bottom+top+boxmap", [boxmap, bottom + 2*top, binary])
+    #DSAVE("bottom+top+boxmap", [0.5*boxmap + binary, bottom, top])
     return bottom,top,boxmap
 
-# from ocropus-gpageseg
+# from ocropus-gpageseg, but with robust switch
 def compute_line_seeds(binary,bottom,top,colseps,scale,
-                       threshold=0.2,vscale=1.0):
-    """Base on gradient maps, computes candidates for baselines
-    and xheights.  Then, it marks the regions between the two
-    as a line seed."""
-    t = threshold
+                       threshold=0.2,vscale=1.0,
+                       # more robust top/bottom transition rules:
+                       robust=True):
+    """Based on gradient maps, compute candidates for baselines and xheights.
+    Then, mark the regions between the two as a line seed. Finally, label
+    all connected regions (starting with 1, with 0 as background)."""
+    # FIXME: make zoomable
     vrange = int(vscale*scale)
+    # find (more or less) horizontal lines along the maximum gradient,
+    # where it is above (squared) threshold and not crossing columns:
     bmarked = filters.maximum_filter(
+        # mark position of maximum gradient every `vrange` pixels:
         bottom==filters.maximum_filter(bottom,(vrange,0)),
-        (2,2)) * (bottom>t*np.amax(bottom)*t) *(1-colseps)
+        # blur by 2 pixels, then retain only large gradients:
+        (2,2)) * (bottom>threshold*np.amax(bottom)*threshold) *(1-colseps)
     tmarked = filters.maximum_filter(
+        # mark position of maximum gradient every `vrange` pixels:
         top==filters.maximum_filter(top,(vrange,0)),
-        (2,2)) * (top>t*np.amax(top)*t/2) *(1-colseps)
-    tmarked = filters.maximum_filter(tmarked,(1,10))
+        # blur by 2 pixels, then retain only large gradients:
+        (2,2)) * (top>threshold*np.amax(top)*threshold/2) *(1-colseps)
+    if robust:
+        bmarked = filters.maximum_filter(bmarked,(1,scale//2))
+    tmarked = filters.maximum_filter(tmarked,(1,scale//2))
+    #tmarked = filters.maximum_filter(tmarked,(1,20))
     seeds = np.zeros(binary.shape,'i')
     delta = max(3,int(scale/2))
     for x in range(bmarked.shape[1]):
+        # sort both kinds of mark from bottom to top (i.e. inverse y position)
         transitions = sorted([(y,1) for y in psegutils.find(bmarked[:,x])] +
                              [(y,0) for y in psegutils.find(tmarked[:,x])])[::-1]
-        transitions += [(0,0)]
-        for l in range(len(transitions)-1):
-            y0,s0 = transitions[l]
-            if s0==0: continue
-            seeds[y0-delta:y0,x] = 1
-            y1,s1 = transitions[l+1]
-            if s1==0 and (y0-y1)<5*scale: seeds[y1:y0,x] = 1
-    seeds = filters.maximum_filter(seeds,(1,int(1+scale)))
+        if robust:
+            l = 0
+            while l < len(transitions):
+                y0, s0 = transitions[l]
+                if s0: # bmarked?
+                    y1 = max(0, y0 - delta) # project seed from bottom
+                    if l+1 < len(transitions) and transitions[l+1][0] > y1:
+                        y1 = transitions[l+1][0] # fill with seed to next mark
+                    seeds[y1:y0, x] = 1
+                else: # tmarked?
+                    y1 = y0 + delta # project seed from top
+                    if l > 0 and transitions[l-1][0] < y1:
+                        y1 = transitions[l-1][0] # fill with seed to next mark
+                    seeds[y0:y1, x] = 1
+                l += 1
+        else:
+            transitions += [(0,0)]
+            for l in range(len(transitions)-1):
+                y0,s0 = transitions[l]
+                if s0==0:
+                    continue # keep looking for next bottom
+                seeds[y0-delta:y0,x] = 1 # project seed from bottom
+                y1,s1 = transitions[l+1]
+                if s1==0 and (y0-y1)<5*scale: # why 5?
+                    # consistent next top?
+                    seeds[y1:y0,x] = 1 # fill with seed completely
+    if not robust:
+        # commented to avoid smearing into neighbouring line components at as/descenders
+        # (horizontal consistency will achieved by hmerge and spread):
+        seeds = filters.maximum_filter(seeds,(1,int(1+scale)))
     seeds = seeds*(1-colseps)
-    #DSAVE("lineseeds unlabelled",[seeds,0.3*tmarked+0.7*bmarked,binary])
-    seeds, _ = morph.label(seeds)
+    #DSAVE("lineseeds unlabelled",[0.4*seeds+0.5*binary, bmarked, tmarked])
+    seeds, nlabels = morph.label(seeds)
+    for i in range(nlabels):
+        ys, xs = np.nonzero(seeds == i+1)
+        height = np.amax(ys) - np.amin(ys)
+        if height > 2 * scale:
+            LOG.warning('line %d has extreme height (%d vs %d)', i+1, height, scale)
     return seeds
 
-def hmerge_line_seeds(seeds, colseps):
+def hmerge_line_seeds(seeds, colseps, threshold=0.2):
+    """Relabel line seeds such that regions of coherent vertical
+    intervals get the same label."""
     # use full horizontal spread to avoid splitting lines at long whitespace
     # (but only indirectly as masks with a label conflict, so we can
     #  horizontally merge components, and at the same time avoid to
     #  horizontally enlarge components in general, which would
-    #  allow corners to become the largest component later-on;
-    #  moreover, ignore conflicts which affect only small fractions
-    #  of either line, so a merge can be avoided for small vertical overlap):
+    #  allow corners to become the largest component when spreading
+    #  into the background;
+    #  moreover, ignore conflicts which affect only small fractions of
+    #  either line, so a merge can be avoided for small vertical overlap):
     relabel = np.unique(seeds)
     labels = np.delete(relabel, 0) # without background
     labels_count = dict([(label, np.sum(seeds == label)) for label in labels])
@@ -440,21 +526,32 @@ def hmerge_line_seeds(seeds, colseps):
                 overlap_count[candidate] = (count, label)
     for label in labels:
         count, candidate = overlap_count[label]
-        if count / labels_count[label] > 0.2:
+        if count / labels_count[label] > threshold:
             relabel[label] = relabel[candidate]
+            relabel[relabel == label] = relabel[candidate]
     seeds = relabel[seeds]
     #DSAVE("lineseeds hmerged", seeds)
     return seeds
 
-# like ocropus-gpageseg compute_segmentation, but with fullpage switch, with larger scale, smaller hscale and horizontal merge, and without final unmasking
-def compute_line_labels(array, fullpage=False, maxcolseps=2, maxseps=0):
+# like ocropus-gpageseg compute_segmentation, but:
+# - with fullpage switch and zoom parameter,
+# - with twice the estimated scale,
+# - with horizontal merge instead of blur,
+# - with component majority for foreground
+#   outside of seeds (instead of spread), and
+# - without final unmasking
+def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0, check=True):
     """Find text line segmentation within a region or page.
     
-    Given a binarized image as Numpy array `array`, compute a complete segmentation
-    into text lines, avoiding horizontal splits. If `fullpage` is True, then also
-    find up to `maxcolseps` white-space and up to `maxseps` black column separators.
+    Given a grayscale-normalized image as Numpy array `array`, compute
+    a complete segmentation into text lines for it, avoiding any single
+    horizontal splits. 
+    If `fullpage` is True, then also find (and suppress) horizontal lines,
+    and up to `maxcolseps` white-space and `maxseps` black column separators
+    (both counted by connected components).
     
-    Return the background label array (not the foreground or the masked image).
+    Return a Numpy array of the background labels
+    (not the foreground or the masked image).
     """
     if np.prod(array.shape) == 0:
         raise Exception('image dimensions are zero')
@@ -462,45 +559,51 @@ def compute_line_labels(array, fullpage=False, maxcolseps=2, maxseps=0):
         raise Exception('image is blank')
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
     #DSAVE("binary",binary)
-    if fullpage:
-        report = check_page(binary)
-    else:
-        report = check_region(binary)
-    if report:
-        raise Exception(report)
+    if check:
+        if fullpage:
+            report = check_page(binary, zoom)
+        else:
+            report = check_region(binary, zoom)
+        if report:
+            raise Exception(report)
     scale = psegutils.estimate_scale(binary)
     # use larger scale so broken/blackletter fonts with their large capitals
-    # are not cut into two lines:
+    # are not cut into two lines or joined at ascenders/decsenders:
     scale *= 2
     LOG.debug('xheight: %d, scale: %d', binary.shape[0], scale)
-    bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
-                                           # make top and bottom sticky so chopped-off
-                                           # lines are not merged with neighbours:
-                                           vsticky=not fullpage,
-                                           # use small scale so broken/blackletter fonts
-                                           # (with their large capitals)
-                                           # can be approximated with enough precision:
-                                           hscale=0.2, vscale=0.5)
+
     if fullpage:
-        colseps, _ = compute_colseps(binary, scale, maxcolseps=maxcolseps, maxseps=maxseps)
+        binary2 = remove_hlines(binary, scale, maxsize=3/zoom)
+        hlines, binary = binary - binary2, binary2
+    else:
+        hlines = np.zeros_like(binary)
+        
+    bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
+                                           hscale=1.0/zoom, vscale=1.0/zoom)
+    if fullpage:
+        colseps, binary2 = compute_colseps(binary, scale, maxcolseps=maxcolseps, maxseps=maxseps)
+        vlines, binary = binary - binary2, binary2
     else:
         colseps = np.zeros(binary.shape, np.uint8)
+        vlines = np.zeros_like(binary)
     seeds = compute_line_seeds(binary, bottom, top, colseps, scale)
-    #DSAVE("seeds",[bottom,top,boxmap])
-    seeds = hmerge_line_seeds(seeds, colseps)
+    #DSAVE("seeds",[boxmap,bottom,top])
+    if not fullpage:
+        seeds = hmerge_line_seeds(seeds, colseps)
 
-    # spread the text line seeds to all the remaining
-    # components
-    # (boxes with overlapping seeds will become background:)
-    llabels = morph.propagate_labels(boxmap,seeds,conflict=0)
+    # spread the text line seeds to all the remaining components
+    # (boxes with conflicting seeds will become background):
+    #llabels = morph.propagate_labels(boxmap,seeds,conflict=0)
+    # better assign the seed label with the majority
+    # of pixels in foreground connected components:
+    llabels = morph.propagate_labels_majority(binary, seeds)
     spread = morph.spread_labels(seeds,maxdist=scale)
-    #DSAVE('spread', spread)
-    # (background and conflict will get nearest seed:)
+    # background and conflict will get nearest seed:
     llabels = np.where(llabels>0,llabels,spread)
-    #DSAVE('llabels', llabels)
+    #DSAVE('llabels', llabels + 0.6*binary)
     #segmentation = llabels*binary
     #return segmentation
-    return llabels
+    return llabels # , hlines, vlines
 
 # from ocropus-gpageseg, but as separate step on the PIL.Image
 def remove_noise(image, maxsize=8):
@@ -513,75 +616,139 @@ def remove_noise(image, maxsize=8):
               maxsize, ncomps_before, ncomps_after)
     return array2pil(1 - binary)
 
-# to be refactored into core:
-# inspired by ocrolib.compute_lines
-def resegment(mask_image, labels):
-    """Shrink a mask to the largest component of a segmentation.
-    
-    Given a PIL.Image of a mask and a label array for the region,
-    find the label with the largest area within the mask,
-    and reduce the mask to that.
-    
-    Return a PIL.Image.
-    """
-    mask = np.array(pil2array(mask_image), np.uint8)
-    #DSAVE('mask', mask)
-    #DSAVE('labels', labels)
-    #DSAVE('mask*labels', mask*labels)
-    objects = morph.find_objects(mask * labels)
-    max_count, max_mask = 0, mask
-    for slices in objects:
-        if not slices: continue
-        if (sl.dim1(slices) < 2 * 20 or
-            sl.dim0(slices) < 20): continue
-        # identify largest label in slice:
-        count = np.bincount(labels[slices].flat)
-        label = np.argmax(count)
-        count = np.amax(count)
-        if not count: continue
-        if count > max_count:
-            max_count = count
-            #max_mask = labels == label
-            # avoid increasing margin when recropping:
-            max_mask = mask * (labels == label)
-    #DSAVE('max_mask', max_mask)
-    LOG.debug('black pixels before/after resegment (nlabels=%d): %d/%d',
-              len(objects),
-              np.count_nonzero(mask * labels),
-              np.count_nonzero(max_mask))
-    return array2pil(max_mask)
-
 # to be refactored into core (as function in ocrd_utils):
 def polygon_mask(image, coordinates):
+    """"Create a mask image of a polygon.
+    
+    Given a PIL.Image `image` (merely for dimensions), and
+    a numpy array `polygon` of relative coordinates into the image,
+    create a new image of the same size with black background, and
+    fill everything inside the polygon hull with white.
+    
+    Return the new PIL.Image.
+    """
     mask = Image.new('L', image.size, 0)
+    if isinstance(coordinates, np.ndarray):
+        coordinates = list(map(tuple, coordinates))
     ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=255)
     return mask
 
 # to be refactored into core (as function in ocrd_utils):
-def rotate_polygon(coordinates, angle, orig={'x': 0, 'y': 0}):
-    # if the region image has been rotated, we must also
-    # rotate the coordinates of the line
-    # (which relate to the top page image)
-    # in the same direction but with inverse transformation
-    # matrix (i.e. passive rotation), and
-    # (since the region was rotated around its center,
-    #  but our coordinates are now relative to the top left)
-    # by first translating to center of region, then
-    # rotating around that center, and translating back:
-    # point := (point - region_center) * region_rotation + region_center
-    # moreover, since rotation has reshaped/expanded the image,
-    # the line coordinates must be offset by those additional pixels:
-    # point := point + 0.5 * (new_region_size - old_region_size)
+def image_from_polygon(image, polygon):
+    """"Mask an image with a polygon.
+    
+    Given a PIL.Image `image` and a numpy array `polygon`
+    of relative coordinates into the image, fill everything
+    outside the polygon hull to the background. Since `image`
+    is not necessarily binarized yet, determine the background
+    from the median color (instead of white).
+    
+    Return a new PIL.Image.
+    """
+    mask = polygon_mask(image, polygon)
+    # create a background image from its median color
+    # (in case it has not been binarized yet):
+    # array = np.asarray(image)
+    # background = np.median(array, axis=[0, 1], keepdims=True)
+    # array = np.broadcast_to(background.astype(np.uint8), array.shape)
+    background = ImageStat.Stat(image).median[0]
+    new_image = Image.new('L', image.size, background)
+    new_image.paste(image, mask=mask)
+    return new_image
+
+# to be refactored into core (as function in ocrd_utils):
+def crop_image(image, box=None):
+    """"Crop an image to a rectangle, filling with background.
+    
+    Given a PIL.Image `image` and a list `box` of the bounding
+    rectangle relative to the image, crop at the box coordinates,
+    filling everything outside `image` with the background.
+    (This covers the case where `box` indexes are negative or
+    larger than `image` width/height. PIL.Image.crop would fill
+    with black.) Since `image` is not necessarily binarized yet,
+    determine the background from the median color (instead of
+    white).
+    
+    Return a new PIL.Image.
+    """
+    # todo: perhaps we should issue a warning if we encounter this
+    # (It should be invalid in PAGE-XML to extend beyond parents.)
+    if not box:
+        box = (0, 0, image.width, image.height)
+    xywh = xywh_from_bbox(*box)
+    background = ImageStat.Stat(image).median[0]
+    new_image = Image.new(image.mode, (xywh['w'], xywh['h']),
+                          background) # or 'white'
+    new_image.paste(image, (-xywh['x'], -xywh['y']))
+    return new_image
+
+# to be refactored into core (as function in ocrd_utils):
+def rotate_coordinates(polygon, angle, orig=np.array([0, 0])):
+    """Apply a passive rotation transformation to the given coordinates.
+    
+    Given a numpy array `polygon` of points and a rotation `angle`,
+    as well as a numpy array `orig` of the center of rotation,
+    calculate the coordinate transform corresponding to the rotation
+    of the underlying image by `angle` degrees at `center` by
+    applying translation to the center, inverse rotation,
+    and translation from the center.
+
+    Return a numpy array of the resulting polygon.
+    """
     angle = np.deg2rad(angle)
+    cos = np.cos(angle)
+    sin = np.sin(angle)
     # active rotation:  [[cos, -sin], [sin, cos]]
     # passive rotation: [[cos, sin], [-sin, cos]] (inverse)
-    return [(orig['x']
-             + (x - orig['x'])*np.cos(angle)
-             + (y - orig['y'])*np.sin(angle),
-             orig['y']
-             - (x - orig['x'])*np.sin(angle)
-             + (y - orig['y'])*np.cos(angle))
-            for x, y in coordinates]
+    return orig + np.dot(polygon - orig, np.array([[cos, sin], [-sin, cos]]).transpose())
+
+# to be refactored into core (as method of ocrd.workspace.Workspace):
+def coordinates_of_segment(segment, parent_image, parent_xywh):
+    """Extract the relative coordinates polygon of a PAGE segment element.
+    
+    Given a Region / TextLine / Word / Glyph `segment` and
+    the PIL.Image of its parent Page / Region / TextLine / Word
+    along with its bounding box, calculate the relative coordinates
+    of the segment within the image. That is, shift all points from
+    the offset of the parent, and (in case the parent was rotated,)
+    rotate all points with the center of the image as origin.
+    
+    Return the rounded numpy array of the resulting polygon.
+    """
+    # get polygon:
+    polygon = np.array(polygon_from_points(segment.get_Coords().points))
+    # offset correction (shift coordinates to base of segment):
+    polygon -= np.array([parent_xywh['x'], parent_xywh['y']])
+    # angle correction (rotate coordinates if image has been rotated):
+    if 'angle' in parent_xywh:
+        polygon = rotate_coordinates(
+            polygon, parent_xywh['angle'],
+            orig=np.array([0.5 * parent_image.width,
+                           0.5 * parent_image.height]))
+    return np.round(polygon).astype(np.int32)
+
+# to be refactored into core (as method of ocrd.workspace.Workspace):
+def coordinates_for_segment(polygon, parent_image, parent_xywh):
+    """Convert a relative coordinates polygon to absolute.
+    
+    Given a numpy array `polygon` of points, and a parent PIL.Image
+    along with its bounding box to which the coordinates are relative,
+    calculate the absolute coordinates within the page.
+    That is, (in case the parent was rotated,) rotate all points in
+    opposite direction with the center of the image as origin, then
+    shift all points to the offset of the parent.
+    
+    Return the rounded numpy array of the resulting polygon.
+    """
+    # angle correction (unrotate coordinates if image has been rotated):
+    if 'angle' in parent_xywh:
+        polygon = rotate_coordinates(
+            polygon, -parent_xywh['angle'],
+            orig=np.array([0.5 * parent_image.width,
+                           0.5 * parent_image.height]))
+    # offset correction (shift coordinates from base of segment):
+    polygon += np.array([parent_xywh['x'], parent_xywh['y']])
+    return np.round(polygon).astype(np.uint32)
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
 def image_from_page(workspace, page,
@@ -595,9 +762,13 @@ def image_from_page(workspace, page,
     or via cropping from `page_image` (if a Border exists),
     or by just returning `page_image` (otherwise).
     
-    When using AlternativeImage, if the resulting page image
-    is larger than the annotated page, then pass down the page's
-    box coordinates with an offset of half the width/height difference.
+    When cropping, respect any orientation angle annotated for
+    the page (from page-level deskewing) by rotating the
+    cropped image, respectively.
+    
+    If the resulting page image is larger than the annotated page,
+    pass down the page's box coordinates with an offset of half
+    the width/height difference.
     
     Return the extracted image, and the page's box coordinates,
     relative to the source image (for passing down).
@@ -606,12 +777,18 @@ def image_from_page(workspace, page,
                  'y': 0,
                  'w': page_image.width,
                  'h': page_image.height}
+    # FIXME: uncomment as soon as we get @orientation in PageType:
+    # # region angle: PAGE orientation is defined clockwise,
+    # # whereas PIL/ndimage rotation is in mathematical direction:
+    # page_xywh['angle'] = -(page.get_orientation() or 0)
     # FIXME: remove PrintSpace here as soon as GT abides by the PAGE standard:
     border = page.get_Border() or page.get_PrintSpace()
     if border and border.get_Coords():
+        page_points = border.get_Coords().points
         LOG.debug("Using explictly set page border '%s' for page '%s'",
-                  border.get_Coords().points, page_id)
-        page_xywh = xywh_from_points(border.get_Coords().points)
+                  page_points, page_id)
+        page_xywh = xywh_from_points(page_points)
+        page_polygon = np.array(polygon_from_points(page_points))
     
     alternative_image = page.get_AlternativeImage()
     if alternative_image:
@@ -623,16 +800,25 @@ def image_from_page(workspace, page,
         page_image = workspace.resolve_image_as_pil(
             alternative_image[-1].get_filename())
     elif border:
-        page_image = page_image.crop(
+        # create a mask from the page polygon:
+        page_image = image_from_polygon(page_image, page_polygon)
+        # recrop into page rectangle:
+        page_image = crop_image(page_image,
             box=(page_xywh['x'],
                  page_xywh['y'],
                  page_xywh['x'] + page_xywh['w'],
                  page_xywh['y'] + page_xywh['h']))
-        # FIXME: mask away all GraphicRegion, SeparatorRegion etc which
-        # could overlay any text regions
+        # FIXME: uncomment as soon as we get @orientation in PageType:
+        # if page_xywh['angle']:
+        #     LOG.info("About to rotate page '%s' by %.2f°",
+        #               page_id, page_xywh['angle'])
+        #     page_image = page_image.rotate(page_xywh['angle'],
+        #                                        expand=True,
+        #                                        #resample=Image.BILINEAR,
+        #                                        fillcolor='white')
     # subtract offset from any increase in binary region size over source:
-    page_xywh['x'] -= 0.5 * max(0, page_image.width  - page_xywh['w'])
-    page_xywh['y'] -= 0.5 * max(0, page_image.height - page_xywh['h'])
+    page_xywh['x'] -= round(0.5 * max(0, page_image.width  - page_xywh['w']))
+    page_xywh['y'] -= round(0.5 * max(0, page_image.height - page_xywh['h']))
     return page_image, page_xywh
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
@@ -646,16 +832,28 @@ def image_from_region(workspace, region,
     extract its PIL.Image from AlternativeImage (if it exists),
     or via cropping from `page_image`.
     
-    When cropping, respect any angle annotated for the region
-    (from deskewing) by rotating the cropped image, respectively.
-    Regardless, if the resulting region image is larger than
-    the annotated region, pass down the region's box coordinates
-    with an offset of half the width/height difference.
+    When cropping, respect any orientation angle annotated for
+    the page (from page-level deskewing) by compensating the
+    region coordinates in an inverse transformation (translation
+    to center, rotation, re-translation).
+    Also, mind the difference between annotated and actual size
+    of the page (usually from deskewing), by a respective offset
+    into the image. Cropping uses a polygon mask (not just the
+    rectangle).
+    
+    When cropping, respect any orientation angle annotated for
+    the region (from region-level deskewing) by rotating the
+    cropped image, respectively.
+
+    If the resulting region image is larger than the annotated region,
+    pass down the region's box coordinates with an offset of half
+    the width/height difference.
     
     Return the extracted image, and the region's box coordinates,
     relative to the page image (for passing down).
     """
     region_xywh = xywh_from_points(region.get_Coords().points)
+    region_polygon = coordinates_of_segment(region, page_image, page_xywh)
     # region angle: PAGE orientation is defined clockwise,
     # whereas PIL/ndimage rotation is in mathematical direction:
     region_xywh['angle'] = -(region.get_orientation() or 0)
@@ -668,17 +866,28 @@ def image_from_region(workspace, region,
         region_image = workspace.resolve_image_as_pil(
             alternative_image[-1].get_filename())
     else:
-        region_image = page_image.crop(
+        # create a mask from the region polygon:
+        region_image = image_from_polygon(page_image, region_polygon)
+        # recrop into region rectangle:
+        region_image = crop_image(region_image,
             box=(region_xywh['x'] - page_xywh['x'],
                  region_xywh['y'] - page_xywh['y'],
                  region_xywh['x'] - page_xywh['x'] + region_xywh['w'],
                  region_xywh['y'] - page_xywh['y'] + region_xywh['h']))
-        # FIXME: mask any overlapping regions (esp. Separator/Noise/Image)
-        # but we might need overlapping rules: e.g. an ImageRegion which
+        # note: We should mask overlapping neighbouring regions here
+        # (especially Separator/Noise/GraphicRegion, but also TextRegion),
+        # but finding the right clipping rules can be difficult if operating
+        # on the raw (non-binary) image data alone: e.g. an ImageRegion which
         # properly contains our TextRegion should be completely ignored, but
         # an ImageRegion which is properly contained in our TextRegion should
         # be completely masked, while partial overlap may be more difficult
-        # to decide (use polygons?)
+        # to decide. On the other hand, on the binary image, we can use
+        # connected component analysis to mask foreground areas which originate
+        # in the neighbouring regions. But that would introduce either the
+        # assumption that the input has already been binarized, or a dependency
+        # on some ad-hoc binarization method. Thus, it is preferable to use
+        # a dedicated processor for this (which produces clipped AlternativeImage
+        # or reduced polygon coordinates).
         if region_xywh['angle']:
             LOG.info("About to rotate region '%s' by %.2f°",
                       region.id, region_xywh['angle'])
@@ -687,14 +896,13 @@ def image_from_region(workspace, region,
                                                #resample=Image.BILINEAR,
                                                fillcolor='white')
     # subtract offset from any increase in binary region size over source:
-    region_xywh['x'] -= 0.5 * max(0, region_image.width  - region_xywh['w'])
-    region_xywh['y'] -= 0.5 * max(0, region_image.height - region_xywh['h'])
+    region_xywh['x'] -= round(0.5 * max(0, region_image.width  - region_xywh['w']))
+    region_xywh['y'] -= round(0.5 * max(0, region_image.height - region_xywh['h']))
     return region_image, region_xywh
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
 def image_from_line(workspace, line,
-                    region_image, region_xywh,
-                    segmentation=None):
+                    region_image, region_xywh):
     """Extract the TextLine image from a TextRegion image.
     
     Given a PIL.Image of the region, `region_image`,
@@ -703,18 +911,14 @@ def image_from_line(workspace, line,
     extract its PIL.Image from AlternativeImage (if it exists),
     or via cropping from `region_image`.
     
-    When cropping, respect any angle annotated for the region
-    (from deskewing) by compensating the line coordinates in
-    an inverse transformation (translation to center, rotation,
-    re-translation). Also, mind the difference between annotated
-    and actual size of the region (usually from deskewing), by
-    a respective offset into the image. Cropping uses a polygon
-    mask (not just the rectangle).
-    
-    If passed an optional labelling for the region, `segmentation`,
-    the mask is shrinked further to the largest overlapping line
-    label, which avoids seeing ascenders from lines below, and
-    descenders from lines above `line`.
+    When cropping, respect any orientation angle annotated for
+    the region (from region-level deskewing) by compensating the
+    line coordinates in an inverse transformation (translation
+    to center, rotation, re-translation).
+    Also, mind the difference between annotated and actual size
+    of the region (usually from deskewing), by a respective offset
+    into the image. Cropping uses a polygon mask (not just the
+    rectangle).
     
     If the resulting line image is larger than the annotated line,
     pass down the line's box coordinates with an offset of half
@@ -723,11 +927,8 @@ def image_from_line(workspace, line,
     Return the extracted image, and the line's box coordinates,
     relative to the region image (for passing down).
     """
-    line_points = line.get_Coords().points
-    line_xywh = xywh_from_points(line_points)
-    line_polygon = [(x - region_xywh['x'],
-                     y - region_xywh['y'])
-                    for x, y in polygon_from_points(line_points)]
+    line_xywh = xywh_from_points(line.get_Coords().points)
+    line_polygon = coordinates_of_segment(line, region_image, region_xywh)
     alternative_image = line.get_AlternativeImage()
     if alternative_image:
         # (e.g. from line-level cropping, deskewing or despeckling)
@@ -738,40 +939,26 @@ def image_from_line(workspace, line,
             alternative_image[-1].get_filename())
     else:
         # create a mask from the line polygon:
-        line_polygon = rotate_polygon(line_polygon,
-                                      region_xywh['angle'],
-                                      orig={'x': 0.5 * region_image.width,
-                                            'y': 0.5 * region_image.height})
-        line_mask = polygon_mask(region_image, line_polygon)
-        if isinstance(segmentation, np.ndarray):
-            # modify mask from (ad-hoc) line segmentation of region
-            # (shrink to largest label spread in that area):
-            line_mask = resegment(line_mask, segmentation)
-        # create a background image from its median color
-        # (in case it has not been binarized yet):
-        region_array = np.asarray(region_image)
-        background = np.median(region_array, axis=[0, 1], keepdims=True)
-        region_array = np.broadcast_to(background.astype(np.uint8), region_array.shape)
-        line_image = Image.fromarray(region_array)
-        line_image.paste(region_image, mask=line_mask)
-        # recrop into a line:
-        bbox = line_mask.getbbox()
-        if bbox:
-            left, upper, right, lower = bbox
-            # keep upper/lower, regardless of h (no vertical padding)
-            # pad left/right if target width w is larger:
-            margin_x = (line_xywh['w'] - right + left) // 2
-            left = max(0, left - margin_x)
-            right = min(line_mask.width, left + line_xywh['w'])
-        else:
-            left = line_xywh['x'] - region_xywh['x']
-            upper = line_xywh['y'] - region_xywh['y']
-            right = left + line_xywh['w']
-            lower = upper + line_xywh['h']
-        line_image = line_image.crop(box=(left, upper, right, lower))
+        line_image = image_from_polygon(region_image, line_polygon)
+        # recrop into line rectangle:
+        line_image = crop_image(line_image,
+            box=(line_xywh['x'] - region_xywh['x'],
+                 line_xywh['y'] - region_xywh['y'],
+                 line_xywh['x'] - region_xywh['x'] + line_xywh['w'],
+                 line_xywh['y'] - region_xywh['y'] + line_xywh['h']))
+        # note: We should mask overlapping neighbouring lines here,
+        # but finding the right clipping rules can be difficult if operating
+        # on the raw (non-binary) image data alone: for each intersection, it
+        # must be decided which one of either textline to assign. On the other
+        # hand, on the binary image, we can use connected component analysis
+        # to mask foreground areas which originate in the neighbouring regions.
+        # But that would introduce either the assumption that the input has
+        # already been binarized, or a dependency on some ad-hoc binarization
+        # method. Thus, it is preferable to use a dedicated processor for this
+        # (which produces clipped AlternativeImage or reduced polygon coordinates).
     # subtract offset from any increase in binary line size over source:
-    line_xywh['x'] -= 0.5 * max(0, line_image.width  - line_xywh['w'])
-    line_xywh['y'] -= 0.5 * max(0, line_image.height - line_xywh['h'])
+    line_xywh['x'] -= round(0.5 * max(0, line_image.width  - line_xywh['w']))
+    line_xywh['y'] -= round(0.5 * max(0, line_image.height - line_xywh['h']))
     return line_image, line_xywh
                 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
@@ -797,11 +984,8 @@ def image_from_word(workspace, word,
     Return the extracted image, and the word's box coordinates,
     relative to the line image (for passing down).
     """
-    word_points = word.get_Coords().points
-    word_xywh = xywh_from_points(word_points)
-    word_polygon = [(x - line_xywh['x'],
-                     y - line_xywh['y'])
-                    for x, y in polygon_from_points(word_points)]
+    word_xywh = xywh_from_points(word.get_Coords().points)
+    word_polygon = coordinates_of_segment(word, line_image, line_xywh)
     alternative_image = word.get_AlternativeImage()
     if alternative_image:
         # (e.g. from word-level cropping or binarization)
@@ -812,32 +996,16 @@ def image_from_word(workspace, word,
             alternative_image[-1].get_filename())
     else:
         # create a mask from the word polygon:
-        word_mask = polygon_mask(line_image, word_polygon)
-        # create a background image from its median color
-        # (in case it has not been binarized yet):
-        line_array = np.asarray(line_image)
-        background = np.median(line_array, axis=[0, 1], keepdims=True)
-        line_array = np.broadcast_to(background.astype(np.uint8), line_array.shape)
-        word_image = Image.fromarray(line_array)
-        word_image.paste(line_image, mask=word_mask)
-        # recrop into a line:
-        bbox = word_mask.getbbox()
-        if bbox:
-            left, upper, right, lower = bbox
-            # keep upper/lower, regardless of h (no vertical padding)
-            # pad left/right if target width w is larger:
-            margin_x = (word_xywh['w'] - right + left) // 2
-            left = max(0, left - margin_x)
-            right = min(word_mask.width, left + word_xywh['w'])
-        else:
-            left = word_xywh['x'] - line_xywh['x']
-            upper = word_xywh['y'] - line_xywh['y']
-            right = left + word_xywh['w']
-            lower = upper + word_xywh['h']
-        word_image = word_image.crop(box=(left, upper, right, lower))
+        word_image = image_from_polygon(line_image, word_polygon)
+        # recrop into word rectangle:
+        word_image = crop_image(word_image,
+            box=(word_xywh['x'] - line_xywh['x'],
+                 word_xywh['y'] - line_xywh['y'],
+                 word_xywh['x'] - line_xywh['x'] + word_xywh['w'],
+                 word_xywh['y'] - line_xywh['y'] + word_xywh['h']))
     # subtract offset from any increase in binary line size over source:
-    word_xywh['x'] -= 0.5 * max(0, word_image.width  - word_xywh['w'])
-    word_xywh['y'] -= 0.5 * max(0, word_image.height - word_xywh['h'])
+    word_xywh['x'] -= round(0.5 * max(0, word_image.width  - word_xywh['w']))
+    word_xywh['y'] -= round(0.5 * max(0, word_image.height - word_xywh['h']))
     return word_image, word_xywh
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
@@ -863,11 +1031,8 @@ def image_from_glyph(workspace, glyph,
     Return the extracted image, and the glyph's box coordinates,
     relative to the word image (for passing down).
     """
-    glyph_points = glyph.get_Coords().points
-    glyph_xywh = xywh_from_points(glyph_points)
-    glyph_polygon = [(x - word_xywh['x'],
-                      y - word_xywh['y'])
-                     for x, y in polygon_from_points(glyph_points)]
+    glyph_xywh = xywh_from_points(glyph.get_Coords().points)
+    glyph_polygon = coordinates_of_segment(glyph, word_image, word_xywh)
     alternative_image = glyph.get_AlternativeImage()
     if alternative_image:
         # (e.g. from glyph-level cropping or binarization)
@@ -878,32 +1043,16 @@ def image_from_glyph(workspace, glyph,
             alternative_image[-1].get_filename())
     else:
         # create a mask from the glyph polygon:
-        glyph_mask = polygon_mask(word_image, glyph_polygon)
-        # create a background image from its median color
-        # (in case it has not been binarized yet):
-        word_array = np.asarray(word_image)
-        background = np.median(word_array, axis=[0, 1], keepdims=True)
-        word_array = np.broadcast_to(background.astype(np.uint8), word_array.shape)
-        glyph_image = Image.fromarray(word_array)
-        glyph_image.paste(word_image, mask=glyph_mask)
-        # recrop into a word:
-        bbox = glyph_mask.getbbox()
-        if bbox:
-            left, upper, right, lower = bbox
-            # keep upper/lower, regardless of h (no vertical padding)
-            # pad left/right if target width w is larger:
-            margin_x = (glyph_xywh['w'] - right + left) // 2
-            left = max(0, left - margin_x)
-            right = min(glyph_mask.width, left + glyph_xywh['w'])
-        else:
-            left = glyph_xywh['x'] - word_xywh['x']
-            upper = glyph_xywh['y'] - word_xywh['y']
-            right = left + glyph_xywh['w']
-            lower = upper + glyph_xywh['h']
-        glyph_image = glyph_image.crop(box=(left, upper, right, lower))
+        glyph_image = image_from_polygon(word_image, glyph_polygon)
+        # recrop into glyph rectangle:
+        glyph_image = crop_image(glyph_image,
+            box=(glyph_xywh['x'] - word_xywh['x'],
+                 glyph_xywh['y'] - word_xywh['y'],
+                 glyph_xywh['x'] - word_xywh['x'] + glyph_xywh['w'],
+                 glyph_xywh['y'] - word_xywh['y'] + glyph_xywh['h']))
     # subtract offset from any increase in binary word size over source:
-    glyph_xywh['x'] -= 0.5 * max(0, glyph_image.width  - glyph_xywh['w'])
-    glyph_xywh['y'] -= 0.5 * max(0, glyph_image.height - glyph_xywh['h'])
+    glyph_xywh['x'] -= round(0.5 * max(0, glyph_image.width  - glyph_xywh['w']))
+    glyph_xywh['y'] -= round(0.5 * max(0, glyph_image.height - glyph_xywh['h']))
     return glyph_image, glyph_xywh
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
@@ -940,13 +1089,54 @@ def save_image_file(workspace, image,
 
 # to be refactored into core (as function in ocrd_utils):
 def bbox_from_points(points):
-    """Constructs a numeric list representing a bounding box from polygon coordinates in page representation."""
+    """Construct a numeric list representing a bounding box from polygon coordinates in page representation."""
     xys = [[int(p) for p in pair.split(',')] for pair in points.split(' ')]
+    return bbox_from_polygon(xys)
+
+# to be refactored into core (as function in ocrd_utils):
+def points_from_bbox(minx, miny, maxx, maxy):
+    """Construct polygon coordinates in page representation from a numeric list representing a bounding box."""
+    return "%i,%i %i,%i %i,%i %i,%i" % (
+        minx, miny, maxx, miny, maxx, maxy, minx, maxy)
+
+# to be refactored into core (as function in ocrd_utils):
+def xywh_from_bbox(minx, miny, maxx, maxy):
+    """Convert a bounding box from a numeric list to a numeric dict representation."""
+    return {
+        'x': minx,
+        'y': miny,
+        'w': maxx - minx,
+        'h': maxy - miny,
+    }
+
+# to be refactored into core (as function in ocrd_utils):
+def bbox_from_xywh(xywh):
+    """Convert a bounding box from a numeric dict to a numeric list representation."""
+    return (
+        xywh['x'],
+        xywh['y'],
+        xywh['x'] + xywh['w'],
+        xywh['y'] + xywh['h']
+    )
+
+# to be refactored into core (as function in ocrd_utils):
+def points_from_polygon(polygon):
+    """Convert polygon coordinates from a numeric list representation to a page representation."""
+    return " ".join("%i,%i" % (x, y) for x, y in polygon)
+
+# to be refactored into core (as function in ocrd_utils):
+def xywh_from_polygon(polygon):
+    """Construct a numeric dict representing a bounding box from polygon coordinates in numeric list representation."""
+    return xywh_from_bbox(*bbox_from_polygon(polygon))
+
+# to be refactored into core (as function in ocrd_utils):
+def bbox_from_polygon(polygon):
+    """Construct a numeric list representing a bounding box from polygon coordinates in numeric list representation."""
     minx = sys.maxsize
     miny = sys.maxsize
     maxx = 0
     maxy = 0
-    for xy in xys:
+    for xy in polygon:
         if xy[0] < minx:
             minx = xy[0]
         if xy[0] > maxx:
@@ -957,36 +1147,6 @@ def bbox_from_points(points):
             maxy = xy[1]
     return minx, miny, maxx, maxy
 
-# to be refactored into core (as function in ocrd_utils):
-def points_from_bbox(minx, miny, maxx, maxy):
-    """Constructs polygon coordinates in page representation from a numeric list representing a bounding box."""
-    return "%i,%i %i,%i %i,%i %i,%i" % (
-        minx, miny, maxx, miny, maxx, maxy, minx, maxy)
-
-# to be refactored into core (as function in ocrd_utils):
-def xywh_from_bbox(minx, miny, maxx, maxy):
-    """Converts a bounding box from a numeric list to a numeric dict representation."""
-    return {
-        'x': minx,
-        'y': miny,
-        'w': maxx - minx,
-        'h': maxy - miny,
-    }
-
-# to be refactored into core (as function in ocrd_utils):
-def bbox_from_xywh(xywh):
-    """Converts a bounding box from a numeric dict to a numeric list representation."""
-    return (
-        xywh['x'],
-        xywh['y'],
-        xywh['x'] + xywh['w'],
-        xywh['y'] + xywh['h']
-    )
-
-# to be refactored into core (as function in ocrd_utils):
-def points_from_polygon(polygon):
-    """Converts polygon coordinates from a numeric list representation to a page representation."""
-    return " ".join("%i,%i" % (x, y) for x, y in polygon)
-
 def membername(class_, val):
+    """Convert a member variable/constant into a member name string."""
     return next((k for k, v in class_.__dict__.items() if v == val), str(val))

@@ -7,6 +7,7 @@ import numpy as np
 from ocrd_utils import getLogger, concat_padded
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
+from ocrd_models import OcrdExif
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
@@ -14,14 +15,13 @@ from .. import get_ocrd_tool
 from . import common
 from .ocrolib import lineest
 from .common import (
-    LOG,
     image_from_page,
     image_from_region,
     image_from_line,
     save_image_file,
     pil2array, array2pil,
     check_line, check_page,
-    compute_line_labels)
+)
     
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -84,13 +84,23 @@ class OcropyDewarp(Processor):
         
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            #file_id = concat_padded(FILEGRP_IMG, n)
             file_id = input_file.ID.replace(self.input_file_grp, FILEGRP_IMG)
+            if file_id == input_file.ID:
+                file_id = concat_padded(FILEGRP_IMG, n)
             
             pcgts = page_from_file(self.workspace.download_file(input_file))
-            page_id = pcgts.pcGtsId or input_file.pageId # (PageType has no id)
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
+            page_image_info = OcrdExif(page_image)
+            if page_image_info.xResolution != 1:
+                dpi = page_image_info.xResolution
+                if page_image_info.resolutionUnit == 'cm':
+                    dpi = round(dpi * 2.54)
+                LOG.info('Page "%s" uses %d DPI', page_id, dpi)
+                zoom = 300.0/dpi
+            else:
+                zoom = 1
             # process page:
             page_image, page_xywh = image_from_page(
                 self.workspace, page, page_image, page_id)
@@ -135,6 +145,8 @@ class OcropyDewarp(Processor):
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
+            if file_id == input_file.ID:
+                file_id = concat_padded(self.output_file_grp, n)
             file_path = os.path.join(self.output_file_grp,
                                      file_id + '.xml')
             out = self.workspace.add_file(

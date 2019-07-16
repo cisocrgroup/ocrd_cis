@@ -19,16 +19,18 @@ from ocrd_utils import MIMETYPE_PAGE
 from .. import get_ocrd_tool
 from . import common
 from .common import (
-    LOG,
     image_from_page,
     image_from_region,
     image_from_line,
     save_image_file,
-    pil2array, array2pil)
+    pil2array, array2pil
+)
 
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+TOOL = 'ocrd-cis-ocropy-deskew'
 LOG = getLogger('processor.OcropyDeskew')
+FILEGRP_IMG = 'OCR-D-IMG-DESKEW'
 
 def deskew(pil_image, maxskew=2):
     array = pil2array(pil_image)
@@ -39,7 +41,7 @@ class OcropyDeskew(Processor):
 
     def __init__(self, *args, **kwargs):
         self.ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-binarize']
+        kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyDeskew, self).__init__(*args, **kwargs)
 
@@ -58,12 +60,16 @@ class OcropyDeskew(Processor):
         Produce a new output file by serialising the resulting hierarchy.
         """
         maxskew = self.parameter['maxskew']
+        # FIXME: offer page-level processing, add level-of-operation
         
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
+            file_id = input_file.ID.replace(self.input_file_grp, FILEGRP_IMG)
+            if file_id == input_file.ID:
+                file_id = concat_padded(FILEGRP_IMG, n)
             
             pcgts = page_from_file(self.workspace.download_file(input_file))
-            page_id = pcgts.pcGtsId or input_file.pageId # (PageType has no id)
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
             # process page:
@@ -91,10 +97,26 @@ class OcropyDeskew(Processor):
                 region.set_orientation(-angle)
                 LOG.info("Found angle for region '%s': %.1f",
                          region.id, angle)
+                region_image = region_image.rotate(angle, expand=True,
+                                                   #resample=Image.BILINEAR,
+                                                   fillcolor='white')
+                # update METS (add the image file):
+                file_path = save_image_file(
+                    self.workspace,
+                    region_image,
+                    file_id=file_id + '_' + region.id,
+                    page_id=page_id,
+                    file_grp=FILEGRP_IMG)
+                # update PAGE (reference the image file):
+                region.add_AlternativeImage(AlternativeImageType(
+                    filename=file_path,
+                    comments='cropped,deskewed'))
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
+            if file_id == input_file.ID:
+                file_id = concat_padded(self.output_file_grp, n)
             file_path = os.path.join(self.output_file_grp,
                                      file_id + '.xml')
             out = self.workspace.add_file(

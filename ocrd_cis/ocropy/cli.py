@@ -3,6 +3,8 @@ import click, os
 from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
 from ocrd_cis.ocropy.binarize import OcropyBinarize
 from ocrd_cis.ocropy.deskew import OcropyDeskew
+from ocrd_cis.ocropy.clip import OcropyClip
+from ocrd_cis.ocropy.resegment import OcropyResegment
 from ocrd_cis.ocropy.dewarp import OcropyDewarp
 from ocrd_cis.ocropy.recognize import OcropyRecognize
 from ocrd_cis.ocropy.train import OcropyTrain
@@ -18,6 +20,16 @@ def cis_ocrd_ocropy_binarize(*args, **kwargs):
 @ocrd_cli_options
 def cis_ocrd_ocropy_deskew(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyDeskew, *args, **kwargs)
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_ocropy_clip(*args, **kwargs):
+    return ocrd_cli_wrap_processor(OcropyClip, *args, **kwargs)
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_ocropy_resegment(*args, **kwargs):
+    return ocrd_cli_wrap_processor(OcropyResegment, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options

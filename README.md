@@ -79,9 +79,31 @@ ocrd-cis-ocropy-train \
   --parameter file:///path/to/config.json
 ```
 
+### ocrd-cis-ocropy-clip
+The ocropy-clip tool can be used to remove intrusions of neighbouring segments in regions / lines of a workspace.
+It runs a (ad-hoc binarization and) connected component analysis on every text region / line of every PAGE in the input file group, as well as its overlapping neighbours, and for each binary object of conflict, determines whether it belongs to the neighbour, and can therefore be clipped to white. It references the resulting segment image files in the output PAGE (as AlternativeImage).
+```sh
+ocrd-cis-ocropy-clip \
+  --input-file-grp OCR-D-SEG-LINE \
+  --output-file-grp OCR-D-SEG-LINE-CLIP \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
+### ocrd-cis-ocropy-resegment
+The ocropy-resegment tool can be used to remove overlap between lines of a workspace.
+It runs a (ad-hoc binarization and) line segmentation on every text region of every PAGE in the input file group, and for each line already annotated, determines the label of largest extent within the original coordinates (polygon outline) in that line, and annotates the resulting coordinates in the output PAGE.
+```sh
+ocrd-cis-ocropy-resegment \
+  --input-file-grp OCR-D-SEG-LINE \
+  --output-file-grp OCR-D-SEG-LINE-RES \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
 ### ocrd-cis-ocropy-deskew
 The ocropy-deskew tool can be used to deskew regions of a workspace.
-It runs the Ocropy thresholding and deskewing estimation on every text region of every PAGE in the input file group and annotated the orientation angle in the output PAGE.
+It runs the Ocropy thresholding and deskewing estimation on every text region of every PAGE in the input file group and annotates the orientation angle in the output PAGE.
 ```sh
 ocrd-cis-ocropy-deskew \
   --input-file-grp OCR-D-SEG-LINE \
@@ -95,7 +117,7 @@ The ocropy-binarize tool can be used to grayscale-normalize and deskew pages / r
 It runs the Ocropy thresholding and deskewing estimation on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.)
 ```sh
 ocrd-cis-ocropy-binarize \
-  --input-file-grp OCR-D-SEG-LINE \
+  --input-file-grp OCR-D-SEG-LINE-DES \
   --output-file-grp OCR-D-SEG-LINE-BIN \
   --mets mets.xml
   --parameter file:///path/to/config.json
@@ -153,7 +175,24 @@ place them into: /usr/share/tesseract-ocr/4.00/tessdata
 Tesserocr v2.4.0 seems broken for tesseract 4.0.0-beta. Install
 Version v2.3.1 instead: `pip install tesseract==2.3.1`.
 
+## Workflow configuration
 
+A decent pipeline might look like this:
+
+1. page-level cropping
+2. page-level binarization
+3. page-level deskewing
+4. page-level dewarping
+5. region segmentation
+6. region-level clipping
+7. region-level deskewing
+8. line segmentation
+9. line-level clipping or resegmentation
+10. line-level dewarping
+11. line-level recognition
+12. line-level alignment
+
+If GT is used, steps 1, 5 and 8 can be omitted. Else if a segmentation is used in 5 and 8 which does not produce overlapping sections, steps 6 and 9 can be omitted.
 
 ## OCR-D links
 

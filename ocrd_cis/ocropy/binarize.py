@@ -25,8 +25,6 @@ from .common import (
     pil2array, array2pil,
     check_line, check_page,
     # binarize,
-    compute_line_labels,
-    borderclean,
     remove_noise)
 
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -34,7 +32,7 @@ from .common import (
 LOG = getLogger('processor.OcropyBinarize')
 FILEGRP_IMG = 'OCR-D-IMG-BIN'
 
-def binarize(pil_image, method='ocropy', maxskew=2, margin=4):
+def binarize(pil_image, method='ocropy', maxskew=2):
     LOG.debug('binarizing %dx%d image with method=%s', pil_image.width, pil_image.height, method)
     if method == 'none':
         return pil_image, 0
@@ -42,8 +40,6 @@ def binarize(pil_image, method='ocropy', maxskew=2, margin=4):
         # parameter defaults from ocropy-nlbin:
         array = pil2array(pil_image)
         bin, angle = common.binarize(array, maxskew=maxskew)
-        # remove components not extending this many pixels from the border
-        bin = borderclean(bin, margin=margin + int(0.5*(bin.shape[0] - array.shape[0])))
         return array2pil(bin), angle
     # equivalent to ocropy, but without deskewing:
     # elif method == 'kraken':
@@ -106,9 +102,11 @@ class OcropyBinarize(Processor):
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = input_file.ID.replace(self.input_file_grp, FILEGRP_IMG)
+            if file_id == input_file.ID:
+                file_id = concat_padded(FILEGRP_IMG, n)
             
             pcgts = page_from_file(self.workspace.download_file(input_file))
-            page_id = pcgts.pcGtsId or input_file.pageId # (PageType has no id)
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
             # process page:
@@ -129,21 +127,12 @@ class OcropyBinarize(Processor):
                         self.process_region(region, region_image, region_xywh,
                                             input_file.pageId, file_id + '_' + region.id)
                         continue
-                    region_labels = None
-                    if region_xywh['w'] > 100 and region_xywh['h'] > 100:
-                        try:
-                            region_array = pil2array(region_image)
-                            region_bin, _ = common.binarize(region_array, maxskew=0)
-                            region_labels = compute_line_labels(region_bin)
-                        except Exception as err:
-                            LOG.warning('cannot line-segment region "%s": %s', region.id, err)
                     lines = region.get_TextLine()
                     if not lines:
                         LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     for line in lines:
                         line_image, line_xywh = image_from_line(
-                            self.workspace, line, region_image, region_xywh,
-                            segmentation=region_labels)
+                            self.workspace, line, region_image, region_xywh)
                         self.process_line(line, line_image, line_xywh,
                                           input_file.pageId, region.id,
                                           file_id + '_' + region.id + '_' + line.id)
@@ -151,6 +140,8 @@ class OcropyBinarize(Processor):
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
+            if file_id == input_file.ID:
+                file_id = concat_padded(self.output_file_grp, n)
             file_path = os.path.join(self.output_file_grp,
                                      file_id + '.xml')
             out = self.workspace.add_file(
@@ -167,14 +158,13 @@ class OcropyBinarize(Processor):
         LOG.info("About to binarize page '%s'", page_id)
         bin_image, angle = binarize(page_image,
                                     method=self.parameter['method'],
-                                    maxskew=self.parameter['maxskew'],
-                                    margin=16)
+                                    maxskew=0) # FIXME self.parameter['maxskew'])
         bin_image = remove_noise(bin_image,
                                  maxsize=self.parameter['noise_maxsize'])
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
         # to redo the rotation themselves):
-        #page.set_orientation(-angle) # does not exist on page level!
+        #page.set_orientation(-angle) # FIXME does not exist on page level yet!
         # update METS (add the image file):
         file_path = save_image_file(
             self.workspace,
@@ -198,22 +188,17 @@ class OcropyBinarize(Processor):
         # its @comments contain the string "deskewed" (as recommended
         # by the OCR-D spec), but that would in other respects be an
         # even strong assumption.
-        if region_xywh['angle'] and not region.get_AlternativeImage():
+        if region_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
-            # but not applied yet (into a binary image); so skip deskewing here:
+            # so skip deskewing here:
             bin_image, _ = binarize(region_image,
                                     method=self.parameter['method'],
-                                    maxskew=0,
-                                    margin=8)
+                                    maxskew=0)
         else:
             bin_image, angle = binarize(region_image,
                                         method=self.parameter['method'],
-                                        maxskew=self.parameter['maxskew'],
-                                        margin=8)
-            # if orientation has already been annotated (by previous deskewing),
-            # then it has also been applied (into a binary image); so here
-            # our deskewing was additive
-            region_xywh['angle'] += angle
+                                        maxskew=self.parameter['maxskew'])
+            region_xywh['angle'] = angle
         bin_image = remove_noise(bin_image,
                                  maxsize=self.parameter['noise_maxsize'])
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
@@ -239,8 +224,7 @@ class OcropyBinarize(Processor):
                  page_id, region_id, line.id)
         bin_image, angle = binarize(line_image,
                                     method=self.parameter['method'],
-                                    maxskew=self.parameter['maxskew'],
-                                    margin=4)
+                                    maxskew=self.parameter['maxskew'])
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
         # to redo the rotation themselves):

@@ -49,7 +49,7 @@
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
 			"categories": [
-				"Text recognition and optimization"
+				"Image preprocessing"
 			],
 			"steps": [
 				"preprocessing/optimization/binarization",
@@ -95,7 +95,7 @@
 		"ocrd-cis-ocropy-deskew": {
 			"executable": "ocrd-cis-ocropy-deskew",
 			"categories": [
-				"Text recognition and optimization"
+				"Image preprocessing"
 			],
 			"steps": [
 				"preprocessing/optimization/deskewing"
@@ -117,10 +117,73 @@
 				}
 			}
 		},
+		"ocrd-cis-ocropy-clip": {
+			"executable": "ocrd-cis-ocropy-clip",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/region",
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Clip text regions / lines at intersections with neighbours",
+			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "region"
+				},
+				"min_fraction": {
+					"type": "number",
+					"format": "float",
+					"description": "share of foreground pixels that must be retained by the largest label",
+					"default": 0.7
+				}
+			}
+		},
+		"ocrd-cis-ocropy-resegment": {
+			"executable": "ocrd-cis-ocropy-resegment",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
+			"parameters": {
+				"min_fraction": {
+					"type": "number",
+					"format": "float",
+					"description": "share of foreground pixels that must be retained by the largest label",
+					"default": 0.8
+				},
+				"extend_margins": {
+					"type": "number",
+					"format": "integer",
+					"description": "number of pixels to extend the input polygons horizontally and vertically before intersecting",
+					"default": 3
+				}
+			}
+		},
 		"ocrd-cis-ocropy-dewarp": {
 			"executable": "ocrd-cis-ocropy-dewarp",
 			"categories": [
-				"Text recognition and optimization"
+				"Image preprocessing"
 			],
 			"steps": [
 				"preprocessing/optimization/dewarping"

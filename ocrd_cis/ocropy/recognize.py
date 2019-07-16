@@ -15,14 +15,14 @@ from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
-from .ocrolib import lstm, load_object
+from .ocrolib import lstm, load_object, midrange
 from .common import (
-    LOG,
     image_from_page,
     image_from_region,
     image_from_line,
     pil2array,
-    check_line)
+    check_line
+)
 
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -37,17 +37,16 @@ def resize_keep_ratio(image, baseheight=48):
 # from ocropus-rpred, but without input files and without lineest/dewarping
 def process1(image, pad, network, check=True):
     line = pil2array(image)
-
+    binary = np.array(line <= midrange(line), np.uint8)
     raw_line = line.copy()
+    
+    # validate:
     if np.prod(line.shape) == 0:
         raise Exception('image dimensions are zero')
     if np.amax(line) == np.amin(line):
         raise Exception('image is blank')
-
-    # validate:
-    temp = np.amax(line)-line
     if check:
-        report = check_line(temp)
+        report = check_line(binary)
         if report:
             raise Exception(report)
 
@@ -128,7 +127,7 @@ class OcropyRecognize(Processor):
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             pcgts = page_from_file(self.workspace.download_file(input_file))
-            page_id = pcgts.pcGtsId or input_file.pageId # (PageType has no id)
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
             # process page:
@@ -145,6 +144,8 @@ class OcropyRecognize(Processor):
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
+            if file_id == input_file.ID:
+                file_id = concat_padded(self.output_file_grp, n)
             file_path = os.path.join(self.output_file_grp,
                                      file_id + '.xml')
             out = self.workspace.add_file(
