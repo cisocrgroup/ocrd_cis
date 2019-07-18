@@ -44,10 +44,8 @@ def dewarp(image, lnorm, check=True):
             raise Exception(report)
     
     temp = temp * 1.0 / np.amax(temp) # normalized
-    lnorm.setHeight(image.height) # keep line size
     lnorm.measure(temp) # find centerline
-    #line = lnorm.dewarp(line, cval=np.amax(line))
-    line = lnorm.normalize(line, cval=np.amax(line))
+    line = lnorm.dewarp(line, cval=np.amax(line))
     
     return array2pil(line)
 
