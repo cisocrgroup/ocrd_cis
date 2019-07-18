@@ -29,10 +29,10 @@ from .common import (
 LOG = getLogger('processor.OcropyRecognize')
 
 def resize_keep_ratio(image, baseheight=48):
-    hpercent = (baseheight / float(image.height))
-    wsize = round(image.width * hpercent)
+    scale = baseheight / image.height
+    wsize = round(image.width * scale)
     image = image.resize((wsize, baseheight), Image.ANTIALIAS)
-    return image
+    return image, scale
 
 # from ocropus-rpred, but without input files and without lineest/dewarping
 def process1(image, pad, network, check=True):
@@ -197,7 +197,7 @@ class OcropyRecognize(Processor):
                 LOG.error("bounding box is too narrow at line %s", line.id)
                 continue
             # resize image to 48 pixel height
-            final_img = resize_keep_ratio(line_image)
+            final_img, scale = resize_keep_ratio(line_image)
             
             # process ocropy:
             try:
@@ -251,9 +251,9 @@ class OcropyRecognize(Processor):
 
                     # Coords of word
                     word_xywh = line_xywh.copy()
-                    word_xywh['x'] += word_r_list[word_no][0]
+                    word_xywh['x'] += word_r_list[word_no][0] / scale
                     #word_xywh['w'] += word_r_list[word_no][-1]
-                    word_xywh['w'] = word_r_list[word_no][-1] - word_r_list[word_no][0]
+                    word_xywh['w'] = (word_r_list[word_no][-1] - word_r_list[word_no][0]) / scale
                     word_id = '%s_word%04d' % (line.id, word_no)
                     word = WordType(id=word_id, Coords=CoordsType(
                         points_from_xywh(word_xywh)))
@@ -265,9 +265,9 @@ class OcropyRecognize(Processor):
                     if maxlevel == 'glyph':
                         for glyph_no, glyph_str in enumerate(word_str):
                             glyph_xywh = line_xywh.copy()
-                            glyph_xywh['x'] += word_r_list[word_no][glyph_no]
+                            glyph_xywh['x'] += word_r_list[word_no][glyph_no] / scale
                             #glyph_xywh['w'] += word_r_list[word_no][glyph_no+1]
-                            glyph_xywh['w'] = word_r_list[word_no][glyph_no+1] - word_r_list[word_no][glyph_no]
+                            glyph_xywh['w'] = (word_r_list[word_no][glyph_no+1] - word_r_list[word_no][glyph_no]) / scale
                             glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
                             glyph = GlyphType(id=glyph_id, Coords=CoordsType(
                                 points_from_xywh(glyph_xywh)))
