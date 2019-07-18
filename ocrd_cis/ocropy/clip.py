@@ -4,8 +4,7 @@ import sys
 import os.path
 import io
 import numpy as np
-from skimage import measure, draw
-import cv2
+from PIL import Image, ImageStat
 from scipy.ndimage import filters
 
 from ocrd_utils import getLogger
@@ -174,6 +173,8 @@ class OcropyClip(Processor):
         segment_polygon = coordinates_of_segment(segment, parent_image, parent_xywh)
         segment_bbox = bbox_from_polygon(segment_polygon)
         segment_image = image_from_polygon(parent_image, segment_polygon)
+        background = ImageStat.Stat(segment_image).median[0]
+        background_image = Image.new('L', segment_image.size, background)
         segment_mask = pil2array(polygon_mask(parent_image, segment_polygon)).astype(np.uint8)
         # ad-hoc binarization:
         parent_array = pil2array(parent_image)
@@ -209,7 +210,7 @@ class OcropyClip(Processor):
                       segment.id, neighbour.id, np.count_nonzero(intruders), page_id)
             clip_mask = array2pil(intruders)
             #parent_bin[intruders] = 0 # suppress in binary for next iteration
-            segment_image.paste(clip_mask, mask=clip_mask) # suppress in raw image
+            segment_image.paste(background_image, mask=clip_mask) # suppress in raw image
         # recrop segment into rectangle (also clipping with white):
         segment_image = crop_image(segment_image,
             box=(segment_xywh['x'] - parent_xywh['x'],
