@@ -17,6 +17,9 @@ from ocrd_utils import MIMETYPE_PAGE
 from .. import get_ocrd_tool
 from .ocrolib import lstm, load_object, midrange
 from .common import (
+    coordinates_for_segment,
+    polygon_from_bbox,
+    points_from_polygon,
     image_from_page,
     image_from_region,
     image_from_line,
@@ -212,10 +215,8 @@ class OcropyRecognize(Processor):
             
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
-            # lists in list for every word with r-position and confidence of each glyph
-            word_r_list = [[0]]
-            word_conf_list = [[]]
-
+            word_r_list = [[0]] # r-positions of every glyph in every word
+            word_conf_list = [[]] # confidences of every glyph in every word
             if words != []:
                 w_no = 0
                 found_char = False
@@ -239,39 +240,42 @@ class OcropyRecognize(Processor):
 
             # conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]
-
             # conf for the line
             line_conf = (min(wordsconf) + max(wordsconf))/2
-
+            # line text
             line.add_TextEquiv(TextEquivType(
                 Unicode=linepred, conf=line_conf))
 
             if maxlevel in ['word', 'glyph']:
                 for word_no, word_str in enumerate(words):
-
-                    # Coords of word
-                    word_xywh = line_xywh.copy()
-                    word_xywh['x'] += word_r_list[word_no][0] / scale
-                    #word_xywh['w'] += word_r_list[word_no][-1]
-                    word_xywh['w'] = (word_r_list[word_no][-1] - word_r_list[word_no][0]) / scale
+                    word_points = points_from_polygon(
+                        coordinates_for_segment(
+                            np.array(polygon_from_bbox(
+                                word_r_list[word_no][0] / scale,
+                                0,
+                                word_r_list[word_no][-1] / scale,
+                                0 + line_xywh['h'])),
+                            line_image,
+                            line_xywh))
                     word_id = '%s_word%04d' % (line.id, word_no)
-                    word = WordType(id=word_id, Coords=CoordsType(
-                        points_from_xywh(word_xywh)))
-
+                    word = WordType(id=word_id, Coords=CoordsType(word_points))
                     line.add_Word(word)
                     word.add_TextEquiv(TextEquivType(
                         Unicode=word_str, conf=wordsconf[word_no]))
 
                     if maxlevel == 'glyph':
                         for glyph_no, glyph_str in enumerate(word_str):
-                            glyph_xywh = line_xywh.copy()
-                            glyph_xywh['x'] += word_r_list[word_no][glyph_no] / scale
-                            #glyph_xywh['w'] += word_r_list[word_no][glyph_no+1]
-                            glyph_xywh['w'] = (word_r_list[word_no][glyph_no+1] - word_r_list[word_no][glyph_no]) / scale
+                            glyph_points = points_from_polygon(
+                                coordinates_for_segment(
+                                    np.array(polygon_from_bbox(
+                                        word_r_list[word_no][glyph_no] / scale,
+                                        0,
+                                        word_r_list[word_no][glyph_no+1] / scale,
+                                        0 + line_xywh['h'])),
+                                    line_image,
+                                    line_xywh))
                             glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
-                            glyph = GlyphType(id=glyph_id, Coords=CoordsType(
-                                points_from_xywh(glyph_xywh)))
-
+                            glyph = GlyphType(id=glyph_id, Coords=CoordsType(glyph_points))
                             word.add_Glyph(glyph)
                             glyph.add_TextEquiv(TextEquivType(
                                 Unicode=glyph_str, conf=word_conf_list[word_no][glyph_no]))
