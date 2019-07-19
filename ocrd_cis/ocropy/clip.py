@@ -13,7 +13,6 @@ from ocrd_models.ocrd_page import (
     to_xml, AlternativeImageType,
     TextRegionType, TextLineType
 )
-from ocrd_models import OcrdExif
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
@@ -25,7 +24,7 @@ from .common import (
     xywh_from_points,
     bbox_from_polygon,
     image_from_page,
-    image_from_region,
+    image_from_segment,
     image_from_polygon,
     polygon_mask,
     crop_image,
@@ -93,8 +92,8 @@ class OcropyClip(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            page_image_info = OcrdExif(page_image)
+            page_image, page_xywh, page_image_info = image_from_page(
+                self.workspace, page, page_id)
             if page_image_info.xResolution != 1:
                 dpi = page_image_info.xResolution
                 if page_image_info.resolutionUnit == 'cm':
@@ -103,8 +102,6 @@ class OcropyClip(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
             
             regions = page.get_TextRegion()
             other_regions = (
@@ -136,7 +133,7 @@ class OcropyClip(Processor):
                                          page_image, page_xywh,
                                          input_file.pageId, file_id + '_' + region.id)
                     continue
-                region_image, region_xywh = image_from_region(
+                region_image, region_xywh = image_from_segment(
                     self.workspace, region, page_image, page_xywh)
                 lines = region.get_TextLine()
                 if not lines:

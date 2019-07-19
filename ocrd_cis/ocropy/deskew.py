@@ -20,8 +20,7 @@ from .. import get_ocrd_tool
 from . import common
 from .common import (
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     save_image_file,
     pil2array, array2pil
 )
@@ -70,9 +69,8 @@ class OcropyDeskew(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
+            page_image, page_xywh, _ = image_from_page(
+                self.workspace, page, page_id)
             if level == 'page':
                 self._process_segment(page, page_image, page_xywh,
                                       "page '%s'" % page_id, input_file.pageId,
@@ -83,7 +81,7 @@ class OcropyDeskew(Processor):
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
                     # process region:
-                    region_image, region_xywh = image_from_region(
+                    region_image, region_xywh = image_from_segment(
                         self.workspace, region, page_image, page_xywh)
                     self._process_segment(region, region_image, region_xywh,
                                           "region '%s'" % region.id, input_file.pageId,

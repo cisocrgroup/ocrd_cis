@@ -21,8 +21,7 @@ from .common import (
     polygon_from_bbox,
     points_from_polygon,
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     pil2array,
     check_line
 )
@@ -132,10 +131,8 @@ class OcropyRecognize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            # process page:
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
+            page_image, page_xywh, _ = image_from_page(
+                self.workspace, page, page_id)
             
             LOG.info("Recognizing text in page '%s'", page_id)
             # region, line, word, or glyph level:
@@ -165,7 +162,7 @@ class OcropyRecognize(Processor):
         edits = 0
         lengs = 0
         for region in regions:
-            region_image, region_xywh = image_from_region(
+            region_image, region_xywh = image_from_segment(
                 self.workspace, region, page_image, page_xywh)
             
             LOG.info("Recognizing text in region '%s'", region.id)
@@ -183,7 +180,7 @@ class OcropyRecognize(Processor):
         edits = 0
         lengs = 0
         for line in textlines:
-            line_image, line_xywh = image_from_line(
+            line_image, line_xywh = image_from_segment(
                 self.workspace, line, region_image, region_xywh)
             
             LOG.info("Recognizing text in line '%s'", line.id)

@@ -7,7 +7,6 @@ import numpy as np
 from ocrd_utils import getLogger, concat_padded
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
-from ocrd_models import OcrdExif
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
@@ -16,8 +15,7 @@ from . import common
 from .ocrolib import lineest
 from .common import (
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     save_image_file,
     pil2array, array2pil,
     check_line, check_page,
@@ -89,8 +87,8 @@ class OcropyDewarp(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            page_image_info = OcrdExif(page_image)
+            page_image, page_xywh, page_image_info = image_from_page(
+                self.workspace, page, page_id)
             if page_image_info.xResolution != 1:
                 dpi = page_image_info.xResolution
                 if page_image_info.resolutionUnit == 'cm':
@@ -99,24 +97,19 @@ class OcropyDewarp(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            # process page:
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
             
             regions = page.get_TextRegion()
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
-                # process region:
-                region_image, region_xywh = image_from_region(
+                region_image, region_xywh = image_from_segment(
                     self.workspace, region, page_image, page_xywh)
                 
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Region %s contains no text lines', region.id)
                 for line in lines:
-                    # process line:
-                    line_image, _ = image_from_line(
+                    line_image, _ = image_from_segment(
                         self.workspace, line, region_image, region_xywh)
                     
                     LOG.info("About to dewarp page '%s' region '%s' line '%s'",
