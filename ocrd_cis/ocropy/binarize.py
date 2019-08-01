@@ -19,8 +19,7 @@ from .. import get_ocrd_tool
 from . import common
 from .common import (
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     save_image_file,
     pil2array, array2pil,
     check_line, check_page,
@@ -108,10 +107,8 @@ class OcropyBinarize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            # process page:
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
+            page_image, page_xywh, _ = image_from_page(
+                self.workspace, page, page_id)
             
             if level == 'page':
                 self.process_page(page, page_image, page_xywh,
@@ -121,7 +118,7 @@ class OcropyBinarize(Processor):
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
-                    region_image, region_xywh = image_from_region(
+                    region_image, region_xywh = image_from_segment(
                         self.workspace, region, page_image, page_xywh)
                     if level == 'region':
                         self.process_region(region, region_image, region_xywh,
@@ -131,7 +128,7 @@ class OcropyBinarize(Processor):
                     if not lines:
                         LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     for line in lines:
-                        line_image, line_xywh = image_from_line(
+                        line_image, line_xywh = image_from_segment(
                             self.workspace, line, region_image, region_xywh)
                         self.process_line(line, line_image, line_xywh,
                                           input_file.pageId, region.id,

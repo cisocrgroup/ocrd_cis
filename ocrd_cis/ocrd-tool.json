@@ -108,12 +108,18 @@
 				"OCR-D-SEG-BLOCK",
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Deskew regions with ocropy (but only by annotating orientation angle)",
+			"description": "Deskew regions with ocropy (by annotating orientation angle and adding AlternativeImage)",
 			"parameters": {
 				"maxskew": {
 					"type": "number",
 					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
 					"default": 5.0
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "region"
 				}
 			}
 		},

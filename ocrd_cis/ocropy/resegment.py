@@ -11,7 +11,6 @@ from scipy.ndimage import filters
 from ocrd_utils import getLogger
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
-from ocrd_models import OcrdExif
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
@@ -22,8 +21,7 @@ from .common import (
     coordinates_of_segment,
     coordinates_for_segment,
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     pil2array, array2pil,
     check_line, check_page,
     # binarize,
@@ -148,8 +146,8 @@ class OcropyResegment(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            page_image_info = OcrdExif(page_image)
+            page_image, page_xywh, page_image_info = image_from_page(
+                self.workspace, page, page_id)
             if page_image_info.xResolution != 1:
                 dpi = page_image_info.xResolution
                 if page_image_info.resolutionUnit == 'cm':
@@ -158,8 +156,6 @@ class OcropyResegment(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
             
             regions = page.get_TextRegion()
             if not regions:
@@ -169,7 +165,7 @@ class OcropyResegment(Processor):
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
-                region_image, region_xywh = image_from_region(
+                region_image, region_xywh = image_from_segment(
                     self.workspace, region, page_image, page_xywh)
                 # ad-hoc binarization:
                 region_array = pil2array(region_image)
@@ -230,7 +226,7 @@ class OcropyResegment(Processor):
                     # annotate result:
                     line.get_Coords().points = points_from_polygon(line_polygon)
                     # create new image:
-                    line_image, line_xywh = image_from_line(
+                    line_image, line_xywh = image_from_segment(
                         self.workspace, line, region_image, region_xywh)
                     # update METS (add the image file):
                     file_path = save_image_file(

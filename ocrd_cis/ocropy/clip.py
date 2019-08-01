@@ -4,8 +4,7 @@ import sys
 import os.path
 import io
 import numpy as np
-from skimage import measure, draw
-import cv2
+from PIL import Image, ImageStat
 from scipy.ndimage import filters
 
 from ocrd_utils import getLogger
@@ -14,7 +13,6 @@ from ocrd_models.ocrd_page import (
     to_xml, AlternativeImageType,
     TextRegionType, TextLineType
 )
-from ocrd_models import OcrdExif
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
@@ -26,7 +24,7 @@ from .common import (
     xywh_from_points,
     bbox_from_polygon,
     image_from_page,
-    image_from_region,
+    image_from_segment,
     image_from_polygon,
     polygon_mask,
     crop_image,
@@ -94,8 +92,8 @@ class OcropyClip(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            page_image_info = OcrdExif(page_image)
+            page_image, page_xywh, page_image_info = image_from_page(
+                self.workspace, page, page_id)
             if page_image_info.xResolution != 1:
                 dpi = page_image_info.xResolution
                 if page_image_info.resolutionUnit == 'cm':
@@ -104,8 +102,6 @@ class OcropyClip(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
             
             regions = page.get_TextRegion()
             other_regions = (
@@ -137,7 +133,7 @@ class OcropyClip(Processor):
                                          page_image, page_xywh,
                                          input_file.pageId, file_id + '_' + region.id)
                     continue
-                region_image, region_xywh = image_from_region(
+                region_image, region_xywh = image_from_segment(
                     self.workspace, region, page_image, page_xywh)
                 lines = region.get_TextLine()
                 if not lines:
@@ -174,6 +170,8 @@ class OcropyClip(Processor):
         segment_polygon = coordinates_of_segment(segment, parent_image, parent_xywh)
         segment_bbox = bbox_from_polygon(segment_polygon)
         segment_image = image_from_polygon(parent_image, segment_polygon)
+        background = ImageStat.Stat(segment_image).median[0]
+        background_image = Image.new('L', segment_image.size, background)
         segment_mask = pil2array(polygon_mask(parent_image, segment_polygon)).astype(np.uint8)
         # ad-hoc binarization:
         parent_array = pil2array(parent_image)
@@ -209,7 +207,7 @@ class OcropyClip(Processor):
                       segment.id, neighbour.id, np.count_nonzero(intruders), page_id)
             clip_mask = array2pil(intruders)
             #parent_bin[intruders] = 0 # suppress in binary for next iteration
-            segment_image.paste(clip_mask, mask=clip_mask) # suppress in raw image
+            segment_image.paste(background_image, mask=clip_mask) # suppress in raw image
         # recrop segment into rectangle (also clipping with white):
         segment_image = crop_image(segment_image,
             box=(segment_xywh['x'] - parent_xywh['x'],

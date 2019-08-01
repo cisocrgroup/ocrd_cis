@@ -12,7 +12,7 @@ from PIL import Image
 
 from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
 from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import to_xml, AlternativeImageType, CoordsType
+from ocrd_models.ocrd_page import to_xml, AlternativeImageType, CoordsType, PageType
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
@@ -20,8 +20,7 @@ from .. import get_ocrd_tool
 from . import common
 from .common import (
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     save_image_file,
     pil2array, array2pil
 )
@@ -59,8 +58,7 @@ class OcropyDeskew(Processor):
         
         Produce a new output file by serialising the resulting hierarchy.
         """
-        maxskew = self.parameter['maxskew']
-        # FIXME: offer page-level processing, add level-of-operation
+        level = self.parameter['level-of-operation']
         
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
@@ -71,46 +69,23 @@ class OcropyDeskew(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            # process page:
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
-            
-            regions = page.get_TextRegion()
-            if not regions:
-                LOG.warning('Page "%s" contains no text regions', page_id)
-            for region in regions:
-                if region.get_orientation():
-                    LOG.error('Region "%s" already has non-zero orientation: %.1f',
-                              region.id, region.get_orientation())
-                    # it would be dangerous to proceed here, because
-                    # the angle could already have been applied to the image
-                    # and our new estimate would (or would not) be additive
-                    continue
-                # process region:
-                region_image, region_xywh = image_from_region(
-                    self.workspace, region, page_image, page_xywh)
-                LOG.info("About to deskew region '%s'", region.id)
-                angle = deskew(region_image, maxskew=maxskew)
-                # region angle: PAGE orientation is defined clockwise,
-                # whereas PIL/ndimage rotation is in mathematical direction:
-                region.set_orientation(-angle)
-                LOG.info("Found angle for region '%s': %.1f",
-                         region.id, angle)
-                region_image = region_image.rotate(angle, expand=True,
-                                                   #resample=Image.BILINEAR,
-                                                   fillcolor='white')
-                # update METS (add the image file):
-                file_path = save_image_file(
-                    self.workspace,
-                    region_image,
-                    file_id=file_id + '_' + region.id,
-                    page_id=page_id,
-                    file_grp=FILEGRP_IMG)
-                # update PAGE (reference the image file):
-                region.add_AlternativeImage(AlternativeImageType(
-                    filename=file_path,
-                    comments='cropped,deskewed'))
+            page_image, page_xywh, _ = image_from_page(
+                self.workspace, page, page_id)
+            if level == 'page':
+                self._process_segment(page, page_image, page_xywh,
+                                      "page '%s'" % page_id, input_file.pageId,
+                                      file_id)
+            else:
+                regions = page.get_TextRegion()
+                if not regions:
+                    LOG.warning('Page "%s" contains no text regions', page_id)
+                for region in regions:
+                    # process region:
+                    region_image, region_xywh = image_from_segment(
+                        self.workspace, region, page_image, page_xywh)
+                    self._process_segment(region, region_image, region_xywh,
+                                          "region '%s'" % region.id, input_file.pageId,
+                                          file_id + '_' + region.id)
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
@@ -129,3 +104,41 @@ class OcropyDeskew(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
     
+    def _process_segment(self, segment, segment_image, segment_xywh, segment_id, page_id, file_id):
+        LOG.info("About to deskew %s", segment_id)
+        if (not isinstance(segment, PageType) and # FIXME: remove that condition as soon as PAGE has orientation on PageType
+            segment.get_orientation()):
+            LOG.error('%s already has non-zero orientation: %.1f',
+                      segment_id, segment.get_orientation())
+            # it would be dangerous to proceed here, because
+            # the angle could already have been applied to the image
+            # and our new estimate would (or would not) be additive
+            return
+        angle = deskew(segment_image, maxskew=self.parameter['maxskew'])
+        # FIXME: remove that condition as soon as PAGE has orientation on PageType:
+        if not isinstance(segment, PageType):
+            # segment angle: PAGE orientation is defined clockwise,
+            # whereas PIL/ndimage rotation is in mathematical direction:
+            orientation = -angle
+            orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
+            segment.set_orientation(orientation)
+        LOG.info("Found angle for %s: %.1f", segment_id, angle)
+        segment_image = segment_image.rotate(angle, expand=True,
+                                             #resample=Image.BILINEAR,
+                                             fillcolor='white')
+        if (isinstance(segment, PageType) and
+            not segment_xywh['x'] and not segment_xywh['y']):
+            comments = '' # not even Border
+        else:
+            comments = 'cropped'
+        if int(angle):
+            comments += ',deskewed'
+        # update METS (add the image file):
+        file_path = save_image_file(self.workspace, segment_image,
+                                    file_id,
+                                    page_id=page_id,
+                                    file_grp=FILEGRP_IMG)
+        # update PAGE (reference the image file):
+        segment.add_AlternativeImage(AlternativeImageType(
+            filename=file_path, comments=comments))
+        

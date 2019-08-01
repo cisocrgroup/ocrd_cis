@@ -17,9 +17,11 @@ from ocrd_utils import MIMETYPE_PAGE
 from .. import get_ocrd_tool
 from .ocrolib import lstm, load_object, midrange
 from .common import (
+    coordinates_for_segment,
+    polygon_from_bbox,
+    points_from_polygon,
     image_from_page,
-    image_from_region,
-    image_from_line,
+    image_from_segment,
     pil2array,
     check_line
 )
@@ -29,10 +31,10 @@ from .common import (
 LOG = getLogger('processor.OcropyRecognize')
 
 def resize_keep_ratio(image, baseheight=48):
-    hpercent = (baseheight / float(image.height))
-    wsize = round(image.width * hpercent)
+    scale = baseheight / image.height
+    wsize = round(image.width * scale)
     image = image.resize((wsize, baseheight), Image.ANTIALIAS)
-    return image
+    return image, scale
 
 # from ocropus-rpred, but without input files and without lineest/dewarping
 def process1(image, pad, network, check=True):
@@ -129,10 +131,8 @@ class OcropyRecognize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image = self.workspace.resolve_image_as_pil(page.imageFilename)
-            # process page:
-            page_image, page_xywh = image_from_page(
-                self.workspace, page, page_image, page_id)
+            page_image, page_xywh, _ = image_from_page(
+                self.workspace, page, page_id)
             
             LOG.info("Recognizing text in page '%s'", page_id)
             # region, line, word, or glyph level:
@@ -162,7 +162,7 @@ class OcropyRecognize(Processor):
         edits = 0
         lengs = 0
         for region in regions:
-            region_image, region_xywh = image_from_region(
+            region_image, region_xywh = image_from_segment(
                 self.workspace, region, page_image, page_xywh)
             
             LOG.info("Recognizing text in region '%s'", region.id)
@@ -180,7 +180,7 @@ class OcropyRecognize(Processor):
         edits = 0
         lengs = 0
         for line in textlines:
-            line_image, line_xywh = image_from_line(
+            line_image, line_xywh = image_from_segment(
                 self.workspace, line, region_image, region_xywh)
             
             LOG.info("Recognizing text in line '%s'", line.id)
@@ -197,7 +197,7 @@ class OcropyRecognize(Processor):
                 LOG.error("bounding box is too narrow at line %s", line.id)
                 continue
             # resize image to 48 pixel height
-            final_img = resize_keep_ratio(line_image)
+            final_img, scale = resize_keep_ratio(line_image)
             
             # process ocropy:
             try:
@@ -212,10 +212,8 @@ class OcropyRecognize(Processor):
             
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
-            # lists in list for every word with r-position and confidence of each glyph
-            word_r_list = [[0]]
-            word_conf_list = [[]]
-
+            word_r_list = [[0]] # r-positions of every glyph in every word
+            word_conf_list = [[]] # confidences of every glyph in every word
             if words != []:
                 w_no = 0
                 found_char = False
@@ -239,39 +237,42 @@ class OcropyRecognize(Processor):
 
             # conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]
-
             # conf for the line
             line_conf = (min(wordsconf) + max(wordsconf))/2
-
+            # line text
             line.add_TextEquiv(TextEquivType(
                 Unicode=linepred, conf=line_conf))
 
             if maxlevel in ['word', 'glyph']:
                 for word_no, word_str in enumerate(words):
-
-                    # Coords of word
-                    word_xywh = line_xywh.copy()
-                    word_xywh['x'] += word_r_list[word_no][0]
-                    #word_xywh['w'] += word_r_list[word_no][-1]
-                    word_xywh['w'] = word_r_list[word_no][-1] - word_r_list[word_no][0]
+                    word_points = points_from_polygon(
+                        coordinates_for_segment(
+                            np.array(polygon_from_bbox(
+                                word_r_list[word_no][0] / scale,
+                                0,
+                                word_r_list[word_no][-1] / scale,
+                                0 + line_xywh['h'])),
+                            line_image,
+                            line_xywh))
                     word_id = '%s_word%04d' % (line.id, word_no)
-                    word = WordType(id=word_id, Coords=CoordsType(
-                        points_from_xywh(word_xywh)))
-
+                    word = WordType(id=word_id, Coords=CoordsType(word_points))
                     line.add_Word(word)
                     word.add_TextEquiv(TextEquivType(
                         Unicode=word_str, conf=wordsconf[word_no]))
 
                     if maxlevel == 'glyph':
                         for glyph_no, glyph_str in enumerate(word_str):
-                            glyph_xywh = line_xywh.copy()
-                            glyph_xywh['x'] += word_r_list[word_no][glyph_no]
-                            #glyph_xywh['w'] += word_r_list[word_no][glyph_no+1]
-                            glyph_xywh['w'] = word_r_list[word_no][glyph_no+1] - word_r_list[word_no][glyph_no]
+                            glyph_points = points_from_polygon(
+                                coordinates_for_segment(
+                                    np.array(polygon_from_bbox(
+                                        word_r_list[word_no][glyph_no] / scale,
+                                        0,
+                                        word_r_list[word_no][glyph_no+1] / scale,
+                                        0 + line_xywh['h'])),
+                                    line_image,
+                                    line_xywh))
                             glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
-                            glyph = GlyphType(id=glyph_id, Coords=CoordsType(
-                                points_from_xywh(glyph_xywh)))
-
+                            glyph = GlyphType(id=glyph_id, Coords=CoordsType(glyph_points))
                             word.add_Glyph(glyph)
                             glyph.add_TextEquiv(TextEquivType(
                                 Unicode=glyph_str, conf=word_conf_list[word_no][glyph_no]))
