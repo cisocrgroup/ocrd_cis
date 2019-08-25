@@ -22,7 +22,7 @@ from setuptools import find_packages
 
 setup(
     name='cis-ocrd',
-    version='0.0.3',
+    version='0.0.4',
     description='description',
     long_description='long description',
     author='Florian Fink, Tobias Englmeier, Christoph Weber',
@@ -31,7 +31,7 @@ setup(
     license='MIT',
     packages=find_packages(),
     install_requires=[
-        'ocrd>=1.0.0b5',
+        'ocrd>=1.0.0b17',
         'click',
         'scipy',
         'pillow==5.4.1',

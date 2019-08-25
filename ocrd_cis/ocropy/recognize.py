@@ -7,21 +7,22 @@ from PIL import Image
 
 import Levenshtein
 
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_xywh
+from ocrd_utils import (
+    getLogger, concat_padded,
+    coordinates_for_segment,
+    xywh_from_points, points_from_xywh,
+    polygon_from_bbox,
+    points_from_polygon,
+    MIMETYPE_PAGE
+)
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
 from ocrd_models.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
 from .ocrolib import lstm, load_object, midrange
 from .common import (
-    coordinates_for_segment,
-    polygon_from_bbox,
-    points_from_polygon,
-    image_from_page,
-    image_from_segment,
     pil2array,
     check_line
 )
@@ -36,8 +37,8 @@ def resize_keep_ratio(image, baseheight=48):
     image = image.resize((wsize, baseheight), Image.ANTIALIAS)
     return image, scale
 
-# from ocropus-rpred, but without input files and without lineest/dewarping
-def process1(image, pad, network, check=True):
+# from ocropus-rpred process1, but without input files and without lineest/dewarping
+def recognize(image, pad, network, check=True):
     line = pil2array(image)
     binary = np.array(line <= midrange(line), np.uint8)
     raw_line = line.copy()
@@ -131,8 +132,8 @@ class OcropyRecognize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, _ = image_from_page(
-                self.workspace, page, page_id)
+            page_image, page_xywh, _ = self.workspace.image_from_page(
+                page, page_id)
             
             LOG.info("Recognizing text in page '%s'", page_id)
             # region, line, word, or glyph level:
@@ -162,8 +163,8 @@ class OcropyRecognize(Processor):
         edits = 0
         lengs = 0
         for region in regions:
-            region_image, region_xywh = image_from_segment(
-                self.workspace, region, page_image, page_xywh)
+            region_image, region_xywh = self.workspace.image_from_segment(
+                region, page_image, page_xywh)
             
             LOG.info("Recognizing text in region '%s'", region.id)
             textlines = region.get_TextLine()
@@ -180,8 +181,8 @@ class OcropyRecognize(Processor):
         edits = 0
         lengs = 0
         for line in textlines:
-            line_image, line_xywh = image_from_segment(
-                self.workspace, line, region_image, region_xywh)
+            line_image, line_xywh = self.workspace.image_from_segment(
+                line, region_image, region_xywh)
             
             LOG.info("Recognizing text in line '%s'", line.id)
             if line.get_TextEquiv():
@@ -201,7 +202,7 @@ class OcropyRecognize(Processor):
             
             # process ocropy:
             try:
-                linepred, clist, rlist, confidlist = process1(
+                linepred, clist, rlist, confidlist = recognize(
                     final_img, self.pad, self.network, check=True)
             except Exception as err:
                 LOG.error('error processing line "%s": %s', line.id, err)

@@ -2,15 +2,10 @@ from __future__ import absolute_import
 
 import sys
 import os.path
-import io
-import warnings
-import cv2
 import numpy as np
-from scipy.ndimage import filters, interpolation, measurements, morphology
-from scipy import stats
 from PIL import Image
 
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
+from ocrd_utils import getLogger, concat_padded
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType, CoordsType, PageType
 from ocrd import Processor
@@ -19,9 +14,6 @@ from ocrd_utils import MIMETYPE_PAGE
 from .. import get_ocrd_tool
 from . import common
 from .common import (
-    image_from_page,
-    image_from_segment,
-    save_image_file,
     pil2array, array2pil
 )
 
@@ -69,8 +61,8 @@ class OcropyDeskew(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, _ = image_from_page(
-                self.workspace, page, page_id)
+            page_image, page_xywh, _ = self.workspace.image_from_page(
+                page, page_id)
             if level == 'page':
                 self._process_segment(page, page_image, page_xywh,
                                       "page '%s'" % page_id, input_file.pageId,
@@ -81,8 +73,8 @@ class OcropyDeskew(Processor):
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
                     # process region:
-                    region_image, region_xywh = image_from_segment(
-                        self.workspace, region, page_image, page_xywh)
+                    region_image, region_xywh = self.workspace.image_from_segment(
+                        region, page_image, page_xywh)
                     self._process_segment(region, region_image, region_xywh,
                                           "region '%s'" % region.id, input_file.pageId,
                                           file_id + '_' + region.id)
@@ -131,10 +123,11 @@ class OcropyDeskew(Processor):
         if int(angle):
             comments += ',deskewed'
         # update METS (add the image file):
-        file_path = save_image_file(self.workspace, segment_image,
-                                    file_id,
-                                    page_id=page_id,
-                                    file_grp=FILEGRP_IMG)
+        file_path = self.workspace.save_image_file(
+            segment_image,
+            file_id,
+            page_id=page_id,
+            file_grp=FILEGRP_IMG)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path, comments=comments))
