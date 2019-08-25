@@ -106,8 +106,7 @@ class OcropyDeskew(Processor):
     
     def _process_segment(self, segment, segment_image, segment_xywh, segment_id, page_id, file_id):
         LOG.info("About to deskew %s", segment_id)
-        if (not isinstance(segment, PageType) and # FIXME: remove that condition as soon as PAGE has orientation on PageType
-            segment.get_orientation()):
+        if segment.get_orientation():
             LOG.error('%s already has non-zero orientation: %.1f',
                       segment_id, segment.get_orientation())
             # it would be dangerous to proceed here, because
@@ -115,13 +114,11 @@ class OcropyDeskew(Processor):
             # and our new estimate would (or would not) be additive
             return
         angle = deskew(segment_image, maxskew=self.parameter['maxskew'])
-        # FIXME: remove that condition as soon as PAGE has orientation on PageType:
-        if not isinstance(segment, PageType):
-            # segment angle: PAGE orientation is defined clockwise,
-            # whereas PIL/ndimage rotation is in mathematical direction:
-            orientation = -angle
-            orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
-            segment.set_orientation(orientation)
+        # segment angle: PAGE orientation is defined clockwise,
+        # whereas PIL/ndimage rotation is in mathematical direction:
+        orientation = -angle
+        orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
+        segment.set_orientation(orientation)
         LOG.info("Found angle for %s: %.1f", segment_id, angle)
         segment_image = segment_image.rotate(angle, expand=True,
                                              #resample=Image.BILINEAR,

@@ -152,7 +152,8 @@ def binarize(image,
              lo=5, # percentile for black estimation (ocropy: 5)
              hi=90, # percentile for white estimation (ocropy: 90)
              maxskew=2, # maximum angle (in degrees) for skew estimation
-             skewsteps=8): # steps per degree
+             skewsteps=8, # steps per degree
+             nrm=False): # output grayscale normalized
     extreme = (np.sum(image < 0.05) + np.sum(image > 0.95)) * 1.0 / np.prod(image.shape)
     if extreme > 0.95:
         comment = "no-normalization"
@@ -176,7 +177,7 @@ def binarize(image,
     flat = np.clip(flat, 0, 1)
     bin = 1 * (flat > threshold)
     LOG.debug("binarization: lo-hi (%.2f %.2f) angle %4.1f %s", lo, hi, angle, comment)
-    return bin, angle
+    return flat if nrm else bin, angle
 
 # inspired by OLD/ocropus-lattices --borderclean
 def borderclean(array, margin=4):
@@ -646,11 +647,12 @@ def remove_noise(image, maxsize=8):
     array = pil2array(image)
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
     _, ncomps_before = morph.label(binary)
-    binary = ocrolib.remove_noise(binary, maxsize)
-    _, ncomps_after = morph.label(binary)
+    clean = ocrolib.remove_noise(binary, maxsize)
+    _, ncomps_after = morph.label(clean)
     LOG.debug('black components before/after denoising (maxsize=%d): %d/%d',
               maxsize, ncomps_before, ncomps_after)
-    return array2pil(1 - binary)
+    array = np.maximum(array, binary - clean)
+    return array2pil(array)
 
 # to be refactored into core (as function in ocrd_utils):
 def polygon_mask(image, coordinates):
@@ -813,10 +815,7 @@ def image_from_page(workspace, page, page_id):
                  'y': 0,
                  'w': page_image.width,
                  'h': page_image.height}
-    # FIXME: uncomment as soon as we get @orientation in PageType:
-    # # region angle: PAGE orientation is defined clockwise,
-    # # whereas PIL/ndimage rotation is in mathematical direction:
-    # page_xywh['angle'] = -(page.get_orientation() or 0)
+    page_xywh['angle'] = -(page.get_orientation() or 0)
     # FIXME: remove PrintSpace here as soon as GT abides by the PAGE standard:
     border = page.get_Border() or page.get_PrintSpace()
     if border:
@@ -845,14 +844,13 @@ def image_from_page(workspace, page, page_id):
                  page_xywh['y'],
                  page_xywh['x'] + page_xywh['w'],
                  page_xywh['y'] + page_xywh['h']))
-        # FIXME: uncomment as soon as we get @orientation in PageType:
-        # if page_xywh['angle']:
-        #     LOG.info("About to rotate page '%s' by %.2f°",
-        #               page_id, page_xywh['angle'])
-        #     page_image = page_image.rotate(page_xywh['angle'],
-        #                                        expand=True,
-        #                                        #resample=Image.BILINEAR,
-        #                                        fillcolor='white')
+        if page_xywh['angle']:
+            LOG.info("About to rotate page '%s' by %.2f°",
+                      page_id, page_xywh['angle'])
+            page_image = page_image.rotate(page_xywh['angle'],
+                                           expand=True,
+                                           #resample=Image.BILINEAR,
+                                           fillcolor='white')
     # subtract offset from any increase in binary region size over source:
     page_xywh['x'] -= round(0.5 * max(0, page_image.width  - page_xywh['w']))
     page_xywh['y'] -= round(0.5 * max(0, page_image.height - page_xywh['h']))

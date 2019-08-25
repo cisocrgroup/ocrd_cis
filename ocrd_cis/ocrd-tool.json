@@ -74,6 +74,11 @@
 					"description": "binarization method to use (only ocropy will include deskewing)",
 					"default": "ocropy"
 				},
+				"grayscale": {
+					"type": "boolean",
+					"description": "for the ocropy method, produce grayscale-normalized instead of thresholded image",
+					"default": false
+				},
 				"maxskew": {
 					"type": "number",
 					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
