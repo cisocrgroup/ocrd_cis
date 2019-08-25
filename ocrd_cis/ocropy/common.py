@@ -306,19 +306,23 @@ def odd(num):
     return num + (num+1)%2
 
 # from ocropus-gpageseg
-def DSAVE(title,array):
+def DSAVE(title,array, interactive=False):
     logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import patches as mpatches
+    from tempfile import mkstemp
     if type(array)==list:
         # 3 inputs, one for each RGB channel
         assert len(array)==3
         array = np.transpose(np.array(array),[1,2,0])
-    #plt.imshow(array.astype('float'))
-    #plt.legend(handles=[mpatches.Patch(label=title)])
-    #plt.show()
-    fname = title+".png"
-    plt.imsave(fname,array.astype('float'))
+    if interactive:
+        plt.imshow(array.astype('float'))
+        plt.legend(handles=[mpatches.Patch(label=title)])
+        plt.show()
+    else:
+        _,fname = mkstemp(suffix=title+".png")
+        plt.imsave(fname,array.astype('float'))
+        LOG.debug('DSAVE %s', fname)
 
 # from ocropus-gpageseg, but with extra height criterion
 def remove_hlines(binary,scale,maxsize=10):
@@ -504,14 +508,11 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
 def hmerge_line_seeds(seeds, colseps, threshold=0.2):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label."""
-    # use full horizontal spread to avoid splitting lines at long whitespace
-    # (but only indirectly as masks with a label conflict, so we can
-    #  horizontally merge components, and at the same time avoid to
-    #  horizontally enlarge components in general, which would
-    #  allow corners to become the largest component when spreading
-    #  into the background;
-    #  moreover, ignore conflicts which affect only small fractions of
-    #  either line, so a merge can be avoided for small vertical overlap):
+    # merge labels horizontally to avoid splitting lines at long whitespace
+    # (to prevent corners from becoming the largest label when spreading
+    #  into the background; and make contiguous contours possible), but
+    # ignore conflicts which affect only small fractions of either line
+    # (avoiding merges for small vertical overlap):
     relabel = np.unique(seeds)
     labels = np.delete(relabel, 0) # without background
     labels_count = dict([(label, np.sum(seeds == label)) for label in labels])
@@ -526,12 +527,31 @@ def hmerge_line_seeds(seeds, colseps, threshold=0.2):
                 overlap_count[candidate][0] < count):
                 overlap_count[candidate] = (count, label)
     for label in labels:
+        # get candidate with largest overlap:
         count, candidate = overlap_count[label]
-        if count / labels_count[label] > threshold:
-            relabel[label] = relabel[candidate]
-            relabel[relabel == label] = relabel[candidate]
+        if (candidate != label and
+            count / labels_count[label] > threshold):
+            # the new label could have been relabelled already:
+            new_label = relabel[candidate]
+            # assign label to (new assignment for) candidate:
+            relabel[label] = new_label
+            # re-assign labels already relabelled to label:
+            relabel[relabel == label] = new_label
+            # fill the horizontal background between both regions:
+            label_y, label_x = np.where(seeds == label)
+            new_label_y, new_label_x = np.where(seeds == new_label)
+            for y in np.intersect1d(label_y, new_label_y):
+                x_min = label_x[label_y == y][0]
+                x_max = label_x[label_y == y][-1]
+                new_x_min = new_label_x[new_label_y == y][0]
+                new_x_max = new_label_x[new_label_y == y][-1]
+                if x_max < new_x_min:
+                    seeds[y, x_max:new_x_min] = label
+                if new_x_max < x_min:
+                    seeds[y, new_x_max:x_min] = label
+    # apply re-assignments:
     seeds = relabel[seeds]
-    #DSAVE("lineseeds hmerged", seeds)
+    #DSAVE("lineseeds_hmerged", seeds)
     return seeds
 
 # like ocropus-gpageseg compute_segmentation, but:
@@ -579,7 +599,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     else:
         hlines = np.zeros_like(binary)
         
-    bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
+    bottom, top, boxmap = compute_gradmaps(binary, scale/2, usegauss=False,
                                            hscale=1.0/zoom, vscale=1.0/zoom)
     if fullpage:
         colseps, binary2 = compute_colseps(binary, scale, maxcolseps=maxcolseps, maxseps=maxseps)
@@ -592,16 +612,31 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     if not fullpage:
         seeds = hmerge_line_seeds(seeds, colseps)
 
-    # spread the text line seeds to all the remaining components
-    # (boxes with conflicting seeds will become background):
-    #llabels = morph.propagate_labels(boxmap,seeds,conflict=0)
-    # better assign the seed label with the majority
-    # of pixels in foreground connected components:
-    llabels = morph.propagate_labels_majority(binary, seeds)
+    # assign the seeds labels to all component boxes
+    # (boxes with conflicts will become background):
+    llabels = morph.propagate_labels(boxmap,seeds,conflict=0)
+    # spread the seed labels to background and conflicts
+    # (unassigned pixels will get the nearest label up to maxdist):
     spread = morph.spread_labels(seeds,maxdist=scale)
-    # background and conflict will get nearest seed:
+    #DSAVE('spread', spread + 0.6*binary)
+    # background and conflict will get nearest spread label:
     llabels = np.where(llabels>0,llabels,spread)
     #DSAVE('llabels', llabels + 0.6*binary)
+    # now improve the above procedure by ensuring that
+    # no connected components are (unnecessarily) split;
+    # the only connected components that must be split are
+    # those conflicting in seeds (not those conflicting in spread);
+    # those conflicting in spread should be given the label
+    # with a majority of foreground pixels:
+    llabels2 = morph.propagate_labels_majority(binary, llabels)
+    llabels2 = np.where(seeds > 0, seeds, llabels2)
+    seed_majority = morph.propagate_labels_majority(binary, seeds)
+    seed_nonconflict = morph.propagate_labels(binary, seeds, conflict=0)
+    seed_conflicts = seed_majority > seed_nonconflict
+    # re-spread the component labels (more exact, and majority
+    # leaders will not extrude):
+    llabels = morph.spread_labels(np.where(seed_conflicts, llabels, llabels2), maxdist=scale)
+    #DSAVE('llabels2', llabels + 0.6*binary)
     #segmentation = llabels*binary
     #return segmentation
     return llabels # , hlines, vlines
@@ -749,7 +784,7 @@ def coordinates_for_segment(polygon, parent_image, parent_xywh):
                            0.5 * parent_image.height]))
     # offset correction (shift coordinates from base of segment):
     polygon += np.array([parent_xywh['x'], parent_xywh['y']])
-    return np.round(polygon).astype(np.uint32)
+    return np.round(polygon).astype(np.int32)
 
 # to be refactored into core (as method of ocrd.workspace.Workspace):
 def image_from_page(workspace, page, page_id):
