@@ -82,12 +82,12 @@
 				"maxskew": {
 					"type": "number",
 					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
-					"default": 5.0
+					"default": 0.0
 				},
 				"noise_maxsize": {
 					"type": "number",
 					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
-					"default": 2
+					"default": 0
 				},
 				"level-of-operation": {
 					"type": "string",
