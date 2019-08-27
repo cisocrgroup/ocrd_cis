@@ -2,6 +2,7 @@ import click, os
 
 from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
 from ocrd_cis.ocropy.binarize import OcropyBinarize
+from ocrd_cis.ocropy.denoise import OcropyDenoise
 from ocrd_cis.ocropy.deskew import OcropyDeskew
 from ocrd_cis.ocropy.clip import OcropyClip
 from ocrd_cis.ocropy.resegment import OcropyResegment
@@ -20,6 +21,11 @@ def cis_ocrd_ocropy_binarize(*args, **kwargs):
 @ocrd_cli_options
 def cis_ocrd_ocropy_deskew(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyDeskew, *args, **kwargs)
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_ocropy_denoise(*args, **kwargs):
+    return ocrd_cli_wrap_processor(OcropyDenoise, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options

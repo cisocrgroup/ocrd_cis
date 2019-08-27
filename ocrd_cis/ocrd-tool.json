@@ -66,7 +66,7 @@
 				"OCR-D-SEG-BLOCK",
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Binarize and deskew pages / regions / lines with ocropy",
+			"description": "Binarize (and optionally deskew/despeckle) pages / regions / lines with ocropy",
 			"parameters": {
 				"method": {
 					"type": "string",
@@ -125,6 +125,39 @@
 					"enum": ["page", "region"],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "region"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-denoise": {
+			"executable": "ocrd-cis-ocropy-denoise",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/despeckling"
+			],
+			"input_file_grp": [
+				"OCR-D-IMG",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-IMG-DESPECK",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Despeckle pages / regions / lines with ocropy",
+			"parameters": {
+				"noise_maxsize": {
+					"type": "number",
+					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
+					"default": 2
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "page"
 				}
 			}
 		},

@@ -75,20 +75,22 @@ class OcropyBinarize(Processor):
             raise Exception('only method=ocropy allows grayscale=true')
 
     def process(self):
-        """Binarize and deskew the pages / regions / lines of the workspace.
+        """Binarize (and optionally deskew/despeckle) the pages/regions/lines of the workspace.
         
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested
-        `level-of-operation`.
+        ``level-of-operation``.
         
         Next, for each file, crop each segment image according to the layout
         annotation (via coordinates into the higher-level image, or from the
         alternative image), and determine the threshold for binarization and
-        the deskewing angle of the segment (up to `maxskew`). Apply results
-        to the image and export it as an image file.
+        the deskewing angle of the segment (up to ``maxskew``). Then despeckle
+        by removing connected components smaller than ``noise_maxsize``.
+        Finally, apply results to the image and export it as an image file.
         
-        Add the new image file to the workspace with a fileGrp USE equal
-        `OCR-D-IMG-BIN` and an ID based on input file and input element.
+        Add the new image file to the workspace with the fileGrp USE given
+        in the second position of the output fileGrp, or ``OCR-D-IMG-BIN``,
+        and an ID based on input file and input element.
         
         Reference each new image in the AlternativeImage of the element.
         
@@ -121,7 +123,8 @@ class OcropyBinarize(Processor):
                 self.process_page(page, page_image, page_xywh,
                                   input_file.pageId, file_id)
             else:
-                regions = page.get_TextRegion()
+                regions = page.get_TextRegion() + (
+                    page.get_TableRegion() if level == 'region' else [])
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
@@ -167,7 +170,7 @@ class OcropyBinarize(Processor):
         if 'angle' in page_xywh and page_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
             # so skip deskewing here:
-            bin_image, _ = binarize(region_image,
+            bin_image, _ = binarize(page_image,
                                     method=self.parameter['method'],
                                     maxskew=0,
                                     nrm=self.parameter['grayscale'])
