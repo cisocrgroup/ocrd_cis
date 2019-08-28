@@ -1,10 +1,12 @@
 import subprocess
 import json
+import pkg_resources
+
 from ocrd_utils import getLogger
 from pathlib import Path
 
 MAIN = "de.lmu.cis.ocrd.cli.Main"
-
+JAR = pkg_resources.resource_filename('ocrd_cis', 'jar/ocrd-cis.jar')
 
 def JavaAligner(jar, n, loglvl="DEBUG"):
     """Create a java process that calls -c align -D '{"n":n}'"""
@@ -12,25 +14,17 @@ def JavaAligner(jar, n, loglvl="DEBUG"):
     args = [
         '-c', 'align',
         "--log-level", loglvl,
-        '-D', "{}".format(json.dumps(d))
+        '--parameter', "{}".format(json.dumps(d))
     ]
     return JavaProcess(jar, args)
 
-
-def JavaProfiler(jar, exe, backend, lang,
-                 args, loglvl="DEBUG"):
-    d = {
-        'executable': exe,
-        'backend': backend,
-        'language': lang,
-        'args': args,
-    }
-    args = [
-        '-c', 'profile',
-        "--log-level", loglvl,
-        '-D', "{}".format(json.dumps(d))
-    ]
-    return JavaProcess(jar, args)
+def JavaProfiler(mets, ifg, ofg, params, loglvl):
+    return JavaProcess(JAR, ['-c', 'profile',
+                             '--log-level', loglvl,
+                             '--input-file-grp', ifg,
+                             '--output-file-grp', ofg,
+                             '--mets', mets,
+                             '-p', "{}".format(json.dumps(params))])
 
 
 def JavaTrain(jar, mets, ifgs, parameter, loglvl="DEBUG"):
@@ -88,7 +82,7 @@ class JavaProcess:
         """
         cmd = self.get_cmd()
         self.log.info('command: %s', " ".join(cmd))
-        self.log.info('input: %s', _input)
+        self.log.debug('input: %s', _input)
         with subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -99,14 +93,27 @@ class JavaProcess:
             output, err = p.communicate(input=_input.encode('utf-8'))
             self.log_stderr(err)
             output = output.decode('utf-8')
+            self.log.debug("got output")
             retval = p.wait()
-            self.log.info("%s: %i", " ".join(cmd), retval)
+            self.log.debug("waited")
+            self.log.debug("%s: %i", " ".join(cmd), retval)
             if retval != 0:
                 raise ValueError(
                     "cannot execute {}: {}\n{}"
                     .format(" ".join(cmd), retval, err.decode('utf-8')))
             # self.log.info('output: %s', output)
             return output
+
+    def exe(self):
+
+        cmd = self.get_cmd()
+        self.log.info('command: %s', " ".join(cmd))
+        ret = subprocess.run(cmd)
+        self.log.debug("%s: %i", " ".join(cmd), ret.returncode)
+        if ret.returncode != 0:
+            raise ValueError(
+                "cannot execute {}: {}\n{}"
+                .format(" ".join(cmd), ret.returncode, err.decode('utf-8')))
 
     def log_stderr(self, err):
         for line in err.decode("utf-8").split("\n"):

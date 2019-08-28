@@ -16,6 +16,7 @@ from setuptools import setup
 from setuptools import find_packages
 
 setup(
+    include_package_data = True,
     name='cis-ocrd',
     version='0.0.2',
     description='description',
@@ -36,6 +37,7 @@ setup(
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
+        'ocrd_cis': ['ocrd_cis/jar/ocrd-cis.jar'],
     },
     entry_points={
         'console_scripts': [

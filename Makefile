@@ -1,3 +1,5 @@
+PY ?= python3
+
 # Log level
 LOGLEVEL = DEBUG
 
@@ -26,9 +28,22 @@ help:
 install:
 	pip install -e .
 
-# Run align tests
-test:
-	tests/align/run_align_test.bash $(TEST_ARGS) loeber_heuschrecken_1693.zip
-	tests/align/run_align_test.bash $(TEST_ARGS) kant_aufklaerung_1784.zip
+#
+# TESTS
+#
+TEST_SCRIPTS=$(wildcard tests/run_*.sh)
 
-.PHONY: install test
+# testscripts need to source virtualenv
+# and should be run unconditionally
+.PHONY: $(TEST_SCRIPTS)
+$(TEST_SCRIPTS): tests/venv/bin/activate
+	source tests/venv/bin/activate && bash $@
+# enable virtualenv and install ocrd-cis
+tests/venv/bin/activate:
+	cd tests && $(PY) -m venv venv && source venv/bin/activate && $(PY) -m pip install -U pip -e ..
+# run test scripts
+test: $(TEST_SCRIPTS)
+
+clean:
+	$(RM) -r tests/venv
+.PHONY: install test clean
