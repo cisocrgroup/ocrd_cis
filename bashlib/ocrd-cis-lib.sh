@@ -210,8 +210,9 @@ ocrd-cis-add-xml-image-pair() {
 		 --file-id "$(basename "$xml")" \
 		 --force "$absxml"
 	# fix filepath
-	local relxml="OCR-D-$gt-$fg/$(basename $xml)"
-	local relimg="OCR-D-IMG-$fg/$(basename $img)"
+	local relxml="$xmlfg/$(basename $xml)"
+	local relimg="$imgfg/$(basename $img)"
+	echo sed -i "s#imageFilename=\"\([^\"]*\)\"#imageFilename=\"$relimg\"#" "$relxml"
 	sed -i "s#imageFilename=\"\([^\"]*\)\"#imageFilename=\"$relimg\"#" "$relxml"
 	popd
 }
