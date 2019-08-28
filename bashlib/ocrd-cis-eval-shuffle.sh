@@ -19,7 +19,7 @@ odireval="$odir/eval-corpus"
 if [[ ! -d "$odirtrain" ]]; then
 	mkdir -p "$odirtrain" "$odireval"
 	i=1
-	for xml in $(find "$idir" -type f -name '*.xml' | shuf); do
+	for xml in $(find "$idir" -type f -name '*.xml' | sort); do
 		img=$(ocrd-cis-find-image-for-xml "$(dirname $xml)" "$xml")
 		x=$((i%2))
 		if [[ $x == 0 ]]; then
