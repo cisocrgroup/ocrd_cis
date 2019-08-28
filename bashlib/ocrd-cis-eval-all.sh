@@ -22,7 +22,6 @@ for how in shuffle ocrd; do
 		# rm -rf "$dir"
 		ocrd-cis-log ./"$cmd" -P "config/config-$how-$corpus.json" $(get_eval_dir $corpus) "$dir"
 		./"$cmd" -P "config/config-$how-$corpus.json" $(get_eval_dir $corpus) "$dir"
-
 		mkdir -p "$odir"
 		cp -r "$dir" "$odir"
 	done

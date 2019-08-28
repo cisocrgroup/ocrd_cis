@@ -170,7 +170,7 @@ def binarize(pil_image, method='none'):
         flat = np.clip(flat, 0, 1)
         bin = 1 * (flat > args['threshold'])
         #LOG.debug("binarization: lo-hi (%.2f %.2f) angle %4.1f %s", lo, hi, angle, comment)
-        
+
         return array2pil(bin)
     else:
         # Convert RGB to OpenCV
@@ -188,7 +188,7 @@ def binarize(pil_image, method='none'):
             _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         else:
             raise Exception('unknown binarization method %s', method)
-        
+
         return Image.fromarray(th)
 
 
@@ -341,7 +341,7 @@ class OcropyRecognize(Processor):
 
     def process_lines(self, textlines, maxlevel, args):
         lnorm, network, pil_image, filepath, pad, dewarping, binarization = args
-        
+
         edits = 0
         lengs = 0
         for line in textlines:
@@ -367,7 +367,7 @@ class OcropyRecognize(Processor):
 
             # resize image to 48 pixel height
             final_img = resize_keep_ratio(bin_image)
-            
+
             # process ocropy:
             try:
                 linepred, clist, rlist, confidlist = process1(
@@ -376,10 +376,12 @@ class OcropyRecognize(Processor):
             except Exception as e:
                 LOG.error('error processing line "%s": %s', line.id, e)
                 continue
-            LOG.debug("OCR '%s': '%s'", line.id, linepred)
-            edits += Levenshtein.distance(linepred, linegt)
+            dist = Levenshtein.distance(linepred, linegt)
+            edits += dist
             lengs += len(linegt)
-            
+            LOG.debug("OCR '%s': '%s'", line.id, linepred)
+            LOG.debug("Distance: %d", dist)
+
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
             # lists in list for every word with r-position and confidence of each glyph
