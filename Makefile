@@ -32,15 +32,9 @@ install:
 # TESTS
 #
 TEST_SCRIPTS=$(wildcard tests/run_*.sh)
-
-# testscripts need to source virtualenv
-# and should be run unconditionally
 .PHONY: $(TEST_SCRIPTS)
-$(TEST_SCRIPTS): tests/venv/bin/activate
-	source tests/venv/bin/activate && bash $@
-# enable virtualenv and install ocrd-cis
-tests/venv/bin/activate:
-	cd tests && $(PY) -m venv venv && source venv/bin/activate && $(PY) -m pip install -U pip -e ..
+$(TEST_SCRIPTS):
+	bash $@
 # run test scripts
 test: $(TEST_SCRIPTS)
 
