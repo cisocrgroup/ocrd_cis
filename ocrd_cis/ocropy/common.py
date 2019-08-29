@@ -9,13 +9,12 @@ import logging
 import numpy as np
 from scipy.ndimage import measurements, filters, interpolation, morphology
 from scipy import stats
-from PIL import Image, ImageDraw, ImageStat
+from PIL import Image
 
-from ocrd_cis.ocropy import ocrolib
-from ocrd_cis.ocropy.ocrolib import lineest, morph, psegutils, sl
+from . import ocrolib
+from .ocrolib import lineest, morph, psegutils, sl
 
-from ocrd_models import OcrdExif
-from ocrd_utils import getLogger, xywh_from_points, polygon_from_points
+from ocrd_utils import getLogger
 
 LOG = getLogger('') # to be refined by importer
 
@@ -152,7 +151,8 @@ def binarize(image,
              lo=5, # percentile for black estimation (ocropy: 5)
              hi=90, # percentile for white estimation (ocropy: 90)
              maxskew=2, # maximum angle (in degrees) for skew estimation
-             skewsteps=8): # steps per degree
+             skewsteps=8, # steps per degree
+             nrm=False): # output grayscale normalized
     extreme = (np.sum(image < 0.05) + np.sum(image > 0.95)) * 1.0 / np.prod(image.shape)
     if extreme > 0.95:
         comment = "no-normalization"
@@ -176,7 +176,7 @@ def binarize(image,
     flat = np.clip(flat, 0, 1)
     bin = 1 * (flat > threshold)
     LOG.debug("binarization: lo-hi (%.2f %.2f) angle %4.1f %s", lo, hi, angle, comment)
-    return bin, angle
+    return flat if nrm else bin, angle
 
 # inspired by OLD/ocropus-lattices --borderclean
 def borderclean(array, margin=4):
@@ -306,19 +306,23 @@ def odd(num):
     return num + (num+1)%2
 
 # from ocropus-gpageseg
-def DSAVE(title,array):
+def DSAVE(title,array, interactive=False):
     logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import patches as mpatches
+    from tempfile import mkstemp
     if type(array)==list:
         # 3 inputs, one for each RGB channel
         assert len(array)==3
         array = np.transpose(np.array(array),[1,2,0])
-    #plt.imshow(array.astype('float'))
-    #plt.legend(handles=[mpatches.Patch(label=title)])
-    #plt.show()
-    fname = title+".png"
-    plt.imsave(fname,array.astype('float'))
+    if interactive:
+        plt.imshow(array.astype('float'))
+        plt.legend(handles=[mpatches.Patch(label=title)])
+        plt.show()
+    else:
+        _,fname = mkstemp(suffix=title+".png")
+        plt.imsave(fname,array.astype('float'))
+        LOG.debug('DSAVE %s', fname)
 
 # from ocropus-gpageseg, but with extra height criterion
 def remove_hlines(binary,scale,maxsize=10):
@@ -504,14 +508,11 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
 def hmerge_line_seeds(seeds, colseps, threshold=0.2):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label."""
-    # use full horizontal spread to avoid splitting lines at long whitespace
-    # (but only indirectly as masks with a label conflict, so we can
-    #  horizontally merge components, and at the same time avoid to
-    #  horizontally enlarge components in general, which would
-    #  allow corners to become the largest component when spreading
-    #  into the background;
-    #  moreover, ignore conflicts which affect only small fractions of
-    #  either line, so a merge can be avoided for small vertical overlap):
+    # merge labels horizontally to avoid splitting lines at long whitespace
+    # (to prevent corners from becoming the largest label when spreading
+    #  into the background; and make contiguous contours possible), but
+    # ignore conflicts which affect only small fractions of either line
+    # (avoiding merges for small vertical overlap):
     relabel = np.unique(seeds)
     labels = np.delete(relabel, 0) # without background
     labels_count = dict([(label, np.sum(seeds == label)) for label in labels])
@@ -526,12 +527,31 @@ def hmerge_line_seeds(seeds, colseps, threshold=0.2):
                 overlap_count[candidate][0] < count):
                 overlap_count[candidate] = (count, label)
     for label in labels:
+        # get candidate with largest overlap:
         count, candidate = overlap_count[label]
-        if count / labels_count[label] > threshold:
-            relabel[label] = relabel[candidate]
-            relabel[relabel == label] = relabel[candidate]
+        if (candidate != label and
+            count / labels_count[label] > threshold):
+            # the new label could have been relabelled already:
+            new_label = relabel[candidate]
+            # assign label to (new assignment for) candidate:
+            relabel[label] = new_label
+            # re-assign labels already relabelled to label:
+            relabel[relabel == label] = new_label
+            # fill the horizontal background between both regions:
+            label_y, label_x = np.where(seeds == label)
+            new_label_y, new_label_x = np.where(seeds == new_label)
+            for y in np.intersect1d(label_y, new_label_y):
+                x_min = label_x[label_y == y][0]
+                x_max = label_x[label_y == y][-1]
+                new_x_min = new_label_x[new_label_y == y][0]
+                new_x_max = new_label_x[new_label_y == y][-1]
+                if x_max < new_x_min:
+                    seeds[y, x_max:new_x_min] = label
+                if new_x_max < x_min:
+                    seeds[y, new_x_max:x_min] = label
+    # apply re-assignments:
     seeds = relabel[seeds]
-    #DSAVE("lineseeds hmerged", seeds)
+    #DSAVE("lineseeds_hmerged", seeds)
     return seeds
 
 # like ocropus-gpageseg compute_segmentation, but:
@@ -579,7 +599,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     else:
         hlines = np.zeros_like(binary)
         
-    bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
+    bottom, top, boxmap = compute_gradmaps(binary, scale/2, usegauss=False,
                                            hscale=1.0/zoom, vscale=1.0/zoom)
     if fullpage:
         colseps, binary2 = compute_colseps(binary, scale, maxcolseps=maxcolseps, maxseps=maxseps)
@@ -592,16 +612,31 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     if not fullpage:
         seeds = hmerge_line_seeds(seeds, colseps)
 
-    # spread the text line seeds to all the remaining components
-    # (boxes with conflicting seeds will become background):
-    #llabels = morph.propagate_labels(boxmap,seeds,conflict=0)
-    # better assign the seed label with the majority
-    # of pixels in foreground connected components:
-    llabels = morph.propagate_labels_majority(binary, seeds)
+    # assign the seeds labels to all component boxes
+    # (boxes with conflicts will become background):
+    llabels = morph.propagate_labels(boxmap,seeds,conflict=0)
+    # spread the seed labels to background and conflicts
+    # (unassigned pixels will get the nearest label up to maxdist):
     spread = morph.spread_labels(seeds,maxdist=scale)
-    # background and conflict will get nearest seed:
+    #DSAVE('spread', spread + 0.6*binary)
+    # background and conflict will get nearest spread label:
     llabels = np.where(llabels>0,llabels,spread)
     #DSAVE('llabels', llabels + 0.6*binary)
+    # now improve the above procedure by ensuring that
+    # no connected components are (unnecessarily) split;
+    # the only connected components that must be split are
+    # those conflicting in seeds (not those conflicting in spread);
+    # those conflicting in spread should be given the label
+    # with a majority of foreground pixels:
+    llabels2 = morph.propagate_labels_majority(binary, llabels)
+    llabels2 = np.where(seeds > 0, seeds, llabels2)
+    seed_majority = morph.propagate_labels_majority(binary, seeds)
+    seed_nonconflict = morph.propagate_labels(binary, seeds, conflict=0)
+    seed_conflicts = seed_majority > seed_nonconflict
+    # re-spread the component labels (more exact, and majority
+    # leaders will not extrude):
+    llabels = morph.spread_labels(np.where(seed_conflicts, llabels, llabels2), maxdist=scale)
+    #DSAVE('llabels2', llabels + 0.6*binary)
     #segmentation = llabels*binary
     #return segmentation
     return llabels # , hlines, vlines
@@ -611,410 +646,9 @@ def remove_noise(image, maxsize=8):
     array = pil2array(image)
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
     _, ncomps_before = morph.label(binary)
-    binary = ocrolib.remove_noise(binary, maxsize)
-    _, ncomps_after = morph.label(binary)
+    clean = ocrolib.remove_noise(binary, maxsize)
+    _, ncomps_after = morph.label(clean)
     LOG.debug('black components before/after denoising (maxsize=%d): %d/%d',
               maxsize, ncomps_before, ncomps_after)
-    return array2pil(1 - binary)
-
-# to be refactored into core (as function in ocrd_utils):
-def polygon_mask(image, coordinates):
-    """"Create a mask image of a polygon.
-    
-    Given a PIL.Image `image` (merely for dimensions), and
-    a numpy array `polygon` of relative coordinates into the image,
-    create a new image of the same size with black background, and
-    fill everything inside the polygon hull with white.
-    
-    Return the new PIL.Image.
-    """
-    mask = Image.new('L', image.size, 0)
-    if isinstance(coordinates, np.ndarray):
-        coordinates = list(map(tuple, coordinates))
-    ImageDraw.Draw(mask).polygon(coordinates, outline=1, fill=255)
-    return mask
-
-# to be refactored into core (as function in ocrd_utils):
-def image_from_polygon(image, polygon):
-    """"Mask an image with a polygon.
-    
-    Given a PIL.Image `image` and a numpy array `polygon`
-    of relative coordinates into the image, put everything
-    outside the polygon hull to the background. Since `image`
-    is not necessarily binarized yet, determine the background
-    from the median color (instead of white).
-    
-    Return a new PIL.Image.
-    """
-    mask = polygon_mask(image, polygon)
-    # create a background image from its median color
-    # (in case it has not been binarized yet):
-    # array = np.asarray(image)
-    # background = np.median(array, axis=[0, 1], keepdims=True)
-    # array = np.broadcast_to(background.astype(np.uint8), array.shape)
-    background = ImageStat.Stat(image).median[0]
-    new_image = Image.new('L', image.size, background)
-    new_image.paste(image, mask=mask)
-    return new_image
-
-# to be refactored into core (as function in ocrd_utils):
-def crop_image(image, box=None):
-    """"Crop an image to a rectangle, filling with background.
-    
-    Given a PIL.Image `image` and a list `box` of the bounding
-    rectangle relative to the image, crop at the box coordinates,
-    filling everything outside `image` with the background.
-    (This covers the case where `box` indexes are negative or
-    larger than `image` width/height. PIL.Image.crop would fill
-    with black.) Since `image` is not necessarily binarized yet,
-    determine the background from the median color (instead of
-    white).
-    
-    Return a new PIL.Image.
-    """
-    # todo: perhaps we should issue a warning if we encounter this
-    # (It should be invalid in PAGE-XML to extend beyond parents.)
-    if not box:
-        box = (0, 0, image.width, image.height)
-    xywh = xywh_from_bbox(*box)
-    background = ImageStat.Stat(image).median[0]
-    new_image = Image.new(image.mode, (xywh['w'], xywh['h']),
-                          background) # or 'white'
-    new_image.paste(image, (-xywh['x'], -xywh['y']))
-    return new_image
-
-# to be refactored into core (as function in ocrd_utils):
-def rotate_coordinates(polygon, angle, orig=np.array([0, 0])):
-    """Apply a passive rotation transformation to the given coordinates.
-    
-    Given a numpy array `polygon` of points and a rotation `angle`,
-    as well as a numpy array `orig` of the center of rotation,
-    calculate the coordinate transform corresponding to the rotation
-    of the underlying image by `angle` degrees at `center` by
-    applying translation to the center, inverse rotation,
-    and translation from the center.
-
-    Return a numpy array of the resulting polygon.
-    """
-    angle = np.deg2rad(angle)
-    cos = np.cos(angle)
-    sin = np.sin(angle)
-    # active rotation:  [[cos, -sin], [sin, cos]]
-    # passive rotation: [[cos, sin], [-sin, cos]] (inverse)
-    return orig + np.dot(polygon - orig, np.array([[cos, sin], [-sin, cos]]).transpose())
-
-# to be refactored into core (as method of ocrd.workspace.Workspace):
-def coordinates_of_segment(segment, parent_image, parent_xywh):
-    """Extract the relative coordinates polygon of a PAGE segment element.
-    
-    Given a Region / TextLine / Word / Glyph `segment` and
-    the PIL.Image of its parent Page / Region / TextLine / Word
-    along with its bounding box, calculate the relative coordinates
-    of the segment within the image. That is, shift all points from
-    the offset of the parent, and (in case the parent was rotated,)
-    rotate all points with the center of the image as origin.
-    
-    Return the rounded numpy array of the resulting polygon.
-    """
-    # get polygon:
-    polygon = np.array(polygon_from_points(segment.get_Coords().points))
-    # offset correction (shift coordinates to base of segment):
-    polygon -= np.array([parent_xywh['x'], parent_xywh['y']])
-    # angle correction (rotate coordinates if image has been rotated):
-    if 'angle' in parent_xywh:
-        polygon = rotate_coordinates(
-            polygon, parent_xywh['angle'],
-            orig=np.array([0.5 * parent_image.width,
-                           0.5 * parent_image.height]))
-    return np.round(polygon).astype(np.int32)
-
-# to be refactored into core (as method of ocrd.workspace.Workspace):
-def coordinates_for_segment(polygon, parent_image, parent_xywh):
-    """Convert a relative coordinates polygon to absolute.
-    
-    Given a numpy array `polygon` of points, and a parent PIL.Image
-    along with its bounding box to which the coordinates are relative,
-    calculate the absolute coordinates within the page.
-    That is, (in case the parent was rotated,) rotate all points in
-    opposite direction with the center of the image as origin, then
-    shift all points to the offset of the parent.
-    
-    Return the rounded numpy array of the resulting polygon.
-    """
-    # angle correction (unrotate coordinates if image has been rotated):
-    if 'angle' in parent_xywh:
-        polygon = rotate_coordinates(
-            polygon, -parent_xywh['angle'],
-            orig=np.array([0.5 * parent_image.width,
-                           0.5 * parent_image.height]))
-    # offset correction (shift coordinates from base of segment):
-    polygon += np.array([parent_xywh['x'], parent_xywh['y']])
-    return np.round(polygon).astype(np.uint32)
-
-# to be refactored into core (as method of ocrd.workspace.Workspace):
-def image_from_page(workspace, page, page_id):
-    """Extract the Page image from the workspace.
-    
-    Given a PageType object, `page`, extract its PIL.Image from
-    AlternativeImage if it exists. Otherwise extract the PIL.Image
-    from imageFilename and crop it if a Border exists. Otherwise
-    just return it.
-    
-    When cropping, respect any orientation angle annotated for
-    the page (from page-level deskewing) by rotating the
-    cropped image, respectively.
-    
-    If the resulting page image is larger than the bounding box of
-    `page`, pass down the page's box coordinates with an offset of
-    half the width/height difference.
-    
-    Return the extracted image, and the absolute coordinates of
-    the page's bounding box / border (for passing down), and
-    an OcrdExif instance associated with the original image.
-    """
-    page_image = workspace.resolve_image_as_pil(page.imageFilename)
-    page_image_info = OcrdExif(page_image)
-    page_xywh = {'x': 0,
-                 'y': 0,
-                 'w': page_image.width,
-                 'h': page_image.height}
-    # FIXME: uncomment as soon as we get @orientation in PageType:
-    # # region angle: PAGE orientation is defined clockwise,
-    # # whereas PIL/ndimage rotation is in mathematical direction:
-    # page_xywh['angle'] = -(page.get_orientation() or 0)
-    # FIXME: remove PrintSpace here as soon as GT abides by the PAGE standard:
-    border = page.get_Border() or page.get_PrintSpace()
-    if border:
-        page_points = border.get_Coords().points
-        LOG.debug("Using explictly set page border '%s' for page '%s'",
-                  page_points, page_id)
-        page_xywh = xywh_from_points(page_points)
-    
-    alternative_image = page.get_AlternativeImage()
-    if alternative_image:
-        # (e.g. from page-level cropping, binarization, deskewing or despeckling)
-        # assumes implicit cropping (i.e. page_xywh has been applied already)
-        LOG.debug("Using AlternativeImage %d (%s) for page '%s'",
-                  len(alternative_image), alternative_image[-1].get_comments(),
-                  page_id)
-        page_image = workspace.resolve_image_as_pil(
-            alternative_image[-1].get_filename())
-    elif border:
-        # get polygon outline of page border:
-        page_polygon = np.array(polygon_from_points(page_points))
-        # create a mask from the page polygon:
-        page_image = image_from_polygon(page_image, page_polygon)
-        # recrop into page rectangle:
-        page_image = crop_image(page_image,
-            box=(page_xywh['x'],
-                 page_xywh['y'],
-                 page_xywh['x'] + page_xywh['w'],
-                 page_xywh['y'] + page_xywh['h']))
-        # FIXME: uncomment as soon as we get @orientation in PageType:
-        # if page_xywh['angle']:
-        #     LOG.info("About to rotate page '%s' by %.2f°",
-        #               page_id, page_xywh['angle'])
-        #     page_image = page_image.rotate(page_xywh['angle'],
-        #                                        expand=True,
-        #                                        #resample=Image.BILINEAR,
-        #                                        fillcolor='white')
-    # subtract offset from any increase in binary region size over source:
-    page_xywh['x'] -= round(0.5 * max(0, page_image.width  - page_xywh['w']))
-    page_xywh['y'] -= round(0.5 * max(0, page_image.height - page_xywh['h']))
-    return page_image, page_xywh, page_image_info
-
-# to be refactored into core (as method of ocrd.workspace.Workspace):
-def image_from_segment(workspace, segment, parent_image, parent_xywh):
-    """Extract a segment image from its parent's image.
-    
-    Given a PIL.Image of the parent, `parent_image`, and
-    its absolute coordinates, `parent_xywh`, and a PAGE
-    segment (TextRegion / TextLine / Word / Glyph) object
-    logically contained in it, `segment`, extract its PIL.Image
-    from AlternativeImage (if it exists), or via cropping from
-    `parent_image`.
-    
-    When cropping, respect any orientation angle annotated for
-    the parent (from parent-level deskewing) by compensating the
-    segment coordinates in an inverse transformation (translation
-    to center, rotation, re-translation).
-    Also, mind the difference between annotated and actual size
-    of the parent (usually from deskewing), by a respective offset
-    into the image. Cropping uses a polygon mask (not just the
-    rectangle).
-    
-    When cropping, respect any orientation angle annotated for
-    the segment (from segment-level deskewing) by rotating the
-    cropped image, respectively.
-    
-    If the resulting segment image is larger than the bounding box of
-    `segment`, pass down the segment's box coordinates with an offset
-    of half the width/height difference.
-    
-    Return the extracted image, and the absolute coordinates of
-    the segment's bounding box (for passing down).
-    """
-    segment_xywh = xywh_from_points(segment.get_Coords().points)
-    if 'orientation' in segment.__dict__:
-        # angle: PAGE orientation is defined clockwise,
-        # whereas PIL/ndimage rotation is in mathematical direction:
-        segment_xywh['angle'] = -(segment.get_orientation() or 0)
-    alternative_image = segment.get_AlternativeImage()
-    if alternative_image:
-        # (e.g. from segment-level cropping, binarization, deskewing or despeckling)
-        LOG.debug("Using AlternativeImage %d (%s) for segment '%s'",
-                  len(alternative_image), alternative_image[-1].get_comments(),
-                  segment.id)
-        segment_image = workspace.resolve_image_as_pil(
-            alternative_image[-1].get_filename())
-    else:
-        # get polygon outline of segment relative to parent image:
-        segment_polygon = coordinates_of_segment(segment, parent_image, parent_xywh)
-        # create a mask from the segment polygon:
-        segment_image = image_from_polygon(parent_image, segment_polygon)
-        # recrop into segment rectangle:
-        segment_image = crop_image(segment_image,
-            box=(segment_xywh['x'] - parent_xywh['x'],
-                 segment_xywh['y'] - parent_xywh['y'],
-                 segment_xywh['x'] - parent_xywh['x'] + segment_xywh['w'],
-                 segment_xywh['y'] - parent_xywh['y'] + segment_xywh['h']))
-        # note: We should mask overlapping neighbouring segments here,
-        # but finding the right clipping rules can be difficult if operating
-        # on the raw (non-binary) image data alone: for each intersection, it
-        # must be decided which one of either segment or neighbour to assign,
-        # e.g. an ImageRegion which properly contains our TextRegion should be
-        # completely ignored, but an ImageRegion which is properly contained
-        # in our TextRegion should be completely masked, while partial overlap
-        # may be more difficult to decide. On the other hand, on the binary image,
-        # we can use connected component analysis to mask foreground areas which
-        # originate in the neighbouring regions. But that would introduce either
-        # the assumption that the input has already been binarized, or a dependency
-        # on some ad-hoc binarization method. Thus, it is preferable to use
-        # a dedicated processor for this (which produces clipped AlternativeImage
-        # or reduced polygon coordinates).
-        if 'angle' in segment_xywh and segment_xywh['angle']:
-            LOG.info("About to rotate segment '%s' by %.2f°",
-                      segment.id, segment_xywh['angle'])
-            segment_image = segment_image.rotate(segment_xywh['angle'],
-                                                 expand=True,
-                                                 #resample=Image.BILINEAR,
-                                                 fillcolor='white')
-    # subtract offset from any increase in binary region size over source:
-    segment_xywh['x'] -= round(0.5 * max(0, segment_image.width  - segment_xywh['w']))
-    segment_xywh['y'] -= round(0.5 * max(0, segment_image.height - segment_xywh['h']))
-    return segment_image, segment_xywh
-
-# to be refactored into core (as method of ocrd.workspace.Workspace):
-def save_image_file(workspace, image,
-                    file_id,
-                    page_id=None,
-                    file_grp='OCR-D-IMG', # or -BIN?
-                    format='PNG',
-                    force=True):
-    """Store and reference an image as file into the workspace.
-    
-    Given a PIL.Image `image`, and an ID `file_id` to use in METS,
-    store the image under the fileGrp `file_grp` and physical page
-    `page_id` into the workspace (in a file name based on
-    the `file_grp`, `file_id` and `format` extension).
-    
-    Return the (absolute) path of the created file.
-    """
-    image_bytes = io.BytesIO()
-    image.save(image_bytes, format=format)
-    file_path = os.path.join(file_grp,
-                             file_id + '.' + format.lower())
-    out = workspace.add_file(
-        ID=file_id,
-        file_grp=file_grp,
-        pageId=page_id,
-        local_filename=file_path,
-        mimetype='image/' + format.lower(),
-        content=image_bytes.getvalue(),
-        force=force)
-    LOG.info('created file ID: %s, file_grp: %s, path: %s',
-             file_id, file_grp, out.local_filename)
-    return file_path
-
-# to be refactored into core (as function in ocrd_utils):
-def bbox_from_points(points):
-    """Construct a numeric list representing a bounding box from polygon coordinates in page representation."""
-    xys = [[int(p) for p in pair.split(',')] for pair in points.split(' ')]
-    return bbox_from_polygon(xys)
-
-# to be refactored into core (as function in ocrd_utils):
-def points_from_bbox(minx, miny, maxx, maxy):
-    """Construct polygon coordinates in page representation from a numeric list representing a bounding box."""
-    return "%i,%i %i,%i %i,%i %i,%i" % (
-        minx, miny, maxx, miny, maxx, maxy, minx, maxy)
-
-# to be refactored into core (as function in ocrd_utils):
-def xywh_from_bbox(minx, miny, maxx, maxy):
-    """Convert a bounding box from a numeric list to a numeric dict representation."""
-    return {
-        'x': minx,
-        'y': miny,
-        'w': maxx - minx,
-        'h': maxy - miny,
-    }
-
-# to be refactored into core (as function in ocrd_utils):
-def bbox_from_xywh(xywh):
-    """Convert a bounding box from a numeric dict to a numeric list representation."""
-    return (
-        xywh['x'],
-        xywh['y'],
-        xywh['x'] + xywh['w'],
-        xywh['y'] + xywh['h']
-    )
-
-# to be refactored into core (as function in ocrd_utils):
-def points_from_polygon(polygon):
-    """Convert polygon coordinates from a numeric list representation to a page representation."""
-    return " ".join("%i,%i" % (x, y) for x, y in polygon)
-
-# to be refactored into core (as function in ocrd_utils):
-def xywh_from_polygon(polygon):
-    """Construct a numeric dict representing a bounding box from polygon coordinates in numeric list representation."""
-    return xywh_from_bbox(*bbox_from_polygon(polygon))
-
-# to be refactored into core (as function in ocrd_utils):
-def polygon_from_xywh(xywh):
-    """Construct polygon coordinates in numeric list representation from numeric dict representing a bounding box."""
-    return polygon_from_bbox(*bbox_from_xywh(xywh))
-
-# to be refactored into core (as function in ocrd_utils):
-def bbox_from_polygon(polygon):
-    """Construct a numeric list representing a bounding box from polygon coordinates in numeric list representation."""
-    minx = sys.maxsize
-    miny = sys.maxsize
-    maxx = 0
-    maxy = 0
-    for xy in polygon:
-        if xy[0] < minx:
-            minx = xy[0]
-        if xy[0] > maxx:
-            maxx = xy[0]
-        if xy[1] < miny:
-            miny = xy[1]
-        if xy[1] > maxy:
-            maxy = xy[1]
-    return minx, miny, maxx, maxy
-
-# to be refactored into core (as function in ocrd_utils):
-def polygon_from_bbox(minx, miny, maxx, maxy):
-    """Construct polygon coordinates in numeric list representation from a numeric list representing a bounding box."""
-    return [[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]]
-
-# to be refactored into core (as function in ocrd_utils):
-def polygon_from_x0y0x1y1(x0y0x1y1):
-    """Construct polygon coordinates in numeric list representation from a string list representing a bounding box."""
-    minx = int(x0y0x1y1[0])
-    miny = int(x0y0x1y1[1])
-    maxx = int(x0y0x1y1[2])
-    maxy = int(x0y0x1y1[3])
-    return [[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]]
-
-def membername(class_, val):
-    """Convert a member variable/constant into a member name string."""
-    return next((k for k, v in class_.__dict__.items() if v == val), str(val))
+    array = np.maximum(array, binary - clean)
+    return array2pil(array)

@@ -14,9 +14,6 @@ from .. import get_ocrd_tool
 from . import common
 from .ocrolib import lineest
 from .common import (
-    image_from_page,
-    image_from_segment,
-    save_image_file,
     pil2array, array2pil,
     check_line, check_page,
 )
@@ -87,10 +84,10 @@ class OcropyDewarp(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, page_image_info = image_from_page(
-                self.workspace, page, page_id)
-            if page_image_info.xResolution != 1:
-                dpi = page_image_info.xResolution
+            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+                page, page_id)
+            if page_image_info.resolution != 1:
+                dpi = page_image_info.resolution
                 if page_image_info.resolutionUnit == 'cm':
                     dpi = round(dpi * 2.54)
                 LOG.info('Page "%s" uses %d DPI', page_id, dpi)
@@ -102,15 +99,15 @@ class OcropyDewarp(Processor):
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
-                region_image, region_xywh = image_from_segment(
-                    self.workspace, region, page_image, page_xywh)
+                region_image, region_xywh = self.workspace.image_from_segment(
+                    region, page_image, page_xywh)
                 
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Region %s contains no text lines', region.id)
                 for line in lines:
-                    line_image, _ = image_from_segment(
-                        self.workspace, line, region_image, region_xywh)
+                    line_image, _ = self.workspace.image_from_segment(
+                        line, region_image, region_xywh)
                     
                     LOG.info("About to dewarp page '%s' region '%s' line '%s'",
                              page_id, region.id, line.id)
@@ -120,8 +117,7 @@ class OcropyDewarp(Processor):
                         LOG.error('error dewarping line "%s": %s', line.id, err)
                         continue
                     # update METS (add the image file):
-                    file_path = save_image_file(
-                        self.workspace,
+                    file_path = self.workspace.save_image_file(
                         dew_image,
                         file_id + '_' + region.id + '_' + line.id,
                         page_id=input_file.pageId,

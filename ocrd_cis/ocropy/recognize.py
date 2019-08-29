@@ -7,21 +7,22 @@ from PIL import Image
 
 import Levenshtein
 
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_xywh
+from ocrd_utils import (
+    getLogger, concat_padded,
+    coordinates_for_segment,
+    xywh_from_points, points_from_xywh,
+    polygon_from_bbox,
+    points_from_polygon,
+    MIMETYPE_PAGE
+)
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
 from ocrd_models.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
 from .ocrolib import lstm, load_object, midrange
 from .common import (
-    coordinates_for_segment,
-    polygon_from_bbox,
-    points_from_polygon,
-    image_from_page,
-    image_from_segment,
     pil2array,
     check_line
 )
@@ -281,7 +282,7 @@ class OcropyRecognize(Processor):
 
             # process ocropy:
             try:
-                linepred, clist, rlist, confidlist = process1(
+                linepred, clist, rlist, confidlist = recognize(
                     final_img, self.pad, self.network, check=True)
             except Exception as err:
                 LOG.error('error processing line "%s": %s', line.id, err)

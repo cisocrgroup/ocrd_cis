@@ -102,8 +102,8 @@ ocrd-cis-ocropy-resegment \
 ```
 
 ### ocrd-cis-ocropy-deskew
-The ocropy-deskew tool can be used to deskew regions of a workspace.
-It runs the Ocropy thresholding and deskewing estimation on every text region of every PAGE in the input file group and annotates the orientation angle in the output PAGE.
+The ocropy-deskew tool can be used to deskew pages / regions of a workspace.
+It runs the Ocropy thresholding and deskewing estimation on every segment of every PAGE in the input file group and annotates the orientation angle in the output PAGE.
 ```sh
 ocrd-cis-ocropy-deskew \
   --input-file-grp OCR-D-SEG-LINE \
@@ -112,9 +112,20 @@ ocrd-cis-ocropy-deskew \
   --parameter file:///path/to/config.json
 ```
 
+### ocrd-cis-ocropy-denoise
+The ocropy-denoise tool can be used to despeckle pages / regions / lines of a workspace.
+It runs the Ocropy "nlbin" denoising on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). 
+```sh
+ocrd-cis-ocropy-denoise \
+  --input-file-grp OCR-D-SEG-LINE-DES \
+  --output-file-grp OCR-D-SEG-LINE-DEN \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
 ### ocrd-cis-ocropy-binarize
-The ocropy-binarize tool can be used to grayscale-normalize and deskew pages / regions / lines of a workspace.
-It runs the Ocropy thresholding and deskewing estimation on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.)
+The ocropy-binarize tool can be used to binarize, denoise and deskew pages / regions / lines of a workspace.
+It runs the Ocropy "nlbin" adaptive thresholding, deskewing estimation and denoising on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.) Images can also be produced grayscale-normalized.
 ```sh
 ocrd-cis-ocropy-binarize \
   --input-file-grp OCR-D-SEG-LINE-DES \

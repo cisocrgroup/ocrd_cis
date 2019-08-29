@@ -14,23 +14,22 @@ from ocrd_models.ocrd_page import (
     TextRegionType, TextLineType
 )
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
+from ocrd_utils import (
+    coordinates_of_segment,
+    xywh_from_points,
+    bbox_from_polygon,
+    image_from_polygon,
+    polygon_mask,
+    crop_image,
+    MIMETYPE_PAGE
+)
 
 from .. import get_ocrd_tool
 from . import common
 from .ocrolib import midrange, morph
 from .common import (
-    coordinates_of_segment,
-    xywh_from_points,
-    bbox_from_polygon,
-    image_from_page,
-    image_from_segment,
-    image_from_polygon,
-    polygon_mask,
-    crop_image,
-    pil2array, array2pil,
     # binarize,
-    save_image_file
+    pil2array, array2pil
 )
 
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -92,10 +91,10 @@ class OcropyClip(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, page_image_info = image_from_page(
-                self.workspace, page, page_id)
-            if page_image_info.xResolution != 1:
-                dpi = page_image_info.xResolution
+            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+                page, page_id)
+            if page_image_info.resolution != 1:
+                dpi = page_image_info.resolution
                 if page_image_info.resolutionUnit == 'cm':
                     dpi = round(dpi * 2.54)
                 LOG.info('Page "%s" uses %d DPI', page_id, dpi)
@@ -133,8 +132,8 @@ class OcropyClip(Processor):
                                          page_image, page_xywh,
                                          input_file.pageId, file_id + '_' + region.id)
                     continue
-                region_image, region_xywh = image_from_segment(
-                    self.workspace, region, page_image, page_xywh)
+                region_image, region_xywh = self.workspace.image_from_segment(
+                    region, page_image, page_xywh)
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
@@ -215,8 +214,7 @@ class OcropyClip(Processor):
                  segment_xywh['x'] - parent_xywh['x'] + segment_xywh['w'],
                  segment_xywh['y'] - parent_xywh['y'] + segment_xywh['h']))
         # update METS (add the image file):
-        file_path = save_image_file(
-            self.workspace,
+        file_path = self.workspace.save_image_file(
             segment_image,
             file_id=file_id,
             page_id=page_id,
