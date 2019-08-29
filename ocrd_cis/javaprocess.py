@@ -8,15 +8,11 @@ from pathlib import Path
 MAIN = "de.lmu.cis.ocrd.cli.Main"
 JAR = pkg_resources.resource_filename('ocrd_cis', 'jar/ocrd-cis.jar')
 
-def JavaAligner(jar, n, loglvl="DEBUG"):
+def JavaAligner(n, loglvl):
     """Create a java process that calls -c align -D '{"n":n}'"""
-    d = {'n': n}
-    args = [
-        '-c', 'align',
-        "--log-level", loglvl,
-        '--parameter', "{}".format(json.dumps(d))
-    ]
-    return JavaProcess(jar, args)
+    return JavaProcess(JAR, ['-c', 'align',
+                             '--log-level', loglvl,
+                             '--parameter', '{}'.format(json.dumps({'n':n}))])
 
 def JavaProfiler(mets, ifg, ofg, params, loglvl):
     return JavaProcess(JAR, ['-c', 'profile',

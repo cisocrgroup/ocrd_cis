@@ -38,13 +38,7 @@
 			"steps": [
 				"postprocessing/alignment"
 			],
-			"description": "Align multiple OCRs and/or GTs",
-			"parameters": {
-				"jar": {
-					"type": "string",
-					"required": true
-				}
-			}
+			"description": "Align multiple OCRs and/or GTs"
 		},
 		"ocrd-cis-ocropy-recognize": {
 			"executable": "ocrd-cis-ocropy-recognize",
