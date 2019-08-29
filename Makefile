@@ -24,10 +24,8 @@ help:
 
 # END-EVAL
 
-# pip install -e .
 install:
-	pip install -e .
-
+	pip install -U pip -e .
 #
 # TESTS
 #
