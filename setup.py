@@ -3,6 +3,7 @@ Installs:
     - ocrd-cis-align
     - ocrd-cis-profile
     - ocrd-cis-ocropy-clip
+    - ocrd-cis-ocropy-denoise
     - ocrd-cis-ocropy-deskew
     - ocrd-cis-ocropy-binarize
     - ocrd-cis-ocropy-resegment
@@ -23,7 +24,7 @@ from setuptools import find_packages
 setup(
     include_package_data = True,
     name='cis-ocrd',
-    version='0.0.3',
+    version='0.0.4',
     description='description',
     long_description='long description',
     author='Florian Fink, Tobias Englmeier, Christoph Weber',
@@ -32,7 +33,7 @@ setup(
     license='MIT',
     packages=find_packages(),
     install_requires=[
-        'ocrd>=1.0.0b5',
+        'ocrd>=1.0.0b17',
         'click',
         'scipy',
         'numpy>=1.17.0',
@@ -51,6 +52,7 @@ setup(
             'ocrd-cis-profile=ocrd_cis.profile.cli:cis_ocrd_profile',
             'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_binarize',
             'ocrd-cis-ocropy-clip=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_clip',
+            'ocrd-cis-ocropy-denoise=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_denoise',
             'ocrd-cis-ocropy-deskew=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_deskew',
             'ocrd-cis-ocropy-dewarp=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_dewarp',
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_recognize',

@@ -4,7 +4,7 @@ import sys
 import os.path
 import io
 import numpy as np
-from skimage import measure, draw
+from skimage import draw
 import cv2
 from scipy.ndimage import filters
 
@@ -12,24 +12,23 @@ from ocrd_utils import getLogger
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
+from ocrd_utils import (
+    coordinates_of_segment,
+    coordinates_for_segment,
+    points_from_polygon,
+    xywh_from_points,
+    MIMETYPE_PAGE
+)
 
 from .. import get_ocrd_tool
 from . import common
 from .ocrolib import midrange
 from .common import (
-    coordinates_of_segment,
-    coordinates_for_segment,
-    image_from_page,
-    image_from_segment,
     pil2array, array2pil,
     check_line, check_page,
     # binarize,
     compute_line_labels,
-    borderclean_bin,
-    points_from_polygon,
-    xywh_from_points,
-    save_image_file
+    borderclean_bin
 )
 
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -84,16 +83,23 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     LOG.debug('Black pixels before/after resegment of line "%s" (nlabels=%d): %d/%d',
               line_id, len(label_counts.nonzero()[0]), total_count, max_count)
     line_mask = np.array(line_labels == max_label, np.uint8)
-    # measure.find_contours() produces open paths when touching boundaries...
-    # ...how about measure.centroid(line_mask) vs measure.centroid(line_bin)?
-    # convert to polygon outline:
+    # find outer contour (parts):
     contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # concatenate contour parts (happens with non-contiguous masks due to large hspace):
-    line_polygon = np.vstack(path for path in [
-        # simplify shape:
-        measure.approximate_polygon(contour[:, 0, ::], 2) # already ordered x,y
-        # filter parts with less than 4 points:
-        for contour in contours] if len(path) >= 4)
+    # determine largest part by area:
+    contour_areas = [cv2.contourArea(contour) for contour in contours]
+    max_contour = np.argmax(contour_areas)
+    max_area = contour_areas[max_contour]
+    total_area = cv2.contourArea(np.expand_dims(line_polygon, 1))
+    if max_area / total_area < 0.5:
+        # using a different, more conservative threshold here:
+        # avoid being overly strict with cropping background,
+        # just ensure the contours are not a split of the mask
+        LOG.info('Largest label (%d) largest contour (%d) is too small (%d/%d) in line "%s"',
+                 max_label, max_contour, max_area, total_area, line_id)
+        return None
+    contour = contours[max_contour]
+    # simplify shape:
+    line_polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
     if len(line_polygon) < 4:
         LOG.warning('found no contour of >=4 points for line "%s"', line_id)
         return None
@@ -146,10 +152,10 @@ class OcropyResegment(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, page_image_info = image_from_page(
-                self.workspace, page, page_id)
-            if page_image_info.xResolution != 1:
-                dpi = page_image_info.xResolution
+            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+                page, page_id)
+            if page_image_info.resolution != 1:
+                dpi = page_image_info.resolution
                 if page_image_info.resolutionUnit == 'cm':
                     dpi = round(dpi * 2.54)
                 LOG.info('Page "%s" uses %d DPI', page_id, dpi)
@@ -165,8 +171,8 @@ class OcropyResegment(Processor):
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
-                region_image, region_xywh = image_from_segment(
-                    self.workspace, region, page_image, page_xywh)
+                region_image, region_xywh = self.workspace.image_from_segment(
+                    region, page_image, page_xywh)
                 # ad-hoc binarization:
                 region_array = pil2array(region_image)
                 region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
@@ -226,11 +232,10 @@ class OcropyResegment(Processor):
                     # annotate result:
                     line.get_Coords().points = points_from_polygon(line_polygon)
                     # create new image:
-                    line_image, line_xywh = image_from_segment(
-                        self.workspace, line, region_image, region_xywh)
+                    line_image, line_xywh = self.workspace.image_from_segment(
+                        line, region_image, region_xywh)
                     # update METS (add the image file):
-                    file_path = save_image_file(
-                        self.workspace,
+                    file_path = self.workspace.save_image_file(
                         line_image,
                         file_id=file_id + '_' + region.id + '_' + line.id,
                         page_id=page_id,
