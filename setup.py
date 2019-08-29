@@ -30,6 +30,7 @@ setup(
         'ocrd>=1.0.0b5',
         'click',
         'scipy',
+        'numpy>=1.17.0',
         'pillow==5.4.1',
         'matplotlib>3.0.0',
         'python-Levenshtein',
