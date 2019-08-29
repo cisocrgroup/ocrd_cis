@@ -38,13 +38,7 @@
 			"steps": [
 				"postprocessing/alignment"
 			],
-			"description": "Align multiple OCRs and/or GTs",
-			"parameters": {
-				"jar": {
-					"type": "string",
-					"required": true
-				}
-			}
+			"description": "Align multiple OCRs and/or GTs"
 		},
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
@@ -293,12 +287,8 @@
 			"steps": [
 				"postprocessing/alignment"
 			],
-			"description": "Add correction suggestions to suspicious tokens",
+			"description": "Add a correction suggestions and suspicious tokens (profile)",
 			"parameters": {
-				"jar": {
-					"type": "string",
-					"required": true
-				},
 				"executable": {
 					"type": "string",
 					"required": true
@@ -307,11 +297,12 @@
 					"type": "string",
 					"required": true
 				},
-				"index": {
-					"type": "integer",
-					"default": 0
+				"language": {
+				    "type": "string",
+					"required": false,
+					"default": "german"
 				},
-				"dynamiclex": {
+				"additionalLexicon": {
 					"type": "string",
 					"required": false,
 					"default": ""

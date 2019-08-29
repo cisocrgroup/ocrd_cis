@@ -21,6 +21,7 @@ from setuptools import setup
 from setuptools import find_packages
 
 setup(
+    include_package_data = True,
     name='cis-ocrd',
     version='0.0.3',
     description='description',
@@ -34,6 +35,7 @@ setup(
         'ocrd>=1.0.0b5',
         'click',
         'scipy',
+        'numpy>=1.17.0',
         'pillow==5.4.1',
         'matplotlib>3.0.0',
         'python-Levenshtein',
@@ -41,6 +43,7 @@ setup(
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
+        'ocrd_cis': ['ocrd_cis/jar/ocrd-cis.jar'],
     },
     entry_points={
         'console_scripts': [

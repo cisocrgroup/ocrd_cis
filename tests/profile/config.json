@@ -1,6 +1,0 @@
-{
-		"jar": "${JAR}",
-		"profilerExecutable": "${pexe}",
-		"profilerBackend": "${pback}",
-		"profilerLanguage": "${plang}"
-}

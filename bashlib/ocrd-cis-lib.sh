@@ -11,21 +11,23 @@ ocrd-cis-log() {
 # utility function to join strings with a given string
 function ocrd-cis-join-by { local IFS="$1"; shift; echo "$*"; }
 
-# Parse command line arguments for a given argument and returns its
-# value.  Usage: `ocrd-cis-getopt -P --parameter $*`.
+# Parse command line arguments for a given argument and
+# SETS_CIS_OPTARG to the addtional proviede value.  Usage:
+# `ocrd-cis-getopt -P --parameter $*`.
 ocrd-cis-getopt() {
-	short=$1
+	OCRD_CIS_OPTARG=""
+	local short=$1
 	shift
-	long=$1
+	local long=$1
 	shift
 	while [[ $# -gt 0 ]]; do
 		case $1 in
-			$short|$long) echo $2; return 0;;
+			$short|$long) OCRD_CIS_OPTAR=$2; return 0;;
 			*) shift;;
 		esac
 	done
 	ocrd-cis-log "missing command line argument: $short | $long"
-	exit 1
+	return 1;
 }
 
 # Download the ocrd.jar if it does not exist.

@@ -1,3 +1,5 @@
+PY ?= python3
+
 # Log level
 LOGLEVEL = DEBUG
 
@@ -22,13 +24,18 @@ help:
 
 # END-EVAL
 
-# pip install -e .
 install:
-	pip install -e .
+	pip install -U pip -e .
+#
+# TESTS
+#
+TEST_SCRIPTS=$(wildcard tests/run_*.sh)
+.PHONY: $(TEST_SCRIPTS)
+$(TEST_SCRIPTS):
+	bash $@
+# run test scripts
+test: $(TEST_SCRIPTS)
 
-# Run align tests
-test:
-	tests/align/run_align_test.bash $(TEST_ARGS) loeber_heuschrecken_1693.zip
-	tests/align/run_align_test.bash $(TEST_ARGS) kant_aufklaerung_1784.zip
-
-.PHONY: install test
+clean:
+	$(RM) -r tests/venv
+.PHONY: install test clean
