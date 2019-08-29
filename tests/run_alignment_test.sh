@@ -32,9 +32,9 @@ popd
 
 # align three page xml files
 ocrd-cis-align --log-level DEBUG \
-				 -I OCR-D-CIS-TEST-1,OCR-D-CIS-TEST-2,OCR-D-CIS-TEST-3 \
-				 -O OCR-D-CIS-ALIGN \
-				 -m $tmpws/mets.xml
+			   -I OCR-D-CIS-TEST-1,OCR-D-CIS-TEST-2,OCR-D-CIS-TEST-3 \
+			   -O OCR-D-CIS-ALIGN \
+			   -m $tmpws/mets.xml
 
 pushd $tmpws
 if [[ ! -f $(ocrd workspace find -G OCR-D-CIS-ALIGN) ]]; then
