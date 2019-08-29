@@ -1,4 +1,4 @@
-![build status](https://travis-ci.org/cisocrgroup/cis-ocrd-py.svg?branch=dev)
+![build status](https://travis-ci.org/cisocrgroup/cis-ocrd-py.svg?branch=ci)
 # cis-ocrd-py
 
 [CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line tools
