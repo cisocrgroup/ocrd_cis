@@ -1,28 +1,23 @@
 #/bin/bash
-set -e
+source $(dirname $0)/test_lib.sh
 
-TMP=$(mktemp -d)
-WS="$TMP/ws"
-trap "rm -rfv $TMP" EXIT
-file=$(realpath $(dirname $0)/data/benner_herrnhuterey04_1748_0015.xml)
-
-ocrd workspace init $WS
-pushd $WS
+# add page xml file
+pushd $tmpws
 ocrd workspace add \
 	 -G OCR-D-CIS-TEST \
 	 -i test01 \
 	 -m 'application/vnd.prima.page+xml' \
-	 "$file"
+	 "$pagexmlfile"
 popd
 
-# profile using mock profiler data/profiler
+# profile using mock profiler at data/profiler
 ocrd-cis-profile --log-level DEBUG \
 				 -I OCR-D-CIS-TEST \
 				 -O OCR-D-CIS-PROFILE \
-				 -m $WS/mets.xml \
+				 -m $tmpws/mets.xml \
 				 -p <(echo "{\"backend\":\"test\",\"executable\":\"$(dirname $0)/data/profiler\"}")
 
-pushd $WS
+pushd $tmpws
 if [[ ! -f $(ocrd workspace find -G OCR-D-CIS-PROFILE) ]]; then
 	echo "cannot find profile in workspace"
 	exit 1
