@@ -1,132 +1,40 @@
 from __future__ import absolute_import
 
-from ocrd_cis.ocropy.ocrolib import lstm
-from ocrd_cis.ocropy import ocrolib
-from ocrd_cis import get_ocrd_tool
-
 import sys
 import os.path
-import warnings
-import cv2
 import numpy as np
-from scipy.ndimage import filters, interpolation, measurements, morphology
-from scipy import stats
 from PIL import Image
 
 import Levenshtein
-#import kraken.binarization
 
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
+from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_xywh
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
 from ocrd_models.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from .. import get_ocrd_tool
+from .ocrolib import lstm, load_object, midrange
+from .common import (
+    coordinates_for_segment,
+    polygon_from_bbox,
+    points_from_polygon,
+    image_from_page,
+    image_from_segment,
+    pil2array,
+    check_line
+)
+
+#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 LOG = getLogger('processor.OcropyRecognize')
 
-def bounding_box(coord_points):
-    point_list = [[int(p) for p in pair.split(',')]
-                  for pair in coord_points.split(' ')]
-    x_coordinates, y_coordinates = zip(*point_list)
-    return (min(x_coordinates), min(y_coordinates), max(x_coordinates), max(y_coordinates))
-
-
 def resize_keep_ratio(image, baseheight=48):
-    hpercent = (baseheight / float(image.size[1]))
-    wsize = int((float(image.size[0] * float(hpercent))))
+    scale = baseheight / image.height
+    wsize = round(image.width * scale)
     image = image.resize((wsize, baseheight), Image.ANTIALIAS)
-    return image
-
-# method similar to ocrolib.read_image_gray:
-def pil2array(image):
-    assert isinstance(image, Image.Image), "not a PIL.Image"
-    array = ocrolib.pil2array(image)
-    if array.dtype == np.uint8:
-        array = array / 255.0
-    if array.dtype == np.int8:
-        array = array / 127.0
-    elif array.dtype == np.uint16:
-        array = array / 65536.0
-    elif array.dtype == np.int16:
-        array = array / 32767.0
-    elif np.issubdtype(array.dtype, np.floating):
-        pass
-    else:
-        raise Exception("unknown image type: " + array.dtype)
-    if array.ndim == 3:
-        array = np.mean(array, 2)
-    return array
-
-def array2pil(array):
-    assert isinstance(array, np.ndarray), "not a numpy array"
-    array = np.array(255.0 * array, np.uint8)
-    return ocrolib.array2pil(array)
-
-# methods from ocropy-nlbin:
-def estimate_local_whitelevel(image, zoom=0.5, perc=80, range_=20):
-    '''flatten it by estimating the local whitelevel
-    zoom for page background estimation, smaller=faster, default: %(default)s
-    percentage for filters, default: %(default)s
-    range for filters, default: %(default)s
-    '''
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        m = interpolation.zoom(image, zoom)
-        m = filters.percentile_filter(m, perc, size=(range_, 2))
-        m = filters.percentile_filter(m, perc, size=(2, range_))
-        m = interpolation.zoom(m, 1. / zoom)
-    w, h = np.minimum(np.array(image.shape), np.array(m.shape))
-    flat = np.clip(image[:w, :h] - m[:w, :h] + 1, 0, 1)
-    return flat
-def estimate_skew_angle(image, angles):
-    estimates = []
-    for a in angles:
-        v = np.mean(interpolation.rotate(image, a, order=0, mode='constant'), axis=1)
-        v = np.var(v)
-        estimates.append((v, a))
-    _, a = max(estimates)
-    return a
-def estimate_skew(flat, bignore=0.1, maxskew=2, skewsteps=8):
-    ''' estimate skew angle and rotate'''
-    d0, d1 = flat.shape
-    o0, o1 = int(bignore * d0), int(bignore * d1) # border ignore
-    flat = np.amax(flat) - flat
-    flat -= np.amin(flat)
-    est = flat[o0:d0 - o0, o1:d1 - o1]
-    ma = maxskew
-    ms = int(2 * maxskew * skewsteps)
-    # print(linspace(-ma,ma,ms+1))
-    angle = estimate_skew_angle(est, np.linspace(-ma, ma, ms + 1))
-    flat = interpolation.rotate(flat, angle, mode='constant', reshape=0)
-    flat = np.amax(flat) - flat
-    return flat, angle
-def estimate_thresholds(flat, bignore=0.1, escale=1.0, lo=5, hi=90):
-    '''# estimate low and high thresholds
-    ignore this much of the border for threshold estimation, default: %(default)s
-    scale for estimating a mask over the text region, default: %(default)s
-    lo percentile for black estimation, default: %(default)s
-    hi percentile for white estimation, default: %(default)s
-    '''
-    d0, d1 = flat.shape
-    o0, o1 = int(bignore * d0), int(bignore * d1)
-    est = flat[o0:d0 - o0, o1:d1 - o1]
-    if escale > 0:
-        # by default, we use only regions that contain
-        # significant variance; this makes the percentile
-        # based low and high estimates more reliable
-        e = escale
-        v = est - filters.gaussian_filter(est, e * 20.0)
-        v = filters.gaussian_filter(v ** 2, e * 20.0) ** 0.5
-        v = (v > 0.3 * np.amax(v))
-        v = morphology.binary_dilation(v, structure=np.ones((int(e * 50), 1)))
-        v = morphology.binary_dilation(v, structure=np.ones((1, int(e * 50))))
-        est = est[v]
-    lo = stats.scoreatpercentile(est.ravel(), lo)
-    hi = stats.scoreatpercentile(est.ravel(), hi)
-    return lo, hi
+    return image, scale
 
 def binarize(pil_image, method='none'):
     if method == 'none':
@@ -210,23 +118,18 @@ def check_line(image):
 
 def process1(image, pad, lnorm, network, check=True, dewarp=True):
     line = pil2array(image)
-
+    binary = np.array(line <= midrange(line), np.uint8)
     raw_line = line.copy()
+
+    # validate:
     if np.prod(line.shape) == 0:
         raise Exception('image dimensions are zero')
     if np.amax(line) == np.amin(line):
         raise Exception('image is blank')
-
-    # dewarp:
-    temp = np.amax(line)-line
     if check:
-        report = check_line(temp)
+        report = check_line(binary)
         if report:
             raise Exception(report)
-    if dewarp:
-        temp = temp * 1.0 / np.amax(temp)
-        lnorm.measure(temp)
-        line = lnorm.normalize(line, cval=np.amax(line))
 
     # recognize:
     line = lstm.prepare_line(line, pad)
@@ -261,120 +164,127 @@ class OcropyRecognize(Processor):
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
 
-    def process(self):
-        """
-        Performs the (text) recognition.
-        """
-        # print(self.parameter)
-        dewarping = self.parameter['dewarping']
-        binarization = self.parameter['binarization']
-        maxlevel = self.parameter['textequiv_level']
-        if maxlevel not in ['line', 'word', 'glyph']:
-            raise Exception(
-                "currently only implemented at the line/glyph level")
-
-        filepath = os.path.dirname(os.path.abspath(__file__))
-
         ocropydir = os.path.dirname(os.path.abspath(__file__))
-        network = ocrolib.load_object(
+        # from ocropus-rpred:
+        self.network = load_object(
             os.path.join(ocropydir, 'models', self.parameter['model']),
             verbose=1)
-        for x in network.walk():
+        for x in self.network.walk():
             x.postLoad()
-        for x in network.walk():
+        for x in self.network.walk():
             if isinstance(x, lstm.LSTM):
                 x.allocate(5000)
-        lnorm = getattr(network, "lnorm", None)
 
-        pad = 16  # default: 16
+        self.pad = 16 # ocropus-rpred default
+
+    def process(self):
+        """Recognize lines / words / glyphs of the workspace.
+
+        Open and deserialise each PAGE input file and its respective image,
+        then iterate over the element hierarchy down to the requested
+        `textequiv_level`. If any layout annotation below the line level
+        already exists, then remove it (regardless of `textequiv_level`).
+
+        Set up Ocropy to recognise each text line (via coordinates into
+        the higher-level image, or from the alternative image; the image
+        must have been binarised/grayscale-normalised, deskewed and dewarped
+        already). Rescale and pad the image, then recognize.
+
+        Create new elements below the line level, if necessary.
+        Put text results and confidence values into new TextEquiv at
+        `textequiv_level`, and make the higher levels consistent with that
+        up to the line level (by concatenation joined by whitespace).
+
+        If a TextLine contained any previous text annotation, then compare
+        that with the new result by aligning characters and computing the
+        Levenshtein distance. Aggregate these scores for each file and print
+        the line-wise and the total character error rates (CER).
+
+        Produce a new output file by serialising the resulting hierarchy.
+        """
+        maxlevel = self.parameter['textequiv_level']
 
         # LOG.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
-            LOG.info("INPUT FILE %i / %s", n, input_file)
+            LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             pcgts = page_from_file(self.workspace.download_file(input_file))
-            pil_image = self.workspace.resolve_image_as_pil(
-                pcgts.get_Page().imageFilename)
-
-            LOG.info("Recognizing text in page '%s'", pcgts.get_pcGtsId())
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
+            page_image, page_xywh, _ = image_from_page(
+                self.workspace, page, page_id)
 
+            LOG.info("Recognizing text in page '%s'", page_id)
             # region, line, word, or glyph level:
             regions = page.get_TextRegion()
             if not regions:
-                LOG.warning("Page contains no text regions")
+                LOG.warning("Page '%s' contains no text regions", page_id)
+            self.process_regions(regions, maxlevel, page_image, page_xywh)
 
-            args = [lnorm, network, pil_image, filepath, pad, dewarping, binarization]
-
-            self.process_regions(regions, maxlevel, args)
-
-            # Use the input file's basename for the new file
-            # this way the files retain the same basenames.
-            # ID = concat_padded(self.output_file_grp, n)
-            ID = self.output_file_grp + '-' + input_file.basename.replace('.xml', '')
-            LOG.info('creating file id: %s, name: %s, file_grp: %s',
-                     ID, input_file.basename, self.output_file_grp)
+            # update METS (add the PAGE file):
+            file_id = input_file.ID.replace(self.input_file_grp,
+                                            self.output_file_grp)
+            if file_id == input_file.ID:
+                file_id = concat_padded(self.output_file_grp, n)
+            file_path = os.path.join(self.output_file_grp,
+                                     file_id + '.xml')
             out = self.workspace.add_file(
-                ID=ID,
+                ID=file_id,
                 file_grp=self.output_file_grp,
                 pageId=input_file.pageId,
-                basename=input_file.basename,
-                local_filename=os.path.join(self.output_file_grp, input_file.basename),
+                local_filename=file_path,
                 mimetype=MIMETYPE_PAGE,
-                content=to_xml(pcgts),
-            )
-            LOG.info('created file %s', out)
+                content=to_xml(pcgts))
+            LOG.info('created file ID: %s, file_grp: %s, path: %s',
+                     file_id, self.output_file_grp, out.local_filename)
 
-    def process_regions(self, regions, maxlevel, args):
+    def process_regions(self, regions, maxlevel, page_image, page_xywh):
         edits = 0
         lengs = 0
         for region in regions:
-            LOG.info("Recognizing text in region '%s'", region.id)
+            region_image, region_xywh = image_from_segment(
+                self.workspace, region, page_image, page_xywh)
 
+            LOG.info("Recognizing text in region '%s'", region.id)
             textlines = region.get_TextLine()
             if not textlines:
                 LOG.warning("Region '%s' contains no text lines", region.id)
             else:
-                edits_, lengs_ = self.process_lines(textlines, maxlevel, args)
+                edits_, lengs_ = self.process_lines(textlines, maxlevel, region_image, region_xywh)
                 edits += edits_
                 lengs += lengs_
-        LOG.info('CER: %.1f%%', 100.0 * edits / lengs if lengs > 0 else 0.)
+        if lengs > 0:
+            LOG.info('CER: %.1f%%', 100.0 * edits / lengs)
 
     def process_lines(self, textlines, maxlevel, args):
         lnorm, network, pil_image, filepath, pad, dewarping, binarization = args
-
         edits = 0
         lengs = 0
         for line in textlines:
+            line_image, line_xywh = image_from_segment(
+                self.workspace, line, region_image, region_xywh)
+
             LOG.info("Recognizing text in line '%s'", line.id)
-            linegt = line.TextEquiv[0].Unicode
+            if line.get_TextEquiv():
+                linegt = line.TextEquiv[0].Unicode
+            else:
+                linegt = ''
             LOG.debug("GT  '%s': '%s'", line.id, linegt)
+            # remove existing annotation below line level:
+            line.set_TextEquiv([])
+            line.set_Word([])
 
-            # get box from points
-            if line.get_Coords().points == '':
-                LOG.warn("empty bounding box at line %s", line.id)
+            if line_image.size[1] < 16:
+                LOG.error("bounding box is too narrow at line %s", line.id)
                 continue
-            box = bounding_box(line.get_Coords().points)
-
-            # crop word from page
-            cropped_image = pil_image.crop(box=box)
-            if cropped_image.size[1] < 32:
-                LOG.warn("bounding box is too narrow at line %s", line.id)
-                continue
-
-            # binarize with Otsu's thresholding after Gaussian filtering
-            bin_image = binarize(cropped_image, method=binarization)
-            #bin_image.save('/tmp/ocrd-cis-ocropy-recognize_%s.bin.png' % line.id)
-
             # resize image to 48 pixel height
             final_img = resize_keep_ratio(bin_image)
 
             # process ocropy:
             try:
                 linepred, clist, rlist, confidlist = process1(
-                    final_img, pad, lnorm, network,
-                    check=True, dewarp=dewarping)
-            except Exception as e:
-                LOG.error('error processing line "%s": %s', line.id, e)
+                    final_img, self.pad, self.network, check=True)
+            except Exception as err:
+                LOG.error('error processing line "%s": %s', line.id, err)
                 continue
             dist = Levenshtein.distance(linepred, linegt)
             edits += dist
@@ -384,10 +294,8 @@ class OcropyRecognize(Processor):
 
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
-            # lists in list for every word with r-position and confidence of each glyph
-            word_r_list = [[0]]
-            word_conf_list = [[]]
-
+            word_r_list = [[0]] # r-positions of every glyph in every word
+            word_conf_list = [[]] # confidences of every glyph in every word
             if words != []:
                 w_no = 0
                 found_char = False
@@ -407,45 +315,47 @@ class OcropyRecognize(Processor):
                             w_no += 1
             else:
                 word_conf_list = [[0]]
-                word_r_list = [[0, box[2]-box[0]]]
+                word_r_list = [[0, line_xywh['w']]]
 
             # conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]
-
             # conf for the line
             line_conf = (min(wordsconf) + max(wordsconf))/2
-
-            line.replace_TextEquiv_at(0, TextEquivType(
+            # line text
+            line.add_TextEquiv(TextEquivType(
                 Unicode=linepred, conf=line_conf))
 
-            if maxlevel == 'word' or 'glyph':
-                line.Word = []
-                for w_no, w in enumerate(words):
-
-                    # Coords of word
-                    wr = (word_r_list[w_no][0], word_r_list[w_no][-1])
-                    word_bbox = [box[0]+wr[0], box[1], box[2]+wr[1], box[3]]
-
-                    word_id = '%s_word%04d' % (line.id, w_no)
-                    word = WordType(id=word_id, Coords=CoordsType(
-                        points_from_x0y0x1y1(word_bbox)))
-
+            if maxlevel in ['word', 'glyph']:
+                for word_no, word_str in enumerate(words):
+                    word_points = points_from_polygon(
+                        coordinates_for_segment(
+                            np.array(polygon_from_bbox(
+                                word_r_list[word_no][0] / scale,
+                                0,
+                                word_r_list[word_no][-1] / scale,
+                                0 + line_xywh['h'])),
+                            line_image,
+                            line_xywh))
+                    word_id = '%s_word%04d' % (line.id, word_no)
+                    word = WordType(id=word_id, Coords=CoordsType(word_points))
                     line.add_Word(word)
                     word.add_TextEquiv(TextEquivType(
-                        Unicode=w, conf=wordsconf[w_no]))
+                        Unicode=word_str, conf=wordsconf[word_no]))
 
                     if maxlevel == 'glyph':
-                        for glyph_no, g in enumerate(w):
-                            gr = (word_r_list[w_no][glyph_no],
-                                  word_r_list[w_no][glyph_no+1])
-                            glyph_bbox = [box[0]+gr[0],
-                                          box[1], box[2]+gr[1], box[3]]
-
+                        for glyph_no, glyph_str in enumerate(word_str):
+                            glyph_points = points_from_polygon(
+                                coordinates_for_segment(
+                                    np.array(polygon_from_bbox(
+                                        word_r_list[word_no][glyph_no] / scale,
+                                        0,
+                                        word_r_list[word_no][glyph_no+1] / scale,
+                                        0 + line_xywh['h'])),
+                                    line_image,
+                                    line_xywh))
                             glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
-                            glyph = GlyphType(id=glyph_id, Coords=CoordsType(
-                                points_from_x0y0x1y1(glyph_bbox)))
-
+                            glyph = GlyphType(id=glyph_id, Coords=CoordsType(glyph_points))
                             word.add_Glyph(glyph)
                             glyph.add_TextEquiv(TextEquivType(
-                                Unicode=g, conf=word_conf_list[w_no][glyph_no]))
+                                Unicode=glyph_str, conf=word_conf_list[word_no][glyph_no]))
         return edits, lengs

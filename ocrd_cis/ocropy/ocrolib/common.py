@@ -297,7 +297,11 @@ def iulib_page_iterator(files):
         yield image,fname
 
 def norm_max(a):
-    return a/amax(a)
+    norm = amax(a) # or nanmax?
+    if norm:
+        return a/norm
+    else:
+        return a # or 0?
 
 def pad_by(image,r,dtype=None):
     """Symmetrically pad the image by the given amount.

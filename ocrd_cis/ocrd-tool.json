@@ -46,6 +46,169 @@
 				}
 			}
 		},
+		"ocrd-cis-ocropy-binarize": {
+			"executable": "ocrd-cis-ocropy-binarize",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/binarization",
+				"preprocessing/optimization/grayscale_normalization",
+				"preprocessing/optimization/deskewing"
+			],
+			"input_file_grp": [
+				"OCR-D-IMG",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-IMG-BIN",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Binarize and deskew pages / regions / lines with ocropy",
+			"parameters": {
+				"method": {
+					"type": "string",
+					"enum": ["none", "global", "otsu", "gauss-otsu", "ocropy"],
+					"description": "binarization method to use (only ocropy will include deskewing)",
+					"default": "ocropy"
+				},
+				"maxskew": {
+					"type": "number",
+					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
+					"default": 5.0
+				},
+				"noise_maxsize": {
+					"type": "number",
+					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
+					"default": 2
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "page"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-deskew": {
+			"executable": "ocrd-cis-ocropy-deskew",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/deskewing"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Deskew regions with ocropy (by annotating orientation angle and adding AlternativeImage)",
+			"parameters": {
+				"maxskew": {
+					"type": "number",
+					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
+					"default": 5.0
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "region"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-clip": {
+			"executable": "ocrd-cis-ocropy-clip",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/region",
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Clip text regions / lines at intersections with neighbours",
+			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "region"
+				},
+				"min_fraction": {
+					"type": "number",
+					"format": "float",
+					"description": "share of foreground pixels that must be retained by the largest label",
+					"default": 0.7
+				}
+			}
+		},
+		"ocrd-cis-ocropy-resegment": {
+			"executable": "ocrd-cis-ocropy-resegment",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
+			"parameters": {
+				"min_fraction": {
+					"type": "number",
+					"format": "float",
+					"description": "share of foreground pixels that must be retained by the largest label",
+					"default": 0.8
+				},
+				"extend_margins": {
+					"type": "number",
+					"format": "integer",
+					"description": "number of pixels to extend the input polygons horizontally and vertically before intersecting",
+					"default": 3
+				}
+			}
+		},
+		"ocrd-cis-ocropy-dewarp": {
+			"executable": "ocrd-cis-ocropy-dewarp",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/dewarping"
+			],
+			"description": "Dewarp line images with ocropy",
+			"input_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"parameters": {
+				"range": {
+					"type": "number",
+					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels)",
+					"default": 4
+				}
+			}
+		},
 		"ocrd-cis-ocropy-recognize": {
 			"executable": "ocrd-cis-ocropy-recognize",
 			"categories": [
@@ -54,21 +217,20 @@
 			"steps": [
 				"recognition/text-recognition"
 			],
-			"description": "Recognize text in lines with ocropy",
+			"description": "Recognize text in (binarized+deskewed+dewarped) lines with ocropy",
+			"input_file_grp": [
+				"OCR-D-SEG-LINE",
+				"OCR-D-SEG-WORD",
+				"OCR-D-SEG-GLYPH"
+			],
+			"output_file_grp": [
+				"OCR-D-OCR-OCRO"
+			],
 			"parameters": {
-                                "dewarping": {
-                                    "type": "boolean",
-                                    "description": "enable line normalization",
-                                    "default": true
-                                },
-                                "binarization": {
-                                    "type": "string",
-                                    "enum": ["none", "global", "otsu", "gauss-otsu", "ocropy"],
-                                    "default": "none"
-                                },
 				"textequiv_level": {
 					"type": "string",
 					"enum": ["line", "word", "glyph"],
+					"description": "PAGE XML hierarchy level granularity to add the TextEquiv results to",
 					"default": "line"
 				},
 				"model": {
