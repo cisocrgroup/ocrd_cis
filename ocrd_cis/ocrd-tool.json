@@ -287,6 +287,31 @@
 				}
 			}
 		},
+		"ocrd-cis-ocropy-segment": {
+			"executable": "ocrd-cis-ocropy-segment",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Segment pages or regions into lines with ocropy",
+			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["region"],
+					"description": "PAGE XML hierarchy level granularity to read images from",
+					"default": "region"
+				}
+			}
+		},
 		"cis-ocrd-ocropy-train": {
 			"executable": "ocrd-cis-ocropy-train",
 			"categories": [
