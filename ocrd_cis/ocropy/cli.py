@@ -8,6 +8,7 @@ from ocrd_cis.ocropy.clip import OcropyClip
 from ocrd_cis.ocropy.resegment import OcropyResegment
 from ocrd_cis.ocropy.dewarp import OcropyDewarp
 from ocrd_cis.ocropy.recognize import OcropyRecognize
+from ocrd_cis.ocropy.segment import OcropySegment
 from ocrd_cis.ocropy.train import OcropyTrain
 from ocrd_cis.ocropy.rec import OcropyRec
 
@@ -46,6 +47,11 @@ def cis_ocrd_ocropy_dewarp(*args, **kwargs):
 @ocrd_cli_options
 def cis_ocrd_ocropy_recognize(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyRecognize, *args, **kwargs)
+
+@click.command()
+@ocrd_cli_options
+def cis_ocrd_ocropy_segment(*args, **kwargs):
+    return ocrd_cli_wrap_processor(OcropySegment, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
