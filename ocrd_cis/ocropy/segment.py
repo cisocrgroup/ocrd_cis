@@ -94,13 +94,16 @@ class OcropySegment(Processor):
         
         Then for each line label, convert its background mask into polygon outlines
         by finding the outer contours consistent with the segment's polygon outline.
-        Annotate the result as a new TextLine element. If ``level-of-operation``
-        was region, then make the new lines constitute the segment. If it was page,
-        then first aggregate the lines into useful regions, giving consideration to
-        columns and separators.
+        Annotate the result as a new TextLine element: If ``level-of-operation``
+        is ``region``, then (unless ``overwrite_lines`` is False) remove any existing
+        TextLine elements, and append the new lines to the region. If however it
+        is ``page``, then (unless ``overwrite_regions`` is False) remove any existing
+        TextRegion elements, and aggregate the lines into useful regions, giving extra
+        consideration to columns and separators.
         
         Produce a new output file by serialising the resulting hierarchy.
         """
+        overwrite_lines = self.parameter['overwrite_lines']
         # FIXME: add level-of-operation page
         # FIXME: expose some parameters
         
@@ -125,10 +128,12 @@ class OcropySegment(Processor):
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
-                lines = region.get_TextLine()
-                if lines:
-                    LOG.warning('Page "%s" region "%s" already contains text lines', page_id, region.id)
-                    region.set_TextLine([])
+                if region.get_TextLine():
+                    if overwrite_lines:
+                        LOG.info('removing existing TextLines in region "%s"', region.id)
+                        region.set_TextLine([])
+                    else:
+                        LOG.warning('keeping existing TextLines in region "%s"', region.id)
                 region_image, region_xywh = self.workspace.image_from_segment(
                     region, page_image, page_xywh)
                 # ad-hoc binarization:
