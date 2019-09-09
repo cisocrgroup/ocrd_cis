@@ -293,6 +293,7 @@
 				"Layout analysis"
 			],
 			"steps": [
+				"layout/segmentation/region",
 				"layout/segmentation/line"
 			],
 			"input_file_grp": [
@@ -302,18 +303,41 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Segment pages or regions into lines with ocropy",
+			"description": "Segment pages into regions or regions into lines with ocropy",
 			"parameters": {
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["region"],
-					"description": "PAGE XML hierarchy level granularity to read images from",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level to read images from",
 					"default": "region"
+				},
+				"maxcolseps": {
+					"type": "number",
+					"format": "integer",
+					"default": 2,
+					"description": "number of white/background column separators to try (when operating on the page level)"
+				},
+				"maxseps": {
+					"type": "number",
+					"format": "integer",
+					"default": 5,
+					"description": "number of black/foreground column separators to try, counted individually as lines (when operating on the page level)"
+				},
+				"overwrite_regions": {
+					"type": "boolean",
+					"default": true,
+					"description": "remove any existing TextRegion elements (when operating on the page level)"
 				},
 				"overwrite_lines": {
 					"type": "boolean",
 					"default": true,
-					"description": "remove existing layout and text annotation below the TextRegion level"
+					"description": "remove any existing TextLine elements (when operating on the region level)"
+				},
+				"spread": {
+					"type": "number",
+					"format": "float",
+					"default": 2.4,
+					"description": "distance in points (pt) from the foreground to project text line (or text region) labels into the background"
 				}
 			}
 		},
