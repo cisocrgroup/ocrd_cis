@@ -55,7 +55,7 @@ def r_dilation(image,size,origin=0):
 @checks(ABINARY2,uintpair)
 def r_erosion(image,size,origin=0):
     """Erosion with rectangular structuring element using maximum_filter"""
-    return filters.minimum_filter(image,size,origin=origin)
+    return filters.minimum_filter(image,size,origin=origin, mode='constant', cval=1)
 
 @checks(ABINARY2,uintpair)
 def r_opening(image,size,origin=0):
@@ -75,14 +75,14 @@ def r_closing(image,size,origin=0):
 def rb_dilation(image,size,origin=0):
     """Binary dilation using linear filters."""
     output = zeros(image.shape,'f')
-    filters.uniform_filter(image,size,output=output,origin=origin,mode='constant',cval=0)
+    filters.uniform_filter(image,size,output=output,origin=origin)
     return array(output>0,'i')
 
 @checks(ABINARY2,uintpair)
 def rb_erosion(image,size,origin=0):
     """Binary erosion using linear filters."""
     output = zeros(image.shape,'f')
-    filters.uniform_filter(image,size,output=output,origin=origin,mode='constant',cval=1)
+    filters.uniform_filter(image,size,output=output,origin=origin, mode='constant', cval=1)
     return array(output==1,'i')
 
 @checks(ABINARY2,uintpair)
@@ -105,7 +105,7 @@ def rg_dilation(image,size,origin=0):
 @checks(GRAYSCALE,uintpair)
 def rg_erosion(image,size,origin=0):
     """Grayscale erosion with maximum/minimum filters."""
-    return filters.minimum_filter(image,size,origin=origin)
+    return filters.minimum_filter(image,size,origin=origin, mode='constant', cval=1)
 
 @checks(GRAYSCALE,uintpair)
 def rg_opening(image,size,origin=0):
