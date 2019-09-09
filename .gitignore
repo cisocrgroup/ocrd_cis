@@ -1,5 +1,7 @@
 __pycache__
 *.py[cod]
+*.py.*
+*~
 .mypy_cache
 *.egg-info*
 env/*
