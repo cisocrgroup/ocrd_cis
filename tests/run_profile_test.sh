@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 source $(dirname $0)/test_lib.sh
 
 # add page xml file

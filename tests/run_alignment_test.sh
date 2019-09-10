@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 source $(dirname $0)/test_lib.sh
 
 other1=$tmp/other1.xml
