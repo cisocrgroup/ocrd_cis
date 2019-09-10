@@ -117,7 +117,7 @@ class OcropyDeskew(Processor):
             comments = '' # not even Border
         else:
             comments = 'cropped'
-        if int(angle):
+        if angle:
             comments += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
