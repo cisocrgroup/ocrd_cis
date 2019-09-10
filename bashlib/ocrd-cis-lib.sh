@@ -42,6 +42,69 @@ ocrd-cis-download-jar() {
 	popd
 }
 
+# Add a zipped OCR-D ground truth zip to the workspace.  The current
+# directory must be a valid workspace with an according mets file.
+# Sets OCR_D_CIS_GT_FILEGRP and OCR_D_CIS_IMG_FILEGRP to the according
+# filegroups.  Exits if the image file for a page-XML file in the zip
+# archive cannot be found.
+# Usage: `ocrd-cis-add-gt-zip ZIP TMP_DIR
+# * ZIP:     path to the gt-zip file
+# * TMP_DIR: existing temporary directory for extracted files
+ocrd-cis-add-gt-zip() {
+	local zip=$1
+	local tmp=$2
+	unzip -d "$tmp" "$zip"
+	echo mf zip: "$zip"
+
+	local base=$(echo $(basename $zip) | tr '_' '-')
+	base=${base/.zip/}
+	local gtfg="OCR-D-GT-$base"
+	local imgfg="OCR-D-IMG-$base"
+	for xml in $(find "$tmp" -type f -name '*.xml' | grep -i 'page'); do
+		local imgname=$(sed -ne 's/.*imageFilename="\([^"]*\)".*/\1/p' "$xml")
+		local img=$(find "$tmp" -type f -name "$imgname")
+		if [[ ! -f "$img" ]]; then
+			echo "cannot find image: $imgname"
+			exit 1
+		fi
+		echo mf xml: "$xml"
+		echo mf imgname: "$imgname"
+		echo mf img: "$img"
+		echo mf gtfg: $gtfg
+		echo mf imgfg: $imgfg
+		local imgmimetype=$(ocrd-cis-get-mimetype-by-extension "$img")
+		ocrd workspace add \
+			 --file-grp "$imgfg" \
+			 --mimetype "$imgmimetype" \
+			 --file-id "$(basename "$img")" \
+			 "$img"
+		ocrd workspace add \
+			 --file-grp "$gtfg" \
+			 --mimetype "application/vnd.prima.page+xml" \
+			 --file-id "$(basename "$xml")" \
+			 "$xml"
+
+	done
+	# set global filegroup variables
+	OCR_D_CIS_GT_FILEGRP=$gtfg
+	OCR_D_CIS_IMG_FILEGRP=$imgfg
+}
+
+# Add a zipped OCR-D ground truth zip to the workspace.  The current
+# directory must be a valid workspace with an according mets file.
+# Usage: `ocrd-cis-add-gt-zip URL TMP_DIR
+# * URL:     URL to the gt-zip file
+# * TMP_DIR: existing temporary directory for downloaded (and
+#   extracted) files
+ocrd-cis-download-and-add-gt-zip() {
+	local url=$1
+	local tmp=$2
+	echo mf url: "$url"
+	wget -P "$tmp" $url
+	local zip=$(find $tmp -type f -name '*.zip')
+	ocrd-cis-add-gt-zip "$zip" "$tmp"
+}
+
 # Get the mimetype of a given path.  The mimetype is determined using
 # the file's extension.
 ocrd-cis-get-mimetype-by-extension() {
