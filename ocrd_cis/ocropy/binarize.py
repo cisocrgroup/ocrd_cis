@@ -159,12 +159,7 @@ class OcropyBinarize(Processor):
     
     def process_page(self, page, page_image, page_xywh, page_id, file_id):
         LOG.info("About to binarize page '%s'", page_id)
-        # NOTE: This just assumes that an existing TextRegion/@orientation
-        # annotation is already applied in (the last) AlternativeImage if such
-        # images are referenced. One could additionally check whether
-        # its @comments contain the string "deskewed" (as recommended
-        # by the OCR-D spec), but that would in other respects be an
-        # even strong assumption.
+        features = page_xywh['features']
         if 'angle' in page_xywh and page_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
             # so skip deskewing here:
@@ -177,9 +172,13 @@ class OcropyBinarize(Processor):
                                         method=self.parameter['method'],
                                         maxskew=self.parameter['maxskew'],
                                         nrm=self.parameter['grayscale'])
+            if angle:
+                features += ',deskewed'
             page_xywh['angle'] = angle
         bin_image = remove_noise(bin_image,
                                  maxsize=self.parameter['noise_maxsize'])
+        if self.parameter['noise_maxsize']:
+            features += ',despeckled'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
         # to redo the rotation themselves):
@@ -189,6 +188,9 @@ class OcropyBinarize(Processor):
         # update METS (add the image file):
         if self.parameter['grayscale']:
             file_id += '.nrm'
+            features += ',grayscale_normalized'
+        else:
+            features += ',binarized'
         file_path = self.workspace.save_image_file(
             bin_image,
             file_id,
@@ -197,19 +199,11 @@ class OcropyBinarize(Processor):
         # update PAGE (reference the image file):
         page.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') + 
-                      (',cropped' if page_xywh['x'] or page_xywh['y'] else '') +
-                      (',despeckled' if self.parameter['noise_maxsize'] else '') +
-                      (',deskewed' if angle else ''))))
+            comments=features))
     
     def process_region(self, region, region_image, region_xywh, page_id, file_id):
         LOG.info("About to binarize page '%s' region '%s'", page_id, region.id)
-        # NOTE: This just assumes that an existing TextRegion/@orientation
-        # annotation is already applied in (the last) AlternativeImage if such
-        # images are referenced. One could additionally check whether
-        # its @comments contain the string "deskewed" (as recommended
-        # by the OCR-D spec), but that would in other respects be an
-        # even strong assumption.
+        features = region_xywh['features']
         if 'angle' in region_xywh and region_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
             # so skip deskewing here:
@@ -222,9 +216,13 @@ class OcropyBinarize(Processor):
                                         method=self.parameter['method'],
                                         maxskew=self.parameter['maxskew'],
                                         nrm=self.parameter['grayscale'])
+            if angle:
+                features += ',deskewed'
             region_xywh['angle'] = angle
         bin_image = remove_noise(bin_image,
                                  maxsize=self.parameter['noise_maxsize'])
+        if self.parameter['noise_maxsize']:
+            features += ',despeckled'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
         # to redo the rotation themselves):
@@ -234,6 +232,9 @@ class OcropyBinarize(Processor):
         # update METS (add the image file):
         if self.parameter['grayscale']:
             file_id += '.nrm'
+            features += ',grayscale_normalized'
+        else:
+            features += ',binarized'
         file_path = self.workspace.save_image_file(
             bin_image,
             file_id,
@@ -242,18 +243,18 @@ class OcropyBinarize(Processor):
         # update PAGE (reference the image file):
         region.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
-                      ',cropped' + 
-                      (',despeckled' if self.parameter['noise_maxsize'] else '') +
-                      (',deskewed' if region_xywh['angle'] else ''))))
+            comments=features))
     
     def process_line(self, line, line_image, line_xywh, page_id, region_id, file_id):
         LOG.info("About to binarize page '%s' region '%s' line '%s'",
                  page_id, region_id, line.id)
+        features = line_xywh['features']
         bin_image, angle = binarize(line_image,
                                     method=self.parameter['method'],
                                     maxskew=self.parameter['maxskew'],
                                     nrm=self.parameter['grayscale'])
+        if angle:
+            features += ',deskewed'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
         # to redo the rotation themselves):
@@ -264,9 +265,14 @@ class OcropyBinarize(Processor):
                     -angle, page_id, region_id, line.id)
         bin_image = remove_noise(bin_image,
                                  maxsize=self.parameter['noise_maxsize'])
+        if self.parameter['noise_maxsize']:
+            features += ',despeckled'
         # update METS (add the image file):
         if self.parameter['grayscale']:
             file_id += '.nrm'
+            features += ',grayscale_normalized'
+        else:
+            features += ',binarized'
         file_path = self.workspace.save_image_file(
             bin_image,
             file_id,
@@ -275,8 +281,5 @@ class OcropyBinarize(Processor):
         # update PAGE (reference the image file):
         line.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
-                      ',cropped' + 
-                      (',despeckled' if self.parameter['noise_maxsize'] else '') +
-                      (',deskewed' if angle else ''))))
+            comments=features))
         

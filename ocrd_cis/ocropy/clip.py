@@ -31,8 +31,6 @@ from .common import (
     pil2array, array2pil
 )
 
-#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 TOOL = 'ocrd-cis-ocropy-clip'
 LOG = getLogger('processor.OcropyClip')
 FILEGRP_IMG = 'OCR-D-IMG-CLIP'
@@ -50,7 +48,7 @@ class OcropyClip(Processor):
         
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested
-        `level-of-operation`.
+        ``level-of-operation``.
         
         Next, get each segment image according to the layout annotation (by cropping
         via coordinates into the higher-level image), as well as all its neighbours',
@@ -63,7 +61,7 @@ class OcropyClip(Processor):
         and export the (final) result as image file.
         
         Add the new image file to the workspace with a fileGrp USE equal
-        `OCR-D-IMG-CLIP` and an ID based on the input file and input element.
+        ``OCR-D-IMG-CLIP`` and an ID based on the input file and input element.
         
         Reference each new image in the AlternativeImage of the element.
         
@@ -221,4 +219,4 @@ class OcropyClip(Processor):
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments='cropped,clipped'))
+            comments=parent_xywh['features'] + ',clipped'))
