@@ -66,7 +66,7 @@ class OcropyDewarp(Processor):
         Export the result as an image file.
         
         Add the new image file to the workspace with a fileGrp USE equal
-        `OCR-D-IMG-DEWARP` and an ID based on input file and input element.
+        ``OCR-D-IMG-DEWARP`` and an ID based on input file and input element.
         
         Reference each new image in the AlternativeImage of the element.
         
@@ -104,7 +104,7 @@ class OcropyDewarp(Processor):
                 if not lines:
                     LOG.warning('Region %s contains no text lines', region.id)
                 for line in lines:
-                    line_image, _ = self.workspace.image_from_segment(
+                    line_image, line_xywh = self.workspace.image_from_segment(
                         line, region_image, region_xywh)
                     
                     LOG.info("About to dewarp page '%s' region '%s' line '%s'",
@@ -124,8 +124,7 @@ class OcropyDewarp(Processor):
                     alternative_image = line.get_AlternativeImage()
                     line.add_AlternativeImage(AlternativeImageType(
                         filename=file_path,
-                        comments=(alternative_image[-1].get_comments() + ','
-                                  if alternative_image else '') + 'dewarped'))
+                        comments=line_xywh['features'] + ',dewarped'))
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,

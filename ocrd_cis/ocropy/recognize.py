@@ -24,8 +24,6 @@ from .common import (
     check_line
 )
 
-#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 LOG = getLogger('processor.OcropyRecognize')
 
 def resize_keep_ratio(image, baseheight=48):
@@ -101,8 +99,8 @@ class OcropyRecognize(Processor):
         
         Open and deserialise each PAGE input file and its respective image,
         then iterate over the element hierarchy down to the requested
-        `textequiv_level`. If any layout annotation below the line level
-        already exists, then remove it (regardless of `textequiv_level`).
+        ``textequiv_level``. If any layout annotation below the line level
+        already exists, then remove it (regardless of ``textequiv_level``).
         
         Set up Ocropy to recognise each text line (via coordinates into
         the higher-level image, or from the alternative image; the image
@@ -111,7 +109,7 @@ class OcropyRecognize(Processor):
         
         Create new elements below the line level, if necessary.
         Put text results and confidence values into new TextEquiv at
-        `textequiv_level`, and make the higher levels consistent with that
+        ``textequiv_level``, and make the higher levels consistent with that
         up to the line level (by concatenation joined by whitespace).
         
         If a TextLine contained any previous text annotation, then compare

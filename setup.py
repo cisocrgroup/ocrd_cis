@@ -34,7 +34,7 @@ setup(
     license='MIT',
     packages=find_packages(),
     install_requires=[
-        'ocrd>=1.0.0b17',
+        'ocrd>=1.0.0b19',
         'click',
         'scipy',
         'numpy>=1.17.0',

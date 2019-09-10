@@ -66,30 +66,34 @@ class OcropyDenoise(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, _ = self.workspace.image_from_page(
-                page, page_id)
             
             if level == 'page':
+                page_image, page_xywh, _ = self.workspace.image_from_page(
+                    page, page_id, feature_selector='binarized')
                 self.process_page(page, page_image, page_xywh,
                                   input_file.pageId, file_id)
             else:
+                page_image, page_xywh, _ = self.workspace.image_from_page(
+                    page, page_id)
                 regions = page.get_TextRegion() + (
                     page.get_TableRegion() if level == 'region' else [])
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
-                    region_image, region_xywh = self.workspace.image_from_segment(
-                        region, page_image, page_xywh)
                     if level == 'region':
+                        region_image, region_xywh = self.workspace.image_from_segment(
+                            region, page_image, page_xywh, feature_selector='binarized')
                         self.process_region(region, region_image, region_xywh,
                                             input_file.pageId, file_id + '_' + region.id)
                         continue
+                    region_image, region_xywh = self.workspace.image_from_segment(
+                        region, page_image, page_xywh)
                     lines = region.get_TextLine()
                     if not lines:
                         LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     for line in lines:
                         line_image, line_xywh = self.workspace.image_from_segment(
-                            line, region_image, region_xywh)
+                            line, region_image, region_xywh, feature_selector='binarized')
                         self.process_line(line, line_image, line_xywh,
                                           input_file.pageId, region.id,
                                           file_id + '_' + region.id + '_' + line.id)
@@ -121,8 +125,8 @@ class OcropyDenoise(Processor):
         # update PAGE (reference the image file):
         page.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=((',cropped' if page_xywh['x'] or page_xywh['y'] else '') +
-                      (',despeckled' if self.parameter['noise_maxsize'] else ''))))
+            comments=page_xywh['features'] + (
+                ',despeckled' if self.parameter['noise_maxsize'] else '')))
     
     def process_region(self, region, region_image, region_xywh, page_id, file_id):
         LOG.info("About to despeckle page '%s' region '%s'", page_id, region.id)
@@ -136,8 +140,8 @@ class OcropyDenoise(Processor):
         # update PAGE (reference the image file):
         region.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=(',cropped' + 
-                      (',despeckled' if self.parameter['noise_maxsize'] else ''))))
+            comments=region_xywh['features'] + (
+                ',despeckled' if self.parameter['noise_maxsize'] else '')))
     
     def process_line(self, line, line_image, line_xywh, page_id, region_id, file_id):
         LOG.info("About to despeckle page '%s' region '%s' line '%s'",
@@ -152,6 +156,6 @@ class OcropyDenoise(Processor):
         # update PAGE (reference the image file):
         line.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=(',cropped' + 
-                      (',despeckled' if self.parameter['noise_maxsize'] else ''))))
+            comments=line_xywh['features'] + (
+                ',despeckled' if self.parameter['noise_maxsize'] else '')))
         

@@ -29,7 +29,6 @@ from .common import (
     #borderclean_bin
 )
 
-#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 TOOL = 'ocrd-cis-ocropy-resegment'
 LOG = getLogger('processor.OcropyResegment')
@@ -40,17 +39,17 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
               threshold_relative=0.8, threshold_absolute=50):
     """Reduce line polygon in a labelled region to the largest intersection.
     
-    Given a Numpy array `line_polygon` of relative coordinates
-    in a region given by a Numpy array `region_labels` of numbered
-    segments and a Numpy array `region_bin` of foreground pixels,
+    Given a Numpy array ``line_polygon`` of relative coordinates
+    in a region given by a Numpy array ``region_labels`` of numbered
+    segments and a Numpy array ``region_bin`` of foreground pixels,
     find the label of the largest segment that intersects the polygon.
     If the number of foreground pixels within that segment is larger
-    than `threshold_absolute` and if the share of foreground pixels
-    within the whole polygon is larger than `threshold_relative`,
+    than ``threshold_absolute`` and if the share of foreground pixels
+    within the whole polygon is larger than ``threshold_relative``,
     then compute the contour of that intersection and return it
     as a new polygon. Otherwise, return None.
     
-    If `extend_margins` is larger than zero, then extend `line_polygon`
+    If ``extend_margins`` is larger than zero, then extend ``line_polygon``
     by that amount of pixels horizontally and vertically before.
     """
     height, width = region_labels.shape
@@ -195,13 +194,11 @@ class OcropyResegment(Processor):
                 for line in lines:
                     alternative_image = line.get_AlternativeImage()
                     if alternative_image:
-                        LOG.debug("Using AlternativeImage %d (%s) for line '%s'",
-                                  len(alternative_image), alternative_image[-1].get_comments(),
-                                  line.id)
-                        line_image = self.workspace.resolve_image_as_pil(
-                            alternative_image[-1].get_filename())
-                        # crop region_labels accordingly:
-                        line_xywh = xywh_from_points(line.get_Coords().points)
+                        line_image, line_xywh = self.workspace.image_from_segment(
+                            line, region_image, region_xywh)
+                        LOG.debug("Using AlternativeImage (%s) for line '%s'",
+                                  line_xywh['features'], line.id)
+                        # crop region arrays accordingly:
                         line_labels = region_labels[line_xywh['y']-region_xywh['y']:
                                                     line_xywh['y']-region_xywh['y']+line_xywh['h'],
                                                     line_xywh['x']-region_xywh['x']:
@@ -241,7 +238,7 @@ class OcropyResegment(Processor):
                     # update PAGE (reference the image file):
                     line.add_AlternativeImage(AlternativeImageType(
                         filename=file_path,
-                        comments=('cropped,clipped')))
+                        comments=region_xywh['features']))
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
