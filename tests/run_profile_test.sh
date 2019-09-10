@@ -25,7 +25,7 @@ ocrd-cis-profile --log-level DEBUG \
 
 pushd $tmpws
 if [[ ! -f $(ocrd workspace find -G OCR-D-CIS-PROFILE) ]]; then
-	echo "cannot find profile in workspace"
+	echo "cannot find profile file group in workspace"
 	exit 1
 fi
 if [[ ! -f $(ocrd workspace find -m 'application/json+gzip') ]]; then
