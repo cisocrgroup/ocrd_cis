@@ -101,15 +101,14 @@ class JavaProcess:
             return output
 
     def exe(self):
-
         cmd = self.get_cmd()
         self.log.info('command: %s', " ".join(cmd))
         ret = subprocess.run(cmd)
         self.log.debug("%s: %i", " ".join(cmd), ret.returncode)
         if ret.returncode != 0:
             raise ValueError(
-                "cannot execute {}: {}\n{}"
-                .format(" ".join(cmd), ret.returncode, err.decode('utf-8')))
+                "cannot execute {}: {}\n"
+                .format(" ".join(cmd), ret.returncode))
 
     def log_stderr(self, err):
         for line in err.decode("utf-8").split("\n"):
