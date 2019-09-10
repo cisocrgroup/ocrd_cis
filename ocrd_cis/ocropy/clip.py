@@ -1,13 +1,10 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
-import io
 import numpy as np
 from PIL import Image, ImageStat
 from scipy.ndimage import filters
 
-from ocrd_utils import getLogger
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
     to_xml, AlternativeImageType,
@@ -15,6 +12,8 @@ from ocrd_models.ocrd_page import (
 )
 from ocrd import Processor
 from ocrd_utils import (
+    getLogger,
+    concat_padded,
     coordinates_of_segment,
     xywh_from_points,
     bbox_from_polygon,
@@ -104,7 +103,7 @@ class OcropyClip(Processor):
             
             regions = page.get_TextRegion()
             other_regions = (
-                page.get_AdvertRegion() + 
+                page.get_AdvertRegion() +
                 page.get_ChartRegion() +
                 page.get_ChemRegion() +
                 page.get_GraphicRegion() +

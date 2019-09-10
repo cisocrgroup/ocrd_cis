@@ -7,6 +7,7 @@ Installs:
     - ocrd-cis-ocropy-deskew
     - ocrd-cis-ocropy-binarize
     - ocrd-cis-ocropy-resegment
+    - ocrd-cis-ocropy-segment
     - ocrd-cis-ocropy-dewarp
     - ocrd-cis-ocropy-recognize
     - ocrd-cis-ocropy-train
@@ -58,6 +59,7 @@ setup(
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_recognize',
             'ocrd-cis-ocropy-rec=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_rec',
             'ocrd-cis-ocropy-resegment=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_resegment',
+            'ocrd-cis-ocropy-segment=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_segment',
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
             'ocrd-cis-aio=ocrd_cis.aio.cli:cis_ocrd_aio',
             'ocrd-cis-stats=ocrd_cis.div.cli:cis_ocrd_stats',

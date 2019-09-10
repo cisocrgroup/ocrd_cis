@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
 import numpy as np
 
@@ -11,7 +10,6 @@ from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
-from . import common
 from .ocrolib import lineest
 from .common import (
     pil2array, array2pil,

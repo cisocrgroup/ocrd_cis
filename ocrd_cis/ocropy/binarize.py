@@ -1,25 +1,25 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
-import io
 import cv2
 import numpy as np
 from PIL import Image
 
 #import kraken.binarization
 
-from ocrd_utils import getLogger
+from ocrd_utils import (
+    getLogger,
+    concat_padded,
+    MIMETYPE_PAGE
+)
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
 from . import common
 from .common import (
     pil2array, array2pil,
-    check_line, check_page,
     # binarize,
     remove_noise)
 
@@ -57,7 +57,7 @@ def binarize(pil_image, method='ocropy', maxskew=2, nrm=False):
             blur = cv2.GaussianBlur(img, (5, 5), 0)
             _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         else:
-            raise Exception('unknown binarization method %s', method)
+            raise Exception('unknown binarization method %s' % method)
         
         return Image.fromarray(th), 0
 
@@ -73,6 +73,13 @@ class OcropyBinarize(Processor):
             LOG.critical('requested method %s does not support grayscale normalized output',
                          self.parameter['method'])
             raise Exception('only method=ocropy allows grayscale=true')
+        if hasattr(self, 'output_file_grp'):
+            try:
+                self.page_grp, self.image_grp = self.output_file_grp.split(',')
+            except ValueError:
+                self.page_grp = self.output_file_grp
+                self.image_grp = FALLBACK_FILEGRP_IMG
+                LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
 
     def process(self):
         """Binarize (and optionally deskew/despeckle) the pages/regions/lines of the workspace.
@@ -96,16 +103,7 @@ class OcropyBinarize(Processor):
         
         Produce a new output file by serialising the resulting hierarchy.
         """
-        method = self.parameter['method']
-        maxskew = self.parameter['maxskew']
-        noise_maxsize = self.parameter['noise_maxsize']
         level = self.parameter['level-of-operation']
-        try:
-            self.page_grp, self.image_grp = self.output_file_grp.split(',')
-        except ValueError:
-            self.page_grp = self.output_file_grp
-            self.image_grp = FALLBACK_FILEGRP_IMG
-            LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
         
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)

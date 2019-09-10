@@ -1,18 +1,17 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
-import io
 import numpy as np
 from skimage import draw
 import cv2
 from scipy.ndimage import filters
 
-from ocrd_utils import getLogger
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
 from ocrd import Processor
 from ocrd_utils import (
+    getLogger,
+    concat_padded,
     coordinates_of_segment,
     coordinates_for_segment,
     points_from_polygon,
@@ -25,10 +24,9 @@ from . import common
 from .ocrolib import midrange
 from .common import (
     pil2array, array2pil,
-    check_line, check_page,
     # binarize,
-    compute_line_labels,
-    borderclean_bin
+    compute_line_labels
+    #borderclean_bin
 )
 
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -40,7 +38,7 @@ FILEGRP_IMG = 'OCR-D-IMG-RESEG'
 def resegment(line_polygon, region_labels, region_bin, line_id,
               extend_margins=3,
               threshold_relative=0.8, threshold_absolute=50):
-    """Reduce polygon in a labelled region to the largest intersection.
+    """Reduce line polygon in a labelled region to the largest intersection.
     
     Given a Numpy array `line_polygon` of relative coordinates
     in a region given by a Numpy array `region_labels` of numbered
@@ -178,7 +176,7 @@ class OcropyResegment(Processor):
                 region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
                 region_bin = np.array(region_array <= midrange(region_array), np.uint8)
                 try:
-                    region_labels = compute_line_labels(region_array, zoom=zoom)
+                    region_labels, _, _, _ = compute_line_labels(region_array, zoom=zoom)
                 except Exception as err:
                     LOG.warning('Cannot line-segment page "%s" region "%s": %s',
                                 page_id, region.id, err)
@@ -200,7 +198,7 @@ class OcropyResegment(Processor):
                         LOG.debug("Using AlternativeImage %d (%s) for line '%s'",
                                   len(alternative_image), alternative_image[-1].get_comments(),
                                   line.id)
-                        line_image = workspace.resolve_image_as_pil(
+                        line_image = self.workspace.resolve_image_as_pil(
                             alternative_image[-1].get_filename())
                         # crop region_labels accordingly:
                         line_xywh = xywh_from_points(line.get_Coords().points)

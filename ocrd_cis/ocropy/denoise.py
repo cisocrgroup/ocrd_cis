@@ -1,21 +1,18 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
-import io
-import numpy as np
 
-from ocrd_utils import getLogger
+from ocrd_utils import (
+    getLogger,
+    concat_padded,
+    MIMETYPE_PAGE
+)
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
-from . import common
 from .common import (
-    pil2array, array2pil,
-    check_line, check_page,
     # binarize,
     remove_noise)
 
@@ -29,6 +26,13 @@ class OcropyDenoise(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-denoise']
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyDenoise, self).__init__(*args, **kwargs)
+        if hasattr(self, 'output_file_grp'):
+            try:
+                self.page_grp, self.image_grp = self.output_file_grp.split(',')
+            except ValueError:
+                self.page_grp = self.output_file_grp
+                self.image_grp = FALLBACK_FILEGRP_IMG
+                LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
 
     def process(self):
         """Despeckle the pages / regions / lines of the workspace.
@@ -51,14 +55,7 @@ class OcropyDenoise(Processor):
         
         Produce a new output file by serialising the resulting hierarchy.
         """
-        noise_maxsize = self.parameter['noise_maxsize']
         level = self.parameter['level-of-operation']
-        try:
-            self.page_grp, self.image_grp = self.output_file_grp.split(',')
-        except ValueError:
-            self.page_grp = self.output_file_grp
-            self.image_grp = FALLBACK_FILEGRP_IMG
-            LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
         
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)

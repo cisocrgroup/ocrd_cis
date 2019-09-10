@@ -1,8 +1,5 @@
 from __future__ import absolute_import
 
-import os.path
-import sys
-import io
 import warnings
 import logging
 
@@ -12,7 +9,7 @@ from scipy import stats
 from PIL import Image
 
 from . import ocrolib
-from .ocrolib import lineest, morph, psegutils, sl
+from .ocrolib import morph, psegutils, sl
 
 from ocrd_utils import getLogger
 
@@ -68,8 +65,8 @@ def estimate_local_whitelevel(image, zoom=0.5, perc=80, range_=20):
         m = filters.percentile_filter(m, perc, size=(range_, 2))
         m = filters.percentile_filter(m, perc, size=(2, range_))
         m = interpolation.zoom(m, 1. / zoom)
-    #w, h = np.minimum(np.array(image.shape), np.array(m.shape))
-    #flat = np.clip(image[:w, :h] - m[:w, :h] + 1, 0, 1)
+    ##w, h = np.minimum(np.array(image.shape), np.array(m.shape))
+    ##flat = np.clip(image[:w, :h] - m[:w, :h] + 1, 0, 1)
     # we want to get exactly the same size as before:
     h, w = image.shape
     h0, w0 = m.shape
@@ -140,8 +137,8 @@ def estimate_thresholds(flat, bignore=0.1, escale=1.0, lo=5, hi=90):
     hi = stats.scoreatpercentile(est.ravel(), hi)
     return lo, hi
 
-# from ocropy-nlbin process1, but reshape when rotating, and catch NaN
-def binarize(image, 
+# from ocropy-nlbin process1, but reshape when rotating, catch NaN, add nrm switch
+def binarize(image,
              perc=90, # percentage for local whitelevel filters (ocropy: 80)
              range=10, # range (in pixels) for local whitelevel filters (ocropy: 20)
              zoom=1.0, # zoom factor for local whitelevel filters (ocropy: 0.5)
@@ -182,7 +179,7 @@ def binarize(image,
 def borderclean(array, margin=4):
     """Remove components that are only contained within the margin.
     
-    Given a grayscale-normalized image as Numpy array `array`, 
+    Given a grayscale-normalized image as Numpy array `array`,
     find and remove those black components that do not exceed
     the top/bottom margins.
     (This can be used to get rid of ascenders and descenders from
@@ -200,7 +197,7 @@ def borderclean(array, margin=4):
 def borderclean_bin(binary, margin=4):
     """Remove components that are only contained within the margin.
     
-    Given a binarized, inverted image as Numpy array `binary`, 
+    Given a binarized, inverted image as Numpy array `binary`,
     find those foreground components that do not exceed
     the top/bottom margins, and return a mask to remove them.
     (This can be used to get rid of ascenders and descenders from
@@ -242,7 +239,7 @@ def check_line(binary, zoom=1.0):
     h,w = binary.shape
     if h<20/zoom: return "image not tall enough for a text line %s"%(binary.shape,)
     if h>200/zoom: return "image too tall for a text line %s"%(binary.shape,)
-    #if w<1.5*h: return "line too short %s"%(binary.shape,)
+    ##if w<1.5*h: return "line too short %s"%(binary.shape,)
     if w<1.5*h and w<32/zoom: return "line too short %s"%(binary.shape,)
     if w>4000/zoom: return "line too long %s"%(binary.shape,)
     ratio = w*1.0/h
@@ -250,7 +247,7 @@ def check_line(binary, zoom=1.0):
     lo = int(0.5*ratio+0.5)
     hi = int(4*ratio)+1
     if ncomps<lo: return "too few connected components (got %d, wanted >=%d)"%(ncomps,lo)
-    #if ncomps>hi*ratio: return "too many connected components (got %d, wanted <=%d)"%(ncomps,hi)
+    ##if ncomps>hi*ratio: return "too many connected components (got %d, wanted <=%d)"%(ncomps,hi)
     if ncomps>hi*ratio and ncomps>10: return "too many connected components (got %d, wanted <=%d)"%(ncomps,hi)
     return None
 
@@ -305,8 +302,8 @@ def check_page(binary, zoom=1.0):
 def odd(num):
     return num + (num+1)%2
 
-# from ocropus-gpageseg
-def DSAVE(title,array, interactive=False):
+# from ocropus-gpageseg, but with interactive switch
+def DSAVE(title,array, interactive=True):
     logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import patches as mpatches
@@ -336,21 +333,40 @@ def remove_hlines(binary,scale,maxsize=10):
     #DSAVE('hlines', binary-result)
     return result
 
-# from ocropus-gpageseg, but with different thresholds, and remove only connected components fully inside seps
-def compute_separators_morph(binary,scale, sepwiden=10, maxseps=0):
+# from ocropus-gpageseg, but with different kernel sizes, and remove only connected components fully inside seps
+def compute_separators_morph(binary,scale,
+                             sepwiden=0, # ocropy: 10
+                             maxseps=2):
     """Finds vertical black lines corresponding to column separators."""
     # FIXME: make zoomable
-    d0 = int(max(5,scale/4))
+    # first, dilate horizontally to make warped or
+    # noisily binarized vertical lines survive:
+    ## no vertical dilation, because that would turn letters into lines:
+    #d0 = int(max(5,scale/4))
+    d0 = 1
     d1 = int(max(5,scale))+ sepwiden
     thick = morph.r_dilation(binary,(d0,d1))
-    # 5 instead of 10, because black colseps can also be discontinous:
+    #DSAVE('colseps1_dilated', thick)
+    # second, open vertically to remove everything that
+    # is vertically non-contiguous:
+    ## 5 instead of 10, because black colseps can also be discontinous:
     vert = morph.rb_opening(thick,(5*scale,1))
-    vert = morph.r_erosion(vert,(d0//2, sepwiden))
-    vert = morph.select_regions(vert,sl.dim1,min=3,nbest=2* maxseps)
-    # 8 instead of 20, because black colseps can also be discontinous:
-    vert = morph.select_regions(vert,sl.dim0,min=8*scale,nbest=maxseps)
-    # reduce to the connected components properly contained in seps:
-    vert = morph.propagate_labels(binary, vert+1, conflict=0)-1
+    #DSAVE('colseps2_opened', vert)
+    # third, erode the same amount that was
+    # dilated in the first step:
+    ## use d1//2 instead of sepwiden:
+    vert = morph.r_erosion(vert,(d0//2, d1//2))
+    #DSAVE('colseps3_eroded', vert)
+    # fourth, select the n widest and highest segments
+    # above certain thresholds to be vertical lines:
+    ## min=1 instead of 3, because lines can be 1 pixel thin
+    vert = morph.select_regions(vert,sl.dim1,min=1,nbest=2* maxseps)
+    ## 7 instead of 20, because black colseps can also be discontinous:
+    vert = morph.select_regions(vert,sl.dim0,min=7*scale,nbest=maxseps)
+    # lastly, reduce to the connected components properly contained
+    # in the detected regions (to not chop off letters):
+    vert = morph.propagate_labels(binary, vert, conflict=0)
+    #DSAVE('colseps4_selected', vert)
     return vert
 
 # from ocropus-gpagseg
@@ -363,31 +379,31 @@ def compute_colseps_conv(binary,scale=1.0, csminheight=10, maxcolseps=2):
     smoothed = filters.gaussian_filter(1.0*binary,(scale,scale*0.5))
     smoothed = filters.uniform_filter(smoothed,(5.0*scale,1))
     thresh = (smoothed<np.amax(smoothed)*0.1)
-    #DSAVE("1thresh",thresh)
+    #DSAVE("colwsseps1_thresh",thresh)
     # find column edges by filtering
     grad = filters.gaussian_filter(1.0*binary,(scale,scale*0.5),order=(0,1))
     grad = filters.uniform_filter(grad,(10.0*scale,1))
     # grad = abs(grad) # use this for finding both edges
     grad = (grad>0.5*np.amax(grad))
-    #DSAVE("2grad",grad)
+    #DSAVE("colwsseps2_grad",grad)
     # combine edges and whitespace
     seps = np.minimum(thresh,filters.maximum_filter(grad,(int(scale),int(5*scale))))
     seps = filters.maximum_filter(seps,(int(2*scale),1))
-    #DSAVE("3seps",seps)
+    #DSAVE("colwsseps3_seps",seps)
     # select only the biggest column separators
     seps = morph.select_regions(seps,sl.dim0,min=csminheight*scale,nbest=maxcolseps)
-    #DSAVE("4seps",seps)
+    #DSAVE("colwsseps4_selected",seps)
     return seps
 
 # from ocropus-gpageseg, but without apply_mask (i.e. input file)
-def compute_colseps(binary,scale, maxcolseps=3, maxseps=0):
+def compute_colseps(binary,scale, maxcolseps=3, maxseps=0, zoom=1.0):
     """Computes column separators either from vertical black lines or whitespace."""
     LOG.debug("considering at most %g whitespace column separators", maxcolseps)
     colseps = compute_colseps_conv(binary,scale, maxcolseps=maxcolseps)
     #DSAVE("colwsseps",0.7*colseps+0.3*binary)
     if maxseps > 0:
         LOG.debug("considering at most %g black column separators", maxseps)
-        seps = compute_separators_morph(binary,scale/2, maxseps=maxseps)
+        seps = compute_separators_morph(binary, scale/2, maxseps=maxseps)
         #DSAVE("colseps", [binary, colseps, seps])
         #colseps = compute_colseps_morph(binary,scale)
         colseps = np.maximum(colseps,seps)
@@ -426,7 +442,7 @@ def compute_gradmaps(binary,scale,
         grad = filters.uniform_filter(
             grad,
             (vscale,hscale*scale))
-            #(vscale,hscale*6*scale))
+            ##(vscale,hscale*6*scale))
     #DSAVE("grad", grad)
     bottom = ocrolib.norm_max((grad<0)*(-grad))
     top = ocrolib.norm_max((grad>0)*grad)
@@ -458,7 +474,7 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
     if robust:
         bmarked = filters.maximum_filter(bmarked,(1,scale//2))
     tmarked = filters.maximum_filter(tmarked,(1,scale//2))
-    #tmarked = filters.maximum_filter(tmarked,(1,20))
+    ##tmarked = filters.maximum_filter(tmarked,(1,20))
     seeds = np.zeros(binary.shape,'i')
     delta = max(3,int(scale/2))
     for x in range(bmarked.shape[1]):
@@ -491,10 +507,14 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
                 if s1==0 and (y0-y1)<5*scale: # why 5?
                     # consistent next top?
                     seeds[y1:y0,x] = 1 # fill with seed completely
-    if not robust:
-        # commented to avoid smearing into neighbouring line components at as/descenders
-        # (horizontal consistency will achieved by hmerge and spread):
+    if robust:
+        # try to separate lines that already touch:
+        seeds = morph.rb_opening(seeds, (scale//4, scale))
+    else:
+        # this will smear into neighbouring line components at as/descenders
+        # (but horizontal consistency is now achieved by hmerge and spread):
         seeds = filters.maximum_filter(seeds,(1,int(1+scale)))
+    # interrupt by column separators before labelling:
     seeds = seeds*(1-colseps)
     #DSAVE("lineseeds unlabelled",[0.4*seeds+0.5*binary, bmarked, tmarked])
     seeds, nlabels = morph.label(seeds)
@@ -505,7 +525,7 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
             LOG.warning('line %d has extreme height (%d vs %d)', i+1, height, scale)
     return seeds
 
-def hmerge_line_seeds(seeds, colseps, threshold=0.2):
+def hmerge_line_seeds(seeds, threshold=0.2):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label."""
     # merge labels horizontally to avoid splitting lines at long whitespace
@@ -514,14 +534,14 @@ def hmerge_line_seeds(seeds, colseps, threshold=0.2):
     # ignore conflicts which affect only small fractions of either line
     # (avoiding merges for small vertical overlap):
     relabel = np.unique(seeds)
-    labels = np.delete(relabel, 0) # without background
+    labels = relabel[relabel > 0] # without background
     labels_count = dict([(label, np.sum(seeds == label)) for label in labels])
     overlap_count = dict([(label, (0, label)) for label in labels])
     for label in labels:
         # get maximum horizontal spread for current label:
         mask = filters.maximum_filter(seeds == label, (1, seeds.shape[1]))
-        # get overlap between other labels and mask (but discount colseps):
-        candidates, counts = np.unique(seeds * mask * (1-colseps), return_counts=True)
+        # get overlap between other labels and mask:
+        candidates, counts = np.unique(seeds * mask, return_counts=True)
         for candidate, count in zip(candidates, counts):
             if (candidate and candidate != label and
                 overlap_count[candidate][0] < count):
@@ -551,7 +571,6 @@ def hmerge_line_seeds(seeds, colseps, threshold=0.2):
                     seeds[y, new_x_max:x_min] = label
     # apply re-assignments:
     seeds = relabel[seeds]
-    #DSAVE("lineseeds_hmerged", seeds)
     return seeds
 
 # like ocropus-gpageseg compute_segmentation, but:
@@ -559,20 +578,28 @@ def hmerge_line_seeds(seeds, colseps, threshold=0.2):
 # - with twice the estimated scale,
 # - with horizontal merge instead of blur,
 # - with component majority for foreground
-#   outside of seeds (instead of spread), and
+#   outside of seeds (instead of spread),
+# - with re-spreading from foreground,
 # - without final unmasking
-def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0, check=True):
+def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0, spread_dist=None, check=True):
     """Find text line segmentation within a region or page.
     
-    Given a grayscale-normalized image as Numpy array `array`, compute
+    Given a grayscale-normalized image as Numpy array ``array``, compute
     a complete segmentation into text lines for it, avoiding any single
-    horizontal splits. 
-    If `fullpage` is True, then also find (and suppress) horizontal lines,
-    and up to `maxcolseps` white-space and `maxseps` black column separators
-    (both counted by connected components).
+    horizontal splits (unless `fullpage`` is true).
+    If ``fullpage`` is true, then also find horizontal lines, and up to
+    ``maxcolseps`` white-space and ``maxseps`` black column separators
+    (both counted by connected components). Suppress the line components
+    and return them separately.
+    If ``spread_dist`` is given, labels are not spread from the background
+    seeds, but from the foreground, with the given distance.
     
-    Return a Numpy array of the background labels
-    (not the foreground or the masked image).
+    Return a tuple of:
+    - Numpy array of the background labels
+      (not the foreground or the masked image),
+    - Numpy array of horizontal lines foreground,
+    - Numpy array of vertical lines foreground,
+    - Numpy array of vertical separators background.
     """
     if np.prod(array.shape) == 0:
         raise Exception('image dimensions are zero')
@@ -601,16 +628,23 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
         
     bottom, top, boxmap = compute_gradmaps(binary, scale/2, usegauss=False,
                                            hscale=1.0/zoom, vscale=1.0/zoom)
+    #DSAVE("boxmap",[boxmap,bottom,top])
     if fullpage:
-        colseps, binary2 = compute_colseps(binary, scale, maxcolseps=maxcolseps, maxseps=maxseps)
+        colseps, binary2 = compute_colseps(binary, scale,
+                                           maxcolseps=maxcolseps, maxseps=maxseps,
+                                           zoom=zoom)
         vlines, binary = binary - binary2, binary2
     else:
         colseps = np.zeros(binary.shape, np.uint8)
         vlines = np.zeros_like(binary)
-    seeds = compute_line_seeds(binary, bottom, top, colseps, scale)
-    #DSAVE("seeds",[boxmap,bottom,top])
+    
+    sepmask = morph.r_dilation(np.maximum(colseps, np.maximum(hlines, vlines)),
+                               (scale//2, scale//2))
+    seeds = compute_line_seeds(binary, bottom, top, sepmask, scale)
+    #DSAVE("seeds", seeds + 0.6*binary)
     if not fullpage:
-        seeds = hmerge_line_seeds(seeds, colseps)
+        seeds = hmerge_line_seeds(seeds)
+        #DSAVE("lineseeds_hmerged", seeds)
 
     # assign the seeds labels to all component boxes
     # (boxes with conflicts will become background):
@@ -636,10 +670,27 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     # re-spread the component labels (more exact, and majority
     # leaders will not extrude):
     llabels = morph.spread_labels(np.where(seed_conflicts, llabels, llabels2), maxdist=scale)
-    #DSAVE('llabels2', llabels + 0.6*binary)
+    #DSAVE('llabels noconflict', llabels + 0.6*binary)
+    if spread_dist:
+        llabels2 = morph.spread_labels(llabels*binary, maxdist=spread_dist)
+        #DSAVE('llabels respread', llabels2 + 0.6*binary)
+        # close each line again:
+        width = llabels2.shape[1]//2
+        llabels2_pad = np.pad(llabels2, width) # protect edges for closing
+        for label in np.unique(llabels):
+            mask = np.array(llabels == label)
+            if not label or not np.count_nonzero(mask):
+                continue
+            mask2 = np.array(llabels2_pad == label)
+            mask2 = morph.r_closing(mask2, (int(scale), width)) # protected
+            mask2 = mask2[width:-width, width:-width]
+            # ensure closing only affects the background inside the original label:
+            llabels2 = np.where(llabels2 > 0, llabels2, mask*mask2*label)
+        llabels = llabels2
+        #DSAVE('llabels closed', llabels + 0.6*binary)
     #segmentation = llabels*binary
     #return segmentation
-    return llabels # , hlines, vlines
+    return llabels, hlines, vlines, colseps
 
 # from ocropus-gpageseg, but as separate step on the PIL.Image
 def remove_noise(image, maxsize=8):

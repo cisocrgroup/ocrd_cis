@@ -101,6 +101,17 @@ ocrd-cis-ocropy-resegment \
   --parameter file:///path/to/config.json
 ```
 
+### ocrd-cis-ocropy-segment
+The ocropy-segment tool can be used to segment regions into lines.
+It runs a (ad-hoc binarization and) line segmentation on every text region of every PAGE in the input file group, and adds a TextLine element with the resulting polygon outline to the annotation of the output PAGE.
+```sh
+ocrd-cis-ocropy-segment \
+  --input-file-grp OCR-D-SEG-BLOCK \
+  --output-file-grp OCR-D-SEG-LINE \
+  --mets mets.xml
+  --parameter file:///path/to/config.json
+```
+
 ### ocrd-cis-ocropy-deskew
 The ocropy-deskew tool can be used to deskew pages / regions of a workspace.
 It runs the Ocropy thresholding and deskewing estimation on every segment of every PAGE in the input file group and annotates the orientation angle in the output PAGE.

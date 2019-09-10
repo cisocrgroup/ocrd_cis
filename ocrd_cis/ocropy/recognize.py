@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
 import numpy as np
 from PIL import Image
@@ -10,14 +9,12 @@ import Levenshtein
 from ocrd_utils import (
     getLogger, concat_padded,
     coordinates_for_segment,
-    xywh_from_points, points_from_xywh,
     polygon_from_bbox,
     points_from_polygon,
     MIMETYPE_PAGE
 )
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
-from ocrd_models.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
 from ocrd import Processor
 
 from .. import get_ocrd_tool

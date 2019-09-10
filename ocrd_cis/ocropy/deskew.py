@@ -1,13 +1,10 @@
 from __future__ import absolute_import
 
-import sys
 import os.path
-import numpy as np
-from PIL import Image
 
 from ocrd_utils import getLogger, concat_padded
 from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import to_xml, AlternativeImageType, CoordsType, PageType
+from ocrd_models.ocrd_page import to_xml, AlternativeImageType, PageType
 from ocrd import Processor
 from ocrd_utils import MIMETYPE_PAGE
 
