@@ -47,6 +47,7 @@ setup(
         '': ['*.json', '*.yml', '*.yaml'],
         'ocrd_cis': ['ocrd_cis/jar/ocrd-cis.jar'],
     },
+    scripts=['bashlib/ocrd-cis-lib.sh'],
     entry_points={
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
