@@ -54,7 +54,6 @@ ocrd-cis-add-gt-zip() {
 	local zip=$1
 	local tmp=$2
 	unzip -d "$tmp" "$zip"
-	echo mf zip: "$zip"
 
 	local base=$(echo $(basename $zip) | tr '_' '-')
 	base=${base/.zip/}
@@ -67,11 +66,6 @@ ocrd-cis-add-gt-zip() {
 			echo "cannot find image: $imgname"
 			exit 1
 		fi
-		echo mf xml: "$xml"
-		echo mf imgname: "$imgname"
-		echo mf img: "$img"
-		echo mf gtfg: $gtfg
-		echo mf imgfg: $imgfg
 		local imgmimetype=$(ocrd-cis-get-mimetype-by-extension "$img")
 		ocrd workspace add \
 			 --file-grp "$imgfg" \
@@ -83,7 +77,6 @@ ocrd-cis-add-gt-zip() {
 			 --mimetype "application/vnd.prima.page+xml" \
 			 --file-id "$(basename "$xml")" \
 			 "$xml"
-
 	done
 	# set global filegroup variables
 	OCR_D_CIS_GT_FILEGRP=$gtfg
@@ -99,7 +92,6 @@ ocrd-cis-add-gt-zip() {
 ocrd-cis-download-and-add-gt-zip() {
 	local url=$1
 	local tmp=$2
-	echo mf url: "$url"
 	wget -P "$tmp" $url
 	local zip=$(find $tmp -type f -name '*.zip')
 	ocrd-cis-add-gt-zip "$zip" "$tmp"
