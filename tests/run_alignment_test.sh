@@ -1,14 +1,14 @@
 #!/bin/bash
 source $(dirname $0)/test_lib.sh
 
-other1=$tmp/other1.xml
+other1=$tmpdir/other1.xml
 cat $pagexmlfile \
 	| sed -e 's/Theil/Teyl/g' \
 		  -e 's/deſen/defen/g' \
 		  -e 's/Philadelphia/Philadclplia/g' \
 	> $other1
 
-other2=$tmp/other2.xml
+other2=$tmpdir/other2.xml
 cat $pagexmlfile | sed -e 's/ſ/f/g' > $other2
 
 # add page xml files to align
