@@ -10,12 +10,18 @@ ocrd workspace add \
 	 "$pagexmlfile"
 popd
 
+profiler=$(realpath $(dirname $0)/data/profiler)
+if [[ ! -f $profiler ]]; then
+	echo "cannot find $profiler"
+	exit 1
+fi
+
 # profile using mock profiler at data/profiler
 ocrd-cis-profile --log-level DEBUG \
 				 -I OCR-D-CIS-TEST \
 				 -O OCR-D-CIS-PROFILE \
 				 -m $tmpws/mets.xml \
-				 -p <(echo "{\"backend\":\"test\",\"executable\":\"$(dirname $0)/data/profiler\"}")
+				 -p <(echo "{\"backend\":\"test\",\"executable\":\"$profiler\"}")
 
 pushd $tmpws
 if [[ ! -f $(ocrd workspace find -G OCR-D-CIS-PROFILE) ]]; then
