@@ -30,7 +30,7 @@ ocrd workspace add \
 	 "$other2"
 popd
 
-# align three page xml files
+# align the three workspaces
 ocrd-cis-align --log-level DEBUG \
 			   -I OCR-D-CIS-TEST-1,OCR-D-CIS-TEST-2,OCR-D-CIS-TEST-3 \
 			   -O OCR-D-CIS-ALIGN \
