@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import os.path
+from PIL import ImageStat
 
 from ocrd_utils import getLogger, concat_padded
 from ocrd_modelfactory import page_from_file
@@ -75,12 +76,24 @@ class OcropyDeskew(Processor):
                                       file_id)
             else:
                 if page_xywh['angle']:
-                    LOG.info("About to rotate page '%s' by %.2f°",
-                      page_id, page_xywh['angle'])
-                    page_image = page_image.rotate(page_xywh['angle'],
-                                                   expand=True,
-                                                   #resample=Image.BILINEAR,
-                                                   fillcolor='white')
+                    LOG.debug("Rotating page '%s' by %.2f°",
+                              page_id, page_xywh['angle'])
+                    if page_image.mode in ['RGB', 'L']:
+                        # ensure no information is lost by adding transparency
+                        # (which rotation will respect):
+                        page_image.putalpha(255)
+                    background = ImageStat.Stat(page_image).median[0]
+                    page_image = page_image.rotate(
+                        page_xywh['angle'],
+                        expand=True,
+                        #resample=Image.BILINEAR,
+                        fillcolor=(
+                            # background detection by median can fail
+                            # if segments are very small or have lots
+                            # of image foreground; if we already know
+                            # this is binarized, fill with white:
+                            'white' if page_image.mode == '1' else
+                            background))
                     # pretend to image_from_segment that this has *not*
                     # been rotated yet (so we can rule out images rotated
                     # on the region level):
@@ -134,9 +147,24 @@ class OcropyDeskew(Processor):
         segment.set_orientation(orientation)
         LOG.info("Found angle for %s: %.1f", segment_id, angle)
         if angle:
-            segment_image = segment_image.rotate(angle, expand=True,
-                                                 #resample=Image.BILINEAR,
-                                                 fillcolor='white')
+            LOG.debug("Rotating segment '%s' by %.2f°",
+                      segment_id, angle)
+            if segment_image.mode in ['RGB', 'L']:
+                # ensure no information is lost by adding transparency
+                # (which rotation will respect):
+                segment_image.putalpha(255)
+            background = ImageStat.Stat(segment_image).median[0]
+            segment_image = segment_image.rotate(
+                angle, expand=True,
+                #resample=Image.BILINEAR,
+                fillcolor=(
+                    # background detection by median can fail
+                    # if segments are very small or have lots
+                    # of image foreground; if we already know
+                    # this is binarized, fill with white:
+                    'white' if segment_image.mode == '1' else
+                    background))
+
             features += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
