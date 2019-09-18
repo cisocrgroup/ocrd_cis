@@ -44,7 +44,8 @@ def binarize(pil_image, method='ocropy', maxskew=2, nrm=False):
     # FIXME: add 'sauvola'
     else:
         # Convert RGB to OpenCV
-        img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
+        #img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
+        img = np.asarray(pil_image.convert('L'))
 
         if method == 'global':
             # global thresholding
@@ -58,7 +59,6 @@ def binarize(pil_image, method='ocropy', maxskew=2, nrm=False):
             _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         else:
             raise Exception('unknown binarization method %s' % method)
-        
         return Image.fromarray(th), 0
 
 
@@ -83,40 +83,40 @@ class OcropyBinarize(Processor):
 
     def process(self):
         """Binarize (and optionally deskew/despeckle) the pages/regions/lines of the workspace.
-        
+
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested
         ``level-of-operation``.
-        
+
         Next, for each file, crop each segment image according to the layout
         annotation (via coordinates into the higher-level image, or from the
         alternative image), and determine the threshold for binarization and
         the deskewing angle of the segment (up to ``maxskew``). Then despeckle
         by removing connected components smaller than ``noise_maxsize``.
         Finally, apply results to the image and export it as an image file.
-        
+
         Add the new image file to the workspace with the fileGrp USE given
         in the second position of the output fileGrp, or ``OCR-D-IMG-BIN``,
         and an ID based on input file and input element.
-        
+
         Reference each new image in the AlternativeImage of the element.
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
         level = self.parameter['level-of-operation']
-        
+
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
             if file_id == input_file.ID:
                 file_id = concat_padded(self.image_grp, n)
-            
+
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             page_image, page_xywh, _ = self.workspace.image_from_page(
                 page, page_id)
-            
+
             if level == 'page':
                 self.process_page(page, page_image, page_xywh,
                                   input_file.pageId, file_id)
@@ -141,7 +141,7 @@ class OcropyBinarize(Processor):
                         self.process_line(line, line_image, line_xywh,
                                           input_file.pageId, region.id,
                                           file_id + '_' + region.id + '_' + line.id)
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
@@ -156,7 +156,7 @@ class OcropyBinarize(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
-    
+
     def process_page(self, page, page_image, page_xywh, page_id, file_id):
         LOG.info("About to binarize page '%s'", page_id)
         # NOTE: This just assumes that an existing TextRegion/@orientation
@@ -197,11 +197,11 @@ class OcropyBinarize(Processor):
         # update PAGE (reference the image file):
         page.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') + 
+            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
                       (',cropped' if page_xywh['x'] or page_xywh['y'] else '') +
                       (',despeckled' if self.parameter['noise_maxsize'] else '') +
                       (',deskewed' if angle else ''))))
-    
+
     def process_region(self, region, region_image, region_xywh, page_id, file_id):
         LOG.info("About to binarize page '%s' region '%s'", page_id, region.id)
         # NOTE: This just assumes that an existing TextRegion/@orientation
@@ -243,10 +243,10 @@ class OcropyBinarize(Processor):
         region.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
             comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
-                      ',cropped' + 
+                      ',cropped' +
                       (',despeckled' if self.parameter['noise_maxsize'] else '') +
                       (',deskewed' if region_xywh['angle'] else ''))))
-    
+
     def process_line(self, line, line_image, line_xywh, page_id, region_id, file_id):
         LOG.info("About to binarize page '%s' region '%s' line '%s'",
                  page_id, region_id, line.id)
@@ -276,7 +276,6 @@ class OcropyBinarize(Processor):
         line.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
             comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
-                      ',cropped' + 
+                      ',cropped' +
                       (',despeckled' if self.parameter['noise_maxsize'] else '') +
                       (',deskewed' if angle else ''))))
-        
