@@ -25,7 +25,7 @@ help:
 # END-EVAL
 
 install:
-	pip install -U pip -e .
+	pip install --upgrade pip -e .
 #
 # TESTS
 #
