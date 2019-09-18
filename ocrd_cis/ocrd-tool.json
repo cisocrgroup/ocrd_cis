@@ -371,6 +371,26 @@
 				}
 			}
 		},
+		"ocrd-cis-wer": {
+			"executable": "ocrd-cis-wer",
+			"categories": [
+				"evaluation"
+			],
+			"steps": [
+				"evaluation"
+			],
+			"description": "calculate the word error rate for aligned page xml files",
+			"parameters": {
+				"testIndex": {
+					"type": "integer",
+					"default": 0
+				},
+				"gtIndex": {
+					"type": "integer",
+					"default": -1
+				}
+			}
+		},
 		"ocrd-cis-profile": {
 			"executable": "ocrd-cis-profile",
 			"categories": [
