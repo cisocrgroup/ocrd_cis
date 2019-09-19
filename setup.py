@@ -3,6 +3,7 @@ Installs:
     - ocrd-cis-align
     - ocrd-cis-profile
     - ocrd-cis-wer
+    - ocrd-cis-jar
     - ocrd-cis-ocropy-clip
     - ocrd-cis-ocropy-denoise
     - ocrd-cis-ocropy-deskew
@@ -54,6 +55,7 @@ setup(
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
             'ocrd-cis-profile=ocrd_cis.profile.cli:cis_ocrd_profile',
             'ocrd-cis-wer=ocrd_cis.wer.cli:cis_ocrd_wer',
+            'ocrd-cis-jar=ocrd_cis.jar.__main__:main',
             'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_binarize',
             'ocrd-cis-ocropy-clip=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_clip',
             'ocrd-cis-ocropy-denoise=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_denoise',
