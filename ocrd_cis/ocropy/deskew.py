@@ -19,7 +19,7 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-deskew'
 LOG = getLogger('processor.OcropyDeskew')
-FILEGRP_IMG = 'OCR-D-IMG-DESKEW'
+FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-DESKEW'
 
 def deskew(pil_image, maxskew=2):
     array = pil2array(pil_image)
@@ -33,6 +33,13 @@ class OcropyDeskew(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyDeskew, self).__init__(*args, **kwargs)
+        if hasattr(self, 'output_file_grp'):
+            try:
+                self.page_grp, self.image_grp = self.output_file_grp.split(',')
+            except ValueError:
+                self.page_grp = self.output_file_grp
+                self.image_grp = FALLBACK_FILEGRP_IMG
+                LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
 
     def process(self):
         """Deskew the regions of the workspace.
@@ -46,15 +53,19 @@ class OcropyDeskew(Processor):
         the deskewing angle of the region (up to ``maxskew``). Annotate the
         angle in the region.
         
+        Add a new image file to the workspace with the fileGrp USE given
+        in the second position of the output fileGrp, or ``OCR-D-IMG-DESKEW``,
+        and an ID based on input file and input element.
+        
         Produce a new output file by serialising the resulting hierarchy.
         """
         level = self.parameter['level-of-operation']
         
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            file_id = input_file.ID.replace(self.input_file_grp, FILEGRP_IMG)
+            file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
             if file_id == input_file.ID:
-                file_id = concat_padded(FILEGRP_IMG, n)
+                file_id = concat_padded(self.image_grp, n)
             
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
@@ -120,21 +131,19 @@ class OcropyDeskew(Processor):
                     page_xywh['features'] += ',deskewed'
             
             # update METS (add the PAGE file):
-            file_id = input_file.ID.replace(self.input_file_grp,
-                                            self.output_file_grp)
+            file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
-                file_id = concat_padded(self.output_file_grp, n)
-            file_path = os.path.join(self.output_file_grp,
-                                     file_id + '.xml')
+                file_id = concat_padded(self.page_grp, n)
+            file_path = os.path.join(self.page_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
-                file_grp=self.output_file_grp,
+                file_grp=self.page_grp,
                 pageId=input_file.pageId,
                 local_filename=file_path,
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
-                     file_id, self.output_file_grp, out.local_filename)
+                     file_id, self.page_grp, out.local_filename)
     
     def _process_segment(self, segment, segment_image, segment_xywh, segment_id, page_id, file_id):
         features = segment_xywh['features']
@@ -171,7 +180,7 @@ class OcropyDeskew(Processor):
             segment_image,
             file_id,
             page_id=page_id,
-            file_grp=FILEGRP_IMG)
+            file_grp=self.image_grp)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path, comments=features))

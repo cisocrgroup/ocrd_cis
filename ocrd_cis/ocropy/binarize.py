@@ -69,11 +69,11 @@ class OcropyBinarize(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-binarize']
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyBinarize, self).__init__(*args, **kwargs)
-        if self.parameter['grayscale'] and self.parameter['method'] != 'ocropy':
-            LOG.critical('requested method %s does not support grayscale normalized output',
-                         self.parameter['method'])
-            raise Exception('only method=ocropy allows grayscale=true')
         if hasattr(self, 'output_file_grp'):
+            if self.parameter['grayscale'] and self.parameter['method'] != 'ocropy':
+                LOG.critical('requested method %s does not support grayscale normalized output',
+                             self.parameter['method'])
+                raise Exception('only method=ocropy allows grayscale=true')
             try:
                 self.page_grp, self.image_grp = self.output_file_grp.split(',')
             except ValueError:
