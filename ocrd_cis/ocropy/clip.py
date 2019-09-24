@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import os.path
 import numpy as np
-from PIL import Image, ImageStat
+from PIL import Image, ImageStat, ImageOps
 from scipy.ndimage import filters
 
 from ocrd_modelfactory import page_from_file
@@ -210,6 +210,10 @@ class OcropyClip(Processor):
             clip_mask = array2pil(intruders)
             #parent_bin[intruders] = 0 # suppress in binary for next iteration
             segment_image.paste(background_image, mask=clip_mask) # suppress in raw image
+            if segment_image.mode in ['RGB', 'L', 'RGBA', 'LA']:
+                # for consumers that do not have to rely on our
+                # guessed background color, but can cope with transparency:
+                segment_image.putalpha(ImageOps.invert(clip_mask))
         # recrop segment into rectangle (also clipping with white):
         segment_image = crop_image(segment_image,
             box=(segment_xywh['x'] - parent_xywh['x'],

@@ -119,6 +119,11 @@ def pil2array(im,alpha=0):
         a = numpy.fromstring(im.tobytes(),'B')
         a.shape = im.size[1],im.size[0]
         return a
+    if im.mode=="LA":
+        a = numpy.fromstring(im.tobytes(),'B')
+        a.shape = im.size[1],im.size[0],2
+        if not alpha: a = a[:,:,0]
+        return a
     if im.mode=="RGB":
         a = numpy.fromstring(im.tobytes(),'B')
         a.shape = im.size[1],im.size[0],3
@@ -135,7 +140,8 @@ def array2pil(a):
         if a.ndim==2:
             return PIL.Image.frombytes("L",(a.shape[1],a.shape[0]),a.tostring())
         elif a.ndim==3:
-            return PIL.Image.frombytes("RGB",(a.shape[1],a.shape[0]),a.tostring())
+            modes = {2: "LA", 3: "RGB", 4: "RGBA"}
+            return PIL.Image.frombytes(modes[a.shape[-1]],(a.shape[1],a.shape[0]),a.tostring())
         else:
             raise OcropusException("bad image rank")
     elif a.dtype==dtype('float32'):

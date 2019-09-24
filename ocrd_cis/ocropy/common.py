@@ -16,15 +16,19 @@ from ocrd_utils import getLogger
 LOG = getLogger('') # to be refined by importer
 
 # method similar to ocrolib.read_image_gray
-def pil2array(image):
+def pil2array(image, alpha=0):
     """Convert image to floating point grayscale array.
     
     Given a PIL.Image instance (of any colorspace),
     convert to a grayscale Numpy array
     (with 1.0 for white and 0.0 for black).
+    
+    If ``alpha`` is not zero, and an alpha channel is present,
+    then preserve it (the array will now have 3 dimensions,
+    with 2 coordinates in the last: luminance and transparency).
     """
     assert isinstance(image, Image.Image), "not a PIL.Image"
-    array = ocrolib.pil2array(image)
+    array = ocrolib.pil2array(image, alpha=alpha)
     if array.dtype == np.uint8:
         array = array / 255.0
     if array.dtype == np.int8:
@@ -38,7 +42,12 @@ def pil2array(image):
     else:
         raise Exception("unknown image type: " + array.dtype)
     if array.ndim == 3:
-        array = np.mean(array, 2)
+        if array.shape[-1] == 3:
+            array = np.mean(array, 2)
+        elif array.shape[-1] == 4:
+            alpha = array[:,:,3]
+            color = np.mean(array[:,:,:3])
+            array = np.dstack((color,alpha))
     return array
 
 def array2pil(array):

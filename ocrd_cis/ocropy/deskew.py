@@ -74,11 +74,6 @@ class OcropyDeskew(Processor):
                 page, page_id,
                 # image must not have been rotated already,
                 # (we will overwrite @orientation anyway,)
-                # (This is true even if oplevel is region
-                #  and page-level deskewing has been applied,
-                #  because we still need to rule out rotated
-                #  images on the region level, so better
-                #  rotate the page level ourselves!)
                 # abort if no such image can be produced:
                 feature_filter='deskewed')
             if level == 'page':
@@ -86,32 +81,6 @@ class OcropyDeskew(Processor):
                                       "page '%s'" % page_id, input_file.pageId,
                                       file_id)
             else:
-                if page_xywh['angle']:
-                    LOG.debug("Rotating page '%s' by %.2f°",
-                              page_id, page_xywh['angle'])
-                    if page_image.mode in ['RGB', 'L']:
-                        # ensure no information is lost by adding transparency
-                        # (which rotation will respect):
-                        page_image.putalpha(255)
-                    background = ImageStat.Stat(page_image).median[0]
-                    page_image = page_image.rotate(
-                        page_xywh['angle'],
-                        expand=True,
-                        #resample=Image.BILINEAR,
-                        fillcolor=(
-                            # background detection by median can fail
-                            # if segments are very small or have lots
-                            # of image foreground; if we already know
-                            # this is binarized, fill with white:
-                            'white' if page_image.mode == '1' else
-                            background))
-                    # pretend to image_from_segment that this has *not*
-                    # been rotated yet (so we can rule out images rotated
-                    # on the region level):
-                    #page_xywh['features'] += ',deskewed'
-                    page_xywh['x'] -= round(0.5 * max(0, page_image.width  - page_xywh['w']))
-                    page_xywh['y'] -= round(0.5 * max(0, page_image.height - page_xywh['h']))
-                
                 regions = page.get_TextRegion()
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
@@ -158,22 +127,15 @@ class OcropyDeskew(Processor):
         if angle:
             LOG.debug("Rotating segment '%s' by %.2f°",
                       segment_id, angle)
-            if segment_image.mode in ['RGB', 'L']:
+            background = ImageStat.Stat(segment_image).median[0]
+            if segment_image.mode in ['RGB', 'L', 'RGBA', 'LA']:
                 # ensure no information is lost by adding transparency
                 # (which rotation will respect):
                 segment_image.putalpha(255)
-            background = ImageStat.Stat(segment_image).median[0]
             segment_image = segment_image.rotate(
                 angle, expand=True,
                 #resample=Image.BILINEAR,
-                fillcolor=(
-                    # background detection by median can fail
-                    # if segments are very small or have lots
-                    # of image foreground; if we already know
-                    # this is binarized, fill with white:
-                    'white' if segment_image.mode == '1' else
-                    background))
-
+                fillcolor=background)
             features += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
