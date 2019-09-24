@@ -49,6 +49,14 @@ def dewarp(image, lnorm, check=True):
     
     return array2pil(line)
 
+# pad with white above and below (as a fallback for dewarp)
+def padvert(image, range_):
+    line = pil2array(image)
+    height = line.shape[0]
+    margin = int(range_ * height / 16)
+    line = np.pad(line, ((margin, margin), (0, 0)), constant_values=1.0)
+    return array2pil(line)
+
 class OcropyDewarp(Processor):
 
     def __init__(self, *args, **kwargs):
@@ -126,8 +134,11 @@ class OcropyDewarp(Processor):
                     try:
                         dew_image = dewarp(line_image, self.lnorm, check=True)
                     except Exception as err:
-                        LOG.error('error dewarping line "%s": %s', line.id, err)
-                        continue
+                        LOG.warning('cannot dewarp line "%s": %s', line.id, err)
+                        # as a fallback, simply pad the image vertically
+                        # (just as dewarping would do on average, so at least
+                        #  this line has similar margins as the others):
+                        dew_image = padvert(line_image, self.parameter['range'])
                     # update METS (add the image file):
                     file_path = self.workspace.save_image_file(
                         dew_image,
