@@ -635,7 +635,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     else:
         hlines = np.zeros_like(binary)
         
-    bottom, top, boxmap = compute_gradmaps(binary, scale/2, usegauss=False,
+    bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
                                            hscale=1.0/zoom, vscale=1.0/zoom)
     #DSAVE("boxmap",[boxmap,bottom,top])
     if fullpage:
