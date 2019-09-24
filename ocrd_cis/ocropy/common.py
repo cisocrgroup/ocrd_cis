@@ -701,14 +701,21 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     #return segmentation
     return llabels, hlines, vlines, colseps
 
-# from ocropus-gpageseg, but as separate step on the PIL.Image
+# from ocropus-gpageseg, but on both foreground and background, and as separate step on the PIL.Image
 def remove_noise(image, maxsize=8):
     array = pil2array(image)
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
-    _, ncomps_before = morph.label(binary)
-    clean = ocrolib.remove_noise(binary, maxsize)
-    _, ncomps_after = morph.label(clean)
-    LOG.debug('black components before/after denoising (maxsize=%d): %d/%d',
-              maxsize, ncomps_before, ncomps_after)
-    array = np.maximum(array, binary - clean)
+    # FIXME: we should use opening/closing against fg/bg noise instead pixel counting
+    clean_bg = ocrolib.remove_noise(binary, maxsize)
+    clean_fg = ocrolib.remove_noise(1 - binary, maxsize)
+    if LOG.getEffectiveLevel() <= logging.DEBUG:
+        _, ncomps_before = morph.label(binary)
+        _, ncomps_after = morph.label(clean_bg)
+        LOG.debug('components before/after black denoising (maxsize=%d): %d/%d',
+                  maxsize, ncomps_before, ncomps_after)
+        _, ncomps_after = morph.label(1 - clean_fg)
+        LOG.debug('components before/after white denoising (maxsize=%d): %d/%d',
+                  maxsize, ncomps_before, ncomps_after)
+    array = np.maximum(array, binary - clean_bg) # cleaned bg becomes white
+    array = np.minimum(array, binary + clean_fg) # cleaned fg becomes black
     return array2pil(array)

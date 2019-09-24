@@ -144,8 +144,9 @@
 			"parameters": {
 				"noise_maxsize": {
 					"type": "number",
-					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
-					"default": 2
+					"format": "float",
+					"description": "maximum size in points (pt) for connected components to regard as noise (0 will deactivate denoising)",
+					"default": 3.0
 				},
 				"level-of-operation": {
 					"type": "string",
