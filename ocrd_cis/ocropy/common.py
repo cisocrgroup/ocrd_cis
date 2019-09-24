@@ -548,7 +548,7 @@ def hmerge_line_seeds(seeds, threshold=0.2):
     overlap_count = dict([(label, (0, label)) for label in labels])
     for label in labels:
         # get maximum horizontal spread for current label:
-        mask = filters.maximum_filter(seeds == label, (1, seeds.shape[1]))
+        mask = filters.maximum_filter(seeds == label, (1, 2*seeds.shape[1]))
         # get overlap between other labels and mask:
         candidates, counts = np.unique(seeds * mask, return_counts=True)
         for candidate, count in zip(candidates, counts):
