@@ -179,6 +179,9 @@ class OcropyResegment(Processor):
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
+                if len(lines) == 1:
+                    LOG.warning('Page "%s" region "%s" contains only one line', page_id, region.id)
+                    continue
                 region_image, region_xywh = self.workspace.image_from_segment(
                     region, page_image, page_xywh)
                 # ad-hoc binarization:
