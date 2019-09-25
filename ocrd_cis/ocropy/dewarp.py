@@ -21,27 +21,35 @@ from .common import (
 LOG = getLogger('processor.OcropyDewarp')
 FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-DEWARP'
 
+class InvalidLine(Exception):
+    """Line image does not allow dewarping and should be ignored."""
+    pass
+
+class InadequateLine(Exception):
+    """Line image is not safe for dewarping and should be padded instead."""
+    pass
+
 # from ocropus-dewarp, but without resizing
 def dewarp(image, lnorm, check=True):
     line = pil2array(image)
     
     if np.prod(line.shape) == 0:
-        raise Exception('image dimensions are zero')
+        raise InvalidLine('image dimensions are zero')
     if np.amax(line) == np.amin(line):
-        raise Exception('image is blank')
+        raise InvalidLine('image is blank')
     
     temp = np.amax(line)-line # inverse, zero-closed
     if check:
         report = check_line(temp)
         if report:
-            raise Exception(report)
+            raise InadequateLine(report)
         # if the line was cropped badly (with intruders from
         # neighbouring lines immediately at the top or bottom,
         # dewarping the intruders would warp our actual line):
         if np.sum(temp[0]) / temp.shape[-1] > 0.2:
-            raise Exception("top is not padded, assuming bad cropping")
+            raise InvalidLine("top is not padded, assuming bad cropping")
         if np.sum(temp[-1]) / temp.shape[-1] > 0.2:
-            raise Exception("bottom is not padded, assuming bad cropping")
+            raise InvalidLine("bottom is not padded, assuming bad cropping")
     
     temp = temp * 1.0 / np.amax(temp) # normalized
     lnorm.measure(temp) # find centerline
@@ -133,7 +141,10 @@ class OcropyDewarp(Processor):
                              page_id, region.id, line.id)
                     try:
                         dew_image = dewarp(line_image, self.lnorm, check=True)
-                    except Exception as err:
+                    except InvalidLine as err:
+                        LOG.error('cannot dewarp line "%s": %s', line.id, err)
+                        continue
+                    except InadequateLine as err:
                         LOG.warning('cannot dewarp line "%s": %s', line.id, err)
                         # as a fallback, simply pad the image vertically
                         # (just as dewarping would do on average, so at least
