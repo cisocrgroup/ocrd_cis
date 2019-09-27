@@ -84,15 +84,18 @@ def estimate_local_whitelevel(image, zoom=0.5, perc=80, range_=20):
     return flat
 
 # from ocropy-nlbin, but with threshold on variance
-def estimate_skew_angle(image, angles):
+def estimate_skew_angle(image, angles, min_factor=1.5):
     estimates = np.zeros_like(angles)
+    varmax = 0
     for i, a in enumerate(angles):
         v = np.mean(interpolation.rotate(image, a, order=0, mode='constant'), axis=1)
         v = np.var(v)
         estimates[i] = v
+        if v > varmax:
+            varmax = v
     # only return the angle of the largest entropy,
     # if it is considerably larger than the average:
-    if np.amax(estimates) / np.mean(estimates) > 1.5:
+    if varmax and varmax / np.mean(estimates) > min_factor:
         return angles[np.argmax(estimates)]
     else:
         return 0
