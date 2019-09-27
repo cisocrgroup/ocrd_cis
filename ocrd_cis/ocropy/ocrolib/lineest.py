@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage import interpolation,filters
+from scipy.ndimage import interpolation,filters,measurements
 
 def scale_to_h(img,target_height,order=1,dtype=np.dtype('f'),cval=0):
     h,w = img.shape
@@ -24,6 +24,20 @@ class CenterNormalizer:
         print("# CenterNormalizer")
     def setHeight(self,target_height):
         self.target_height = target_height
+    def check(self,line, max_ignore=0.05):
+        # make sure we only have 1 textline in the image, i.e.
+        # no intruders from bad cropping (otherwise dewarping
+        # would heavily distort our actual line; so better skip):
+        h,w = line.shape
+        smoothed = filters.gaussian_filter(line, (1, h), mode='constant')
+        smoothed = np.array(smoothed > np.median(smoothed), dtype=np.uint8)
+        smoothed = filters.maximum_filter(smoothed, (h//10, h))
+        smoothed, _ = measurements.label(smoothed)
+        counts = np.bincount((smoothed * line.astype(np.uint8)).flatten())[1:] # no bg
+        thresh = max_ignore * np.sum(line) # at least that many fg pixels belong to other line?
+        if np.count_nonzero(counts > thresh) > 1:
+            return "found more than 1 textline, most likely from bad cropping"
+        return None
     def measure(self,line):
         h,w = line.shape
         smoothed = filters.gaussian_filter(line,(h*0.5,h*self.smoothness),mode='constant')

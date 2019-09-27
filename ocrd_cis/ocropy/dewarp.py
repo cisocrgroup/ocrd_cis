@@ -43,15 +43,13 @@ def dewarp(image, lnorm, check=True):
         report = check_line(temp)
         if report:
             raise InadequateLine(report)
-        # if the line was cropped badly (with intruders from
-        # neighbouring lines immediately at the top or bottom,
-        # dewarping the intruders would warp our actual line):
-        if np.sum(temp[0]) / temp.shape[-1] > 0.2:
-            raise InvalidLine("top is not padded, assuming bad cropping")
-        if np.sum(temp[-1]) / temp.shape[-1] > 0.2:
-            raise InvalidLine("bottom is not padded, assuming bad cropping")
     
     temp = temp * 1.0 / np.amax(temp) # normalized
+    if check:
+        report = lnorm.check(temp)
+        if report:
+            raise InvalidLine(report)
+
     lnorm.measure(temp) # find centerline
     line = lnorm.dewarp(line, cval=np.amax(line))
     
