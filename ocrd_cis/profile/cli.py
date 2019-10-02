@@ -30,7 +30,8 @@ class Profiler(Processor):
         self.log.debug("starting java client")
         self.log.debug("LOG_LEVEL = %s", LOG_LEVEL)
         p = JavaProfiler(self.workspace.mets_target, self.input_file_grp,
-                         self.output_file_grp, self.parameter, LOG_LEVEL)
+                         self.output_file_grp, self.parameter,
+                         LOG_LEVEL or 'INFO')
         p.exe()
         # Reload the updated METS file to make sure that run_processor
         # does not overwrite the updated file with the old.
