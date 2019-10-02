@@ -1,6 +1,7 @@
 """
 Installs:
     - ocrd-cis-align
+    - ocrd-cis-training
     - ocrd-cis-profile
     - ocrd-cis-wer
     - ocrd-cis-jar
@@ -13,12 +14,6 @@ Installs:
     - ocrd-cis-ocropy-dewarp
     - ocrd-cis-ocropy-recognize
     - ocrd-cis-ocropy-train
-    - ocrd-cis-aio
-    - ocrd-cis-stats
-    - ocrd-cis-lang
-    - ocrd-cis-clean
-    - ocrd-cis-cutter
-    - ocrd-cis-importer
 """
 
 from setuptools import setup
@@ -49,7 +44,10 @@ setup(
         '': ['*.json', '*.yml', '*.yaml'],
         'ocrd_cis': ['ocrd_cis/jar/ocrd-cis.jar'],
     },
-    scripts=['bashlib/ocrd-cis-lib.sh'],
+    scripts=[
+        'bashlib/ocrd-cis-lib.sh',
+        'bashlib/ocrd-cis-training.sh'
+    ],
     entry_points={
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
@@ -65,13 +63,6 @@ setup(
             'ocrd-cis-ocropy-rec=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_rec',
             'ocrd-cis-ocropy-resegment=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_resegment',
             'ocrd-cis-ocropy-segment=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_segment',
-            'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_train',
-            'ocrd-cis-aio=ocrd_cis.aio.cli:cis_ocrd_aio',
-            'ocrd-cis-stats=ocrd_cis.div.cli:cis_ocrd_stats',
-            'ocrd-cis-lang=ocrd_cis.div.cli:cis_ocrd_lang',
-            'ocrd-cis-clean=ocrd_cis.div.cli:cis_ocrd_clean',
-            'ocrd-cis-importer=ocrd_cis.div.cli:cis_ocrd_importer',
-            'ocrd-cis-cutter=ocrd_cis.div.cli:cis_ocrd_cutter',
         ]
     },
 )

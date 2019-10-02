@@ -5,7 +5,28 @@ set -e
 LOG_LEVEL=DEBUG
 
 ocrd-cis-log() {
-	echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') $LOG_LEVEL $* >&2
+	echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') $LOG_LEVEL - $* >&2
+}
+
+# Write a OCR-D debug log message to stderr.
+ocrd-cis-debug() {
+	case $LOG_LEVEL in
+		DEBUG) echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') DEBUG ocrd.cis - $* >&2;;
+	esac
+}
+
+# Write a OCR-D info log message to stderr.
+ocrd-cis-info() {
+	case $LOG_LEVEL in
+		DEBUG|INFO) echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') INFO ocrd.cis - $* >&2;;
+	esac
+}
+
+# Print error message to stderr and exit.
+# Usage `ocrd-cis-fail "error message" [EXIT]`
+function ocrd-cis-fail {
+	printf '%s\n' "$1" >&2
+	exit "${2-1}"
 }
 
 # utility function to join strings with a given string
@@ -22,11 +43,10 @@ ocrd-cis-getopt() {
 	shift
 	while [[ $# -gt 0 ]]; do
 		case $1 in
-			$short|$long) OCRD_CIS_OPTAR=$2; return 0;;
+			$short|$long) OCRD_CIS_OPTARG=$2; return 0;;
 			*) shift;;
 		esac
 	done
-	ocrd-cis-log "missing command line argument: $short | $long"
 	return 1;
 }
 
@@ -42,6 +62,18 @@ ocrd-cis-download-jar() {
 	popd
 }
 
+# Get the file for a file path.  Sets OCRD_CIS_FILE_ID to
+# the file id.  Usage: ocrd-cis-file-id path/to/file.xml
+OCRD_CIS_FILE_ID=""
+ocrd-cis-get-file-id() {
+	local path=$1
+	local filename=$(basename "$path")
+	local ext="${filename##*.}"
+	local fileid="${filename%.*}"
+	OCRD_CIS_FILE_ID="${fileid}_${ext}"
+	echo $path $OCRD_CIS_FILE_ID
+}
+
 # Add a zipped OCR-D ground truth zip to the workspace.  The current
 # directory must be a valid workspace with an according mets file.
 # Sets OCR_D_CIS_GT_FILEGRP and OCR_D_CIS_IMG_FILEGRP to the according
@@ -53,9 +85,10 @@ ocrd-cis-download-jar() {
 ocrd-cis-add-gt-zip() {
 	local zip=$1
 	local tmp=$2
+	ocrd-cis-log ocrd-cis-add-gt-zip $zip $tmp
 	unzip -d "$tmp" "$zip"
 
-	local base=$(echo $(basename $zip) | tr '_' '-')
+	local base=$(echo $(basename $zip) | tr '_ \t' '-')
 	base=${base/.zip/}
 	local gtfg="OCR-D-GT-$base"
 	local imgfg="OCR-D-IMG-$base"
@@ -66,16 +99,23 @@ ocrd-cis-add-gt-zip() {
 			echo "cannot find image: $imgname"
 			exit 1
 		fi
+		# add image to workspace
 		local imgmimetype=$(ocrd-cis-get-mimetype-by-extension "$img")
+		ocrd-cis-get-file-id "$img"
 		ocrd workspace add \
 			 --file-grp "$imgfg" \
 			 --mimetype "$imgmimetype" \
-			 --file-id "$(basename "$img")" \
+			 --file-id "$OCRD_CIS_FILE_ID" \
 			 "$img"
+		# get img path in workspace and set imageFilename in page xml accordingly.
+		img=$(ocrd workspace find -i "$OCRD_CIS_FILE_ID")
+		sed -i -e "s#imageFilename=\"[^\"]*\"#imageFilename=\"$img\"#" "$xml"
+		# add page xml file to workspace
+		ocrd-cis-get-file-id "$xml"
 		ocrd workspace add \
 			 --file-grp "$gtfg" \
 			 --mimetype "application/vnd.prima.page+xml" \
-			 --file-id "$(basename "$xml")" \
+			 --file-id "$OCRD_CIS_FILE_ID" \
 			 "$xml"
 	done
 	# set global filegroup variables
@@ -92,8 +132,10 @@ ocrd-cis-add-gt-zip() {
 ocrd-cis-download-and-add-gt-zip() {
 	local url=$1
 	local tmp=$2
+	ocrd-cis-log ocrd-cis-download-and-add-gt-zip $url $tmp
 	wget -P "$tmp" $url
 	local zip=$(find $tmp -type f -name '*.zip')
+	echo $zip
 	ocrd-cis-add-gt-zip "$zip" "$tmp"
 }
 
