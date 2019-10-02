@@ -577,6 +577,161 @@
 					}
 				}
 			}
+		},
+		"ocrd-cis-post-correct": {
+			"executable": "ocrd-cis-post-correct.sh",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"postprocessing/alignment"
+			],
+			"description": "Post correct OCR results",
+			"parameters": {
+				"ocrSteps": {
+					"description": "List of additional ocr steps",
+					"type": "array",
+					"required": true,
+					"items": {
+						"description": "OCR command that is evaled using the bash eval command (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $PARAMETER)",
+						"type": "string"
+					}
+				},
+				"postCorrection": {
+					"description": "Configuration of post correction command",
+					"type": "object",
+					"required": [
+						"trigrams",
+						"maxCandidate",
+						"profiler",
+						"leFeatures",
+						"rrFeatures",
+						"dmFeatures"
+					],
+					"properties": {
+						"trigrams": {
+							"description": "Path to character trigrams csv file (format: n,trigram)",
+							"type": "string",
+							"required": true
+						},
+						"maxCandidate": {
+							"description": "Maximum number of considered profiler candidates per token",
+							"type": "integer",
+							"required": true
+						},
+						"filterClasses": {
+							"description": "List of filtered feature classes",
+							"required": false,
+							"type": "array",
+							"items": {
+								"description": "Class name of feature class to filter",
+								"type": "string"
+							}
+						},
+						"profiler": {
+							"description": "Profiler configuration",
+							"type": "object",
+							"required": [
+								"path",
+								"config"
+							],
+							"properties": {
+								"path": {
+									"description": "Path to the profiler executable",
+									"required": true,
+									"type": "string"
+								},
+								"config": {
+									"description": "Path to the profiler language config file",
+									"required": true,
+									"type": "string"
+								}
+							}
+						},
+						"leFeatures": {
+							"description": "List of the lexicon extension features (leave empty to skip lexicon extension step)",
+							"required": true,
+							"type": "array",
+							"items": {
+								"description": "Feature configuration",
+								"type": "object",
+								"required": [
+									"type",
+									"name"
+								],
+								"properties": {
+									"name": {
+										"description": "Name of the feature",
+										"type": "string"
+									},
+									"type": {
+										"description": "Fully qualified java class name of the feature",
+										"type": "string"
+									},
+									"class": {
+										"description": "Class name of the feature",
+										"type": "string"
+									}
+								}
+							}
+						},
+						"rrFeatures": {
+							"description": "List of the reranker features (leave empty to skip reranking and decision maker steps)",
+							"required": true,
+							"type": "array",
+							"items": {
+								"description": "Feature configuration",
+								"type": "object",
+								"required": [
+									"type",
+									"name"
+								],
+								"properties": {
+									"name": {
+										"description": "Name of the feature",
+										"type": "string"
+									},
+									"type": {
+										"description": "Fully qualified java class name of the feature",
+										"type": "string"
+									},
+									"class": {
+										"description": "Class name of the feature",
+										"type": "string"
+									}
+								}
+							}
+						},
+						"dmFeatures": {
+							"description": "List of the desicion maker features",
+							"required": true,
+							"type": "array",
+							"items": {
+								"description": "Feature configuration",
+								"type": "object",
+								"required": [
+									"type",
+									"name"
+								],
+								"properties": {
+									"name": {
+										"description": "Name of the feature",
+										"type": "string"
+									},
+									"type": {
+										"description": "Fully qualified java class name of the feature",
+										"type": "string"
+									},
+									"class": {
+										"description": "Class name of the feature",
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }
