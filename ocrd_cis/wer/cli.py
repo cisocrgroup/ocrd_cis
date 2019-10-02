@@ -27,7 +27,8 @@ class WERer(Processor):
         """Calculate word error rate"""
         stats = Stats()
         for (n, input_file) in enumerate(self.input_files):
-            self.log.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
+            self.log.info("INPUT FILE %i / %s", n,
+                          input_file.pageId or input_file.ID)
             pcgts = page_from_file(self.workspace.download_file(input_file))
             for region in pcgts.get_Page().get_TextRegion():
                 for line in region.get_TextLine():
