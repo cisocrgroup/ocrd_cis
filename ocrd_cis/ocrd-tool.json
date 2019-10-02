@@ -405,8 +405,8 @@
 				}
 			}
 		},
-		"ocrd-cis-training": {
-			"executable": "ocrd-cis-training.sh",
+		"ocrd-cis-train": {
+			"executable": "ocrd-cis-train.sh",
 			"categories": [
 				"Text recognition and optimization"
 			],

@@ -46,7 +46,7 @@ setup(
     },
     scripts=[
         'bashlib/ocrd-cis-lib.sh',
-        'bashlib/ocrd-cis-training.sh'
+        'bashlib/ocrd-cis-train.sh',
     ],
     entry_points={
         'console_scripts': [
