@@ -429,7 +429,7 @@
 					"type": "array",
 					"required": true,
 					"items": {
-						"description": "Image preprocessing command that is evaled (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $IMG_OUTPUT_FILE_GRP, $IMG_INPUT_FILE_GRP, $PARAMETER)",
+						"description": "Image preprocessing command that is evaled using the bash eval command (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $IMG_OUTPUT_FILE_GRP, $IMG_INPUT_FILE_GRP, $PARAMETER)",
 						"type": "string"
 					}
 				},
@@ -438,7 +438,7 @@
 					"type": "array",
 					"required": true,
 					"items": {
-						"description": "OCR command that is evaled (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $IMG_OUTPUT_FILE_GRP, $IMG_INPUT_FILE_GRP, $PARAMETER)",
+						"description": "OCR command that is evaled using the bash eval command (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $PARAMETER)",
 						"type": "string"
 					}
 				},
