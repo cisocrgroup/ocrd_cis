@@ -13,7 +13,7 @@ from .ocrolib import morph, psegutils, sl
 
 from ocrd_utils import getLogger
 
-LOG = getLogger('') # to be refined by importer
+LOG = getLogger('ocrolib') # to be refined by importer
 
 # method similar to ocrolib.read_image_gray
 def pil2array(image, alpha=0):
