@@ -6,7 +6,7 @@ from ocrd_utils import getLogger
 from pathlib import Path
 
 MAIN = "de.lmu.cis.ocrd.cli.Main"
-JAR = pkg_resources.resource_filename('ocrd_cis', 'jar/ocrd-cis.jar')
+JAR = pkg_resources.resource_filename('ocrd_cis', 'data/ocrd-cis.jar')
 
 def JavaAligner(n, loglvl):
     """Create a java process that calls -c align -D '{"n":n}'"""

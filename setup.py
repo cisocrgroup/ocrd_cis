@@ -4,7 +4,7 @@ Installs:
     - ocrd-cis-training
     - ocrd-cis-profile
     - ocrd-cis-wer
-    - ocrd-cis-jar
+    - ocrd-cis-data
     - ocrd-cis-ocropy-clip
     - ocrd-cis-ocropy-denoise
     - ocrd-cis-ocropy-deskew
@@ -42,7 +42,7 @@ setup(
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml'],
-        'ocrd_cis': ['ocrd_cis/jar/ocrd-cis.jar'],
+        'ocrd_cis': ['ocrd_cis/data/ocrd-cis.jar', 'ocrd_cis/data/3gs.csv.gz'],
     },
     scripts=[
         'bashlib/ocrd-cis-lib.sh',
@@ -53,7 +53,7 @@ setup(
             'ocrd-cis-align=ocrd_cis.align.cli:cis_ocrd_align',
             'ocrd-cis-profile=ocrd_cis.profile.cli:cis_ocrd_profile',
             'ocrd-cis-wer=ocrd_cis.wer.cli:cis_ocrd_wer',
-            'ocrd-cis-jar=ocrd_cis.jar.__main__:main',
+            'ocrd-cis-data=ocrd_cis.data.__main__:main',
             'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_binarize',
             'ocrd-cis-ocropy-clip=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_clip',
             'ocrd-cis-ocropy-denoise=ocrd_cis.ocropy.cli:cis_ocrd_ocropy_denoise',

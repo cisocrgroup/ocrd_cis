@@ -143,13 +143,13 @@ mkdir -p "$traindir"
 main="de.lmu.cis.ocrd.cli.Main"
 nocr=$(jq ".ocrSteps | length" "$PARAMETER")
 ocrd-cis-info "step: training"
-# eval ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $(ocrd-cis-jar) $main \
+# eval ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $(ocrd-cis-data -jar) $main \
 # 	 --log-level $LOG_LEVEL \
 # 	 -c train \
 # 	 --mets $METS \
 # 	 --parameter <(jq ".training.dir = \"$traindir\"" "$PARAMETER") \
 # 	 --input-file-grp "$trainfgs"
-java -Dfile.encoding=UTF-8 -Xmx3g -cp $(ocrd-cis-jar) $main \
+java -Dfile.encoding=UTF-8 -Xmx3g -cp $(ocrd-cis-data -jar) $main \
 	 --log-level $LOG_LEVEL \
 	 -c train \
 	 --mets $METS \
