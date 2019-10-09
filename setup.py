@@ -21,13 +21,13 @@ from setuptools import find_packages
 
 setup(
     include_package_data = True,
-    name='cis-ocrd',
+    name='ocrd-cis',
     version='0.0.4',
     description='description',
     long_description='long description',
     author='Florian Fink, Tobias Englmeier, Christoph Weber',
     author_email='finkf@cis.lmu.de, englmeier@cis.lmu.de, web_chris@msn.com',
-    url='https://github.com/cisocrgroup/cis-ocrd-py',
+    url='https://github.com/cisocrgroup/ocrd_cis',
     license='MIT',
     packages=find_packages(),
     install_requires=[
