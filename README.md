@@ -1,5 +1,5 @@
-![build status](https://travis-ci.org/cisocrgroup/cis-ocrd-py.svg?branch=dev)
-# cis-ocrd-py
+![build status](https://travis-ci.org/cisocrgroup/ocrd_cis.svg?branch=dev)
+# ocrd_cis
 
 [CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line tools
 
@@ -125,7 +125,7 @@ ocrd-cis-ocropy-deskew \
 
 ### ocrd-cis-ocropy-denoise
 The ocropy-denoise tool can be used to despeckle pages / regions / lines of a workspace.
-It runs the Ocropy "nlbin" denoising on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). 
+It runs the Ocropy "nlbin" denoising on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage).
 ```sh
 ocrd-cis-ocropy-denoise \
   --input-file-grp OCR-D-SEG-LINE-DES \
