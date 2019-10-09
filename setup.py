@@ -21,8 +21,8 @@ from setuptools import find_packages
 
 setup(
     include_package_data = True,
-    name='ocrd-cis',
-    version='0.0.4',
+    name='ocrd_cis',
+    version='0.0.5',
     description='description',
     long_description='long description',
     author='Florian Fink, Tobias Englmeier, Christoph Weber',
