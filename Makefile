@@ -8,6 +8,4 @@ $(TEST_SCRIPTS):
 # run test scripts
 test: $(TEST_SCRIPTS)
 
-clean:
-	$(RM) -r tests/venv
-.PHONY: install test clean
+.PHONY: install test
