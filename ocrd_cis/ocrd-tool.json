@@ -303,7 +303,7 @@
 				}
 			}
 		},
-		"cis-ocrd-ocropy-train": {
+		"ocrd-cis-ocropy-train": {
 			"executable": "ocrd-cis-ocropy-train",
 			"categories": [
 				"lstm ocropy model training"
