@@ -1,0 +1,23 @@
+{
+  "model": "${DATA}/models/model.zip",
+  "jar": "${DATA}/ocrd-cis.jar",
+  "nOCR": 2,
+  "trigrams": "${DATA}/models/character-trigrams.csv",
+  "lexiconExtensionProtocol": "",
+  "decisionMakerProtocol": "",
+  "additionalLexicon": "",
+  "runLexiconExtension": true,
+  "runDescisionMaker": true,
+  "profiler": {
+    "type": "local",
+    "executable": "/apps/profiler",
+    "config": "${DATA}/languages/german.ini",
+    "cacheDir": "${DATA}/cache"
+  },
+  "ocr": [
+    {
+      "type": "ocropy",
+      "path": "${DATA}/config/ocrd-cis-ocropy-fraktur1.json"
+    }
+  ]
+}
