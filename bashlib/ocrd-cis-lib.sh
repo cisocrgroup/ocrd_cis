@@ -364,21 +364,22 @@ ocrd-cis-run-ocr-and-align() {
 		--mets "$mets" \
 		--parameter $(cat "$config" | jq --raw-output ".alignparampath") \
 		--log-level $LOG_LEVEL
-	# change long s (ſ) to normal s if the ground truth
-	# does not contain long s
-	fixlongs=$(cat "$config" | jq --raw-output '.fixLongS')
-	if [[ "$fixlongs" == "true" ]]; then
-		pushd "$workspace"
-		ocrd-cis-log "fixing long s in file"
-		for fg in $(ocrd workspace list-group | grep 'ALIGN'); do
-			ocrd-cis-log "fixing long s in filegroup $fg"
-			for xml in "$fg"/*; do
-				ocrd-cis-log "fixing long s in file $xml"
-				sed -i -e 's/ſ/s/g' "$xml"
-			done
-		done
-		popd
-	fi
+	# (Cannot use non unicode chars if installing this)
+	# Change long s (\u017f) to normal s if the ground truth
+	# does not contain long s.
+	# fixlongs=$(cat "$config" | jq --raw-output '.fixLongS')
+	# if [[ "$fixlongs" == "true" ]]; then
+	# 	pushd "$workspace"
+	# 	ocrd-cis-log "fixing long s in file"
+	# 	for fg in $(ocrd workspace list-group | grep 'ALIGN'); do
+	# 		ocrd-cis-log "fixing long s in filegroup $fg"
+	# 		for xml in "$fg"/*; do
+	# 			ocrd-cis-log "fixing long s in file $xml"
+	# 			sed -i -e 's/\u017f/s/g' "$xml"
+	# 		done
+	# 	done
+	# 	popd
+	# fi
 }
 
 # Run the training over the `-ALIGN-` filegroups in the workspace
@@ -461,7 +462,7 @@ ocrd-cis-download-and-extract-ground-truth() {
 	wget -r -np -l1 -nd -N -A zip -erobots=off "$url" || true # ignore exit status of wget
 	for zip in *.zip; do
 		# this archive is broken
-		if [[ "$(basename $zip)" == "bißmarck_carmina_1657.zip" ]]; then continue; fi
+		if [[ "$(basename $zip)" == $'bi\u00dfmarck_carmina_1657.zip' ]]; then continue; fi
 		unzip -u -o $zip
 	done
 	popd
