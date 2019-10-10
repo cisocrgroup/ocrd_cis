@@ -1,5 +1,8 @@
+PY ?= python3
+PIP ?= pip3
+
 install:
-	pip install --upgrade pip -e .
+	${PIP} install --upgrade pip -e .
 
 TEST_SCRIPTS=$(wildcard tests/run_*.sh)
 .PHONY: $(TEST_SCRIPTS)
