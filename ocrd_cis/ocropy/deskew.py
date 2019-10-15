@@ -77,7 +77,7 @@ class OcropyDeskew(Processor):
                 # image must not have been rotated already,
                 # (we will overwrite @orientation anyway,)
                 # abort if no such image can be produced:
-                feature_filter='deskewed')
+                feature_filter='deskewed' if level == 'page' else '')
             if level == 'page':
                 self._process_segment(page, page_image, page_coords,
                                       "page '%s'" % page_id, input_file.pageId,
@@ -114,12 +114,13 @@ class OcropyDeskew(Processor):
                      file_id, self.page_grp, out.local_filename)
     
     def _process_segment(self, segment, segment_image, segment_coords, segment_id, page_id, file_id):
-        features = segment_coords['features']
+        features = segment_coords['features'] # features already applied to segment_image
+        angle0 = segment_coords['angle'] # deskewing (w.r.t. top image) already applied to segment_image
         LOG.info("About to deskew %s", segment_id)
-        angle = deskew(segment_image, maxskew=self.parameter['maxskew'])
+        angle = deskew(segment_image, maxskew=self.parameter['maxskew']) # additional angle to be applied
         # segment angle: PAGE orientation is defined clockwise,
         # whereas PIL/ndimage rotation is in mathematical direction:
-        orientation = -angle
+        orientation = -(angle + angle0)
         orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
         segment.set_orientation(orientation)
         LOG.info("Found angle for %s: %.1f", segment_id, angle)
