@@ -169,8 +169,12 @@ class OcropyClip(Processor):
                      file_id, self.page_grp, out.local_filename)
     
     def process_segment(self, segment, neighbours, parent_image, parent_coords, page_id, file_id):
-        # initialize AlternativeImage@comments classes from parent:
-        features = parent_coords['features'] + ',clipped'
+        # initialize AlternativeImage@comments classes from parent, except
+        # for those operations that can apply on multiple hierarchy levels:
+        features = ','.join(
+            [feature for feature in parent_coords['features'].split(',')
+             if feature in ['binarized', 'grayscale_normalized',
+                            'despeckled', 'dewarped']]) + ',clipped'
         # mask segment within parent image:
         segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
         segment_bbox = bbox_from_polygon(segment_polygon)
