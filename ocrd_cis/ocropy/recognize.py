@@ -127,7 +127,7 @@ class OcropyRecognize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, _ = self.workspace.image_from_page(
+            page_image, page_coords, _ = self.workspace.image_from_page(
                 page, page_id)
             
             LOG.info("Recognizing text in page '%s'", page_id)
@@ -135,7 +135,7 @@ class OcropyRecognize(Processor):
             regions = page.get_TextRegion()
             if not regions:
                 LOG.warning("Page '%s' contains no text regions", page_id)
-            self.process_regions(regions, maxlevel, page_image, page_xywh)
+            self.process_regions(regions, maxlevel, page_image, page_coords)
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
@@ -154,30 +154,30 @@ class OcropyRecognize(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def process_regions(self, regions, maxlevel, page_image, page_xywh):
+    def process_regions(self, regions, maxlevel, page_image, page_coords):
         edits = 0
         lengs = 0
         for region in regions:
-            region_image, region_xywh = self.workspace.image_from_segment(
-                region, page_image, page_xywh)
+            region_image, region_coords = self.workspace.image_from_segment(
+                region, page_image, page_coords)
             
             LOG.info("Recognizing text in region '%s'", region.id)
             textlines = region.get_TextLine()
             if not textlines:
                 LOG.warning("Region '%s' contains no text lines", region.id)
             else:
-                edits_, lengs_ = self.process_lines(textlines, maxlevel, region_image, region_xywh)
+                edits_, lengs_ = self.process_lines(textlines, maxlevel, region_image, region_coords)
                 edits += edits_
                 lengs += lengs_
         if lengs > 0:
             LOG.info('CER: %.1f%%', 100.0 * edits / lengs)
 
-    def process_lines(self, textlines, maxlevel, region_image, region_xywh):
+    def process_lines(self, textlines, maxlevel, region_image, region_coords):
         edits = 0
         lengs = 0
         for line in textlines:
-            line_image, line_xywh = self.workspace.image_from_segment(
-                line, region_image, region_xywh)
+            line_image, line_coords = self.workspace.image_from_segment(
+                line, region_image, region_coords)
             
             LOG.info("Recognizing text in line '%s'", line.id)
             if line.get_TextEquiv():
@@ -229,7 +229,7 @@ class OcropyRecognize(Processor):
                             w_no += 1
             else:
                 word_conf_list = [[0]]
-                word_r_list = [[0, line_xywh['w']]]
+                word_r_list = [[0, line_image.width]]
 
             # conf for each word
             wordsconf = [(min(x)+max(x))/2 for x in word_conf_list]
@@ -247,9 +247,9 @@ class OcropyRecognize(Processor):
                                 word_r_list[word_no][0] / scale,
                                 0,
                                 word_r_list[word_no][-1] / scale,
-                                0 + line_xywh['h'])),
+                                0 + line_image.height)),
                             line_image,
-                            line_xywh))
+                            line_coords))
                     word_id = '%s_word%04d' % (line.id, word_no)
                     word = WordType(id=word_id, Coords=CoordsType(word_points))
                     line.add_Word(word)
@@ -264,9 +264,9 @@ class OcropyRecognize(Processor):
                                         word_r_list[word_no][glyph_no] / scale,
                                         0,
                                         word_r_list[word_no][glyph_no+1] / scale,
-                                        0 + line_xywh['h'])),
+                                        0 + line_image.height)),
                                     line_image,
-                                    line_xywh))
+                                    line_coords))
                             glyph_id = '%s_glyph%04d' % (word.id, glyph_no)
                             glyph = GlyphType(id=glyph_id, Coords=CoordsType(glyph_points))
                             word.add_Glyph(glyph)
