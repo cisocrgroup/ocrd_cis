@@ -11,14 +11,14 @@ ocrd-cis-log() {
 # Write a OCR-D debug log message to stderr.
 ocrd-cis-debug() {
 	case $LOG_LEVEL in
-		DEBUG) echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') DEBUG ocrd.cis - $* >&2;;
+		DEBUG) echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') DEBUG ocrd.cis.bashlib - $* >&2;;
 	esac
 }
 
 # Write a OCR-D info log message to stderr.
 ocrd-cis-info() {
 	case $LOG_LEVEL in
-		DEBUG|INFO) echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') INFO ocrd.cis - $* >&2;;
+		DEBUG|INFO) echo $(date +%R:%S.%N | sed -e 's/.*\([0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]\).*/\1/') INFO ocrd.cis.bashlib - $* >&2;;
 	esac
 }
 
