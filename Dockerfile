@@ -34,12 +34,13 @@ RUN	git clone ${GITURL}/Resources --branch master --single-branch /tmp/resources
 	&& cd / \
 	&& rm -rf /tmp/resources
 
-# install cis-ocrd-py (python)
-RUN git clone ${GITURL}/cis-ocrd-py --branch fix-ci --single-branch /tmp/cis-ocrd-py \
-	&& cd /tmp/cis-ocrd-py \
+# install ocrd_cis (python)
+COPY Makefile setup.py ocrd-tool.json ocrd_cis/ bashlib/ /tmp/ocrd_cis/
+COPY bashlib/ /tmp/ocrd_cis/bashlib/
+RUN cd /tmp/ocrd_cis \
 	&& make install \
 	&& cd / \
-	&& rm -rf /tmp/cis-ocrd-py
+	&& rm -rf /tmp/ocrd_cis
 
 # download ocr models and pre-trainded post-correction model
 RUN mkdir ${DATA}/models \
@@ -56,7 +57,5 @@ COPY data/docker/ocrd-cis-post-correction.json \
 RUN sed -i -e "s#\${DATA}#${DATA}#g" ${DATA}/config/*.json
 
 
-# TODOS:
-# - implement/adjust training script
 VOLUME ["/data"]
 ENTRYPOINT ["/bin/sh", "-c"]
