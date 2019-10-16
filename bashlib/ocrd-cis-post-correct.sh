@@ -47,10 +47,10 @@ ocrd-cis-info "step: additional ocr and alignment"
 # preset in case that there are no ocr steps
 XML_INPUT_FILE_GRP="$INPUT_FILE_GRP"
 XML_OUTPUT_FILE_GRP="$INPUT_FILE_GRP"
-alignfgs="$XML_INPUT_FILE_GROUP" # master ocr comes first
+alignfgs="$XML_INPUT_FILE_GRP" # master ocr comes first
 n=1
 for cmd in $(cat $PARAMETER | jq -r '.ocrSteps[] | @base64'); do
-	XML_OUTPUT_FILE_GRP="$XML_OUTPUT_FILE_GROUP-OCR$n"
+	XML_OUTPUT_FILE_GRP="$XML_OUTPUT_FILE_GRP-OCR$n"
 	n=$((n+1))
 	cmd=$(echo $cmd | base64 -d)
 	eval ocrd-cis-debug "$cmd"
@@ -58,6 +58,9 @@ for cmd in $(cat $PARAMETER | jq -r '.ocrSteps[] | @base64'); do
 	alignfgs="$alignfgs,$XML_OUTPUT_FILE_GRP"
 done
 alignfg="$XML_INPUT_FILE_GRP-ALIGN"
+ocrd-cis-debug ocrd-cis-align --mets $METS \
+			   --input-file-grp "$alignfgs" \
+			   --output-file-grp "$alignfg"
 ocrd-cis-align --mets $METS \
 			   --input-file-grp "$alignfgs" \
 			   --output-file-grp "$alignfg"
@@ -68,15 +71,16 @@ ocrd-cis-align --mets $METS \
 pcdir="$tmpdir/training"
 mkdir -p "$pcdir"
 main="de.lmu.cis.ocrd.cli.Main"
+jar=$(ocrd-cis-data -jar)
 nocr=$(jq ".ocrSteps | length+1" "$PARAMETER")
-ocrd-cis-info "step: training"
-# eval ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $(ocrd-cis-data -jar) $main \
-# 	 --log-level $LOG_LEVEL \
-# 	 -c train \
-# 	 --mets $METS \
-# 	 --parameter <(jq ".training.dir = \"$traindir\"" "$PARAMETER") \
-# 	 --input-file-grp "$trainfgs"
-java -Dfile.encoding=UTF-8 -Xmx3g -cp $(ocrd-cis-data -jar) $main \
+ocrd-cis-info "step: post-correction"
+ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar) $main \
+	 --log-level $LOG_LEVEL \
+	 -c train \
+	 --mets $METS \
+	 --parameter <(jq ".training.dir = \"$traindir\"" "$PARAMETER") \
+	 --input-file-grp "$trainfgs"
+java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main \
 	 --log-level $LOG_LEVEL \
 	 -c post-correct \
 	 --mets $METS \
