@@ -35,27 +35,21 @@ RUN	git clone ${GITURL}/Resources --branch master --single-branch /tmp/resources
 	&& rm -rf /tmp/resources
 
 # install ocrd_cis (python)
-COPY Makefile setup.py ocrd-tool.json ocrd_cis/ bashlib/ /tmp/ocrd_cis/
-COPY bashlib/ /tmp/ocrd_cis/bashlib/
-RUN cd /tmp/ocrd_cis \
+COPY Manifest.in Makefile setup.py ocrd-tool.json /tmp/build/
+COPY ocrd_cis/ /tmp/build/ocrd_cis/
+COPY bashlib/ /tmp/build/bashlib/
+# COPY . /tmp/ocrd_cis
+RUN cd /tmp/build \
 	&& make install \
 	&& cd / \
-	&& rm -rf /tmp/ocrd_cis
+	&& rm -rf /tmp/build
 
 # download ocr models and pre-trainded post-correction model
-RUN mkdir ${DATA}/models \
-	&& cd ${DATA}/models \
-	&& wget ${DOWNLOAD_URL}/model.zip \
-	&& wget ${DOWNLOAD_URL}/fraktur1-00085000.pyrnn.gz \
-	&& wget ${DOWNLOAD_URL}/fraktur2-00062000.pyrnn.gz
-
-# copy configuration
-COPY data/docker/ocrd-cis-post-correction.json \
-	data/docker/ocrd-cis-ocropy-fraktur1.json \
-	data/docker/ocrd-cis-ocropy-fraktur2.json \
-	${DATA}/config/
-RUN sed -i -e "s#\${DATA}#${DATA}#g" ${DATA}/config/*.json
-
+RUN mkdir /apps/models \
+	&& cd /apps/models \
+	&& wget ${DOWNLOAD_URL}/model.zip >/dev/null 2>&1 \
+	&& wget ${DOWNLOAD_URL}/fraktur1-00085000.pyrnn.gz >/dev/null 2>&1 \
+	&& wget ${DOWNLOAD_URL}/fraktur2-00062000.pyrnn.gz >/dev/null 2>&1
 
 VOLUME ["/data"]
 ENTRYPOINT ["/bin/sh", "-c"]
