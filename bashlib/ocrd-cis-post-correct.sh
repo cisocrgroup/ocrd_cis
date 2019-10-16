@@ -74,7 +74,7 @@ main="de.lmu.cis.ocrd.cli.Main"
 jar=$(ocrd-cis-data -jar)
 nocr=$(jq ".ocrSteps | length+1" "$PARAMETER")
 ocrd-cis-info "step: post-correction"
-ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar) $main \
+ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main \
 	 --log-level $LOG_LEVEL \
 	 -c train \
 	 --mets $METS \
