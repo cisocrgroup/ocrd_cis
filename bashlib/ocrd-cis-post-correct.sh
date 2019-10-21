@@ -76,15 +76,15 @@ nocr=$(jq ".ocrSteps | length+1" "$PARAMETER")
 ocrd-cis-info "step: post-correction"
 ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main \
 	 --log-level $LOG_LEVEL \
-	 -c train \
+	 -c post-correct \
 	 --mets $METS \
-	 --parameter <(jq ".training.dir = \"$traindir\"" "$PARAMETER") \
+	 --parameter "$PARAMETER" \<(jq ".postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
 	 --input-file-grp "$trainfgs"
 java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main \
 	 --log-level $LOG_LEVEL \
 	 -c post-correct \
 	 --mets $METS \
-	 --parameter <(jq ".postCorrection.dir = \"$traindir\" | .postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
+	 --parameter "$PARAMETER" \<(jq ".postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
 	 --input-file-grp "$alignfg" \
 	 --output-file-grp "$OUTPUT_FILE_GRP"
 
