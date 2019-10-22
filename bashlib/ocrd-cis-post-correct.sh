@@ -78,13 +78,13 @@ ocrd-cis-debug java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main \
 	 --log-level $LOG_LEVEL \
 	 -c post-correct \
 	 --mets $METS \
-	 --parameter "$PARAMETER" \<(jq ".postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
+	 --parameter <(jq ".postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
 	 --input-file-grp "$trainfgs"
 java -Dfile.encoding=UTF-8 -Xmx3g -cp $jar $main \
 	 --log-level $LOG_LEVEL \
 	 -c post-correct \
 	 --mets $METS \
-	 --parameter "$PARAMETER" \<(jq ".postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
+	 --parameter <(jq ".postCorrection.nOCR = \"$nocr\" | .postCorrection" "$PARAMETER") \
 	 --input-file-grp "$alignfg" \
 	 --output-file-grp "$OUTPUT_FILE_GRP"
 
