@@ -1,7 +1,8 @@
 ![build status](https://travis-ci.org/cisocrgroup/ocrd_cis.svg?branch=dev)
 # ocrd_cis
 
-[CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line tools
+[CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line
+tools for the automatic post-correction of OCR-results.
 
 ## General usage
 
