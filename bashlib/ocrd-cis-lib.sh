@@ -12,7 +12,7 @@ ocrd-cis-log() {
 function ocrd-cis-join-by { local IFS="$1"; shift; echo "$*"; }
 
 # Parse command line arguments for a given argument and
-# SETS_CIS_OPTARG to the addtional proviede value.  Usage:
+# SETS_CIS_OPTARG to the additional provided value.  Usage:
 # `ocrd-cis-getopt -P --parameter $*`.
 ocrd-cis-getopt() {
 	OCRD_CIS_OPTARG=""

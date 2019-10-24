@@ -35,7 +35,7 @@ def rtrain(inputs, load, output, ntrain):
     #LSTM save frequency, default: 1000
     savefreq=1000
 
-    #manually set the number of already learned lines, which influences the naming and stoping condition, default: -1
+    #manually set the number of already learned lines, which influences the naming and stopping condition, default: -1
     start=-1
 
     #strip the model before saving

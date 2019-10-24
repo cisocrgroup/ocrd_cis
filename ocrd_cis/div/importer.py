@@ -24,7 +24,7 @@ from ocrd import Processor, MIMETYPE_PAGE
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def cmd_to_string(cmd):
-    """remove unneded whitepsace from command strings"""
+    """remove unneeded whitespace from command strings"""
     return re.sub("""\\s+""", " ", cmd).strip()
 
 def subprocess_cmd(command, want=0):
