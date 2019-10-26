@@ -38,7 +38,7 @@ setup(
         'click',
         'scipy',
         'numpy>=1.17.0',
-        'pillow==5.4.1',
+        'pillow==6.2.0',
         'matplotlib>3.0.0',
         'python-Levenshtein',
         'calamari_ocr'
