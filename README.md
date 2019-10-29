@@ -15,8 +15,9 @@ version of ocropy that works with python3.
 
 ## Installation
 There are multiple ways to install the `ocrd_cis` tools:
- * `make install` uses `pip` to install `ocrd_cis`.
- * `make install-devel` uses `pip -e` to install `ocrd_cis`.
+ * `make install` uses `pip` to install `ocrd_cis` (see below).
+ * `make install-devel` uses `pip -e` to install `ocrd_cis` (see
+   below).
  * `pip install --upgrade pip ocrd_cis_dir`
  * `pip install -e --upgrade pip ocrd_cis_dir`
 
@@ -43,9 +44,10 @@ description of the parameter config file for the different tools that
 accept the `--parameter` argument.
 
 ### ocrd-cis-post-correct.sh
-This bash script runs the post correction using a pre-trained model.
-FIXME: how to obtain the model?  If additional support OCR should be
-used, models for these OCR steps are required (see ocrd-tool.json).
+This bash script runs the post correction using a pre-trained
+[model](http://cis.lmu.de/~finkf/model.zip).  If additional support
+OCRs should be used, models for these OCR steps are required and must
+be configured in an according configuration file (see ocrd-tool.json).
 
 Arguments:
  * `--parameter` path to configuration file
@@ -57,7 +59,8 @@ Arguments:
 ### ocrd-cis-align
 Aligns tokens of multiple input file groups to one output file group.
 This tool is used to align the master OCR with any additional support
-OCRs.
+OCRs.  It accepts a comma-separated list of input file groups, which
+it aligns in order.
 
 Arguments:
  * `--parameter` path to configuration file
@@ -72,37 +75,28 @@ Script to train a model from a list of ground-truth archives (see
 ocrd-tool.json) for the post correction.  The tool somewhat mimics the
 behaviour of other ocrd tools:
  * `--mets` for the workspace
- *  `--log-level` is passed to other tools
- *  `--parameter` is used as configuration
- *  `--output-file-grp` defines the output file group for the model
+ * `--log-level` is passed to other tools
+ * `--parameter` is used as configuration
+ * `--output-file-grp` defines the output file group for the model
 
 ### ocrd-cis-data
 Helper tool to get the path of the installed data files. Usage:
 `ocrd-cis-data [-jar|-3gs]` to get the path of the jar library or the
 path to th default 3-grams language model file.
 
-### ocrd-cis-recognize
-Run ocropus OCR over the given files of the according input file
-group.
-
-Arguments:
- * `--parameter` path to configuration file
- * `--input-file-grp` input file group
- * `--output-file-grp` output file group
- * `--log-level` set log level
- * `--mets` path to METS file in workspace
-
 ### ocrd-cis-profile
-Run the profiler over the given files of the according input file
-group.  This tools requires an installed [language
+Run the profiler over the given files of the according the given input
+file grp and adds a gzipped JSON-formatted profile to the output file
+group of the workspace.  This tools requires an installed [language
 profiler](https://github.com/cisocrgroup/Profiler).
 
 Arguments:
  * `--parameter` path to configuration file
- * `--input-file-grp` input file group
- * `--output-file-grp` output file group of the JSON-formatted profile
+ * `--input-file-grp` name of the input file group to profile
+ * `--output-file-grp` name of the output file group where the profile
+   is stored
  * `--log-level` set log level
- * `--mets` path to METS file in workspace
+ * `--mets` path to METS file in the workspace
 
 ### ocrd-cis-ocropy-train
 The ocropy-train tool can be used to train LSTM models.
@@ -248,69 +242,12 @@ If GT is used, steps 1, 5 and 8 can be omitted. Else if a segmentation is used i
 To run a view basic test type `make test` (`ocrd_cis` has to be
 installed in order to run any tests).
 
-## Old documentation
-FIXME: Will be removed at some point.
-
-### Essential system packages
-
-```sh
-sudo apt-get install \
-  git \
-  build-essential \
-  python3 python3-pip \
-  libxml2-dev \
-  default-jdk
-```
-
-### Virtualenv
-
-Use `virtualenv` to install dependencies:
-* `virtualenv -p python3.6 env`
-* `source env/bin/activate`
-* `pip install -e path/to/dir/containing/setup.py`
-
-Use `deactivate` to deactivate the virtualenv again.
-
-### OCR-D workspace
+## OCR-D workspace
 
 * Create a new (empty) workspace: `ocrd workspace init workspace-dir`
 * cd into `workspace-dir`
 * Add new file to workspace: `ocrd workspace add file -G group -i id
   -m mimetype`
-
-### Tests
-
-Issue `make test` to run the automated test suite. The tests depend on
-the following tools:
-
-* [wget](https://www.gnu.org/software/wget/)
-* [envsubst](https://linux.die.net/man/1/envsubst)
-
-You can run individual testcases using the `run_*_test.bash` scripts in
-the tests directory. Use the `--persistent` or `-p` flag to keep
-temporary directories.
-
-You can override the temporary directory by setting the `TMP_DIR` environment
-variable.
-
-## Tools
-
-### ocrd-cis-align
-
-The alignment tool line-aligns multiple file groups. It can be used to
-align the results of multiple OCRs with their respective ground-truth.
-
-The tool expects a comma-separated list of input file groups, the
-according output file group and the url of the configuration file:
-
-```sh
-ocrd-cis-align \
-  --input-file-grp 'ocr1,ocr2,gt' \
-  --output-file-grp 'ocr1+ocr2+gt' \
-  --mets mets.xml \
-  --parameter file:///path/to/config.json
-```
-
 
 ## OCR-D links
 
