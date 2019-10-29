@@ -1,6 +1,6 @@
-import click, sys, os
+import click
+import os
 
-from ocrd.decorators import ocrd_cli_options, ocrd_cli_wrap_processor
 from ocrd_cis.aio.aio import AllInOne
 
 
@@ -12,5 +12,6 @@ from ocrd_cis.aio.aio import AllInOne
 
 
 def cis_ocrd_aio(directory, parameter, verbose, download):
-    if directory == '.': directory = os.getcwd()
-    return AllInOne(directory,  parameter, verbose, download)
+    if directory == '.':
+        directory = os.getcwd()
+    return AllInOne(directory, parameter, verbose, download)

@@ -37,7 +37,7 @@ def recognize(image, pad, network, check=True):
     line = pil2array(image)
     binary = np.array(line <= midrange(line), np.uint8)
     raw_line = line.copy()
-    
+
     # validate:
     if np.prod(line.shape) == 0:
         raise Exception('image dimensions are zero')
@@ -80,12 +80,9 @@ class OcropyRecognize(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-recognize']
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
-        
-        ocropydir = os.path.dirname(os.path.abspath(__file__))
+
         # from ocropus-rpred:
-        self.network = load_object(
-            os.path.join(ocropydir, 'models', self.parameter['model']),
-            verbose=1)
+        self.network = load_object(self.get_model(), verbose=1)
         for x in self.network.walk():
             x.postLoad()
         for x in self.network.walk():
@@ -93,30 +90,46 @@ class OcropyRecognize(Processor):
                 x.allocate(5000)
 
         self.pad = 16 # ocropus-rpred default
-                
+
+    def get_model(self):
+        """Search for the model file.  First checks if
+        parameter['model'] is a valid readeable file and returns it.
+        If not, it checks if the model can be found in the
+        dirname(__file__)/models/ directory."""
+        canread = lambda p: os.path.isfile(p) and os.access(p, os.R_OK)
+        model = self.parameter['model']
+        if canread(model):
+            return model
+        ocropydir = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(ocropydir, 'models', model)
+        if canread(path):
+            return path
+        raise FileNotFoundError("cannot find model: " + model)
+
     def process(self):
+
         """Recognize lines / words / glyphs of the workspace.
-        
+
         Open and deserialise each PAGE input file and its respective image,
         then iterate over the element hierarchy down to the requested
         ``textequiv_level``. If any layout annotation below the line level
         already exists, then remove it (regardless of ``textequiv_level``).
-        
+
         Set up Ocropy to recognise each text line (via coordinates into
         the higher-level image, or from the alternative image; the image
         must have been binarised/grayscale-normalised, deskewed and dewarped
         already). Rescale and pad the image, then recognize.
-        
+
         Create new elements below the line level, if necessary.
         Put text results and confidence values into new TextEquiv at
         ``textequiv_level``, and make the higher levels consistent with that
         up to the line level (by concatenation joined by whitespace).
-        
+
         If a TextLine contained any previous text annotation, then compare
         that with the new result by aligning characters and computing the
         Levenshtein distance. Aggregate these scores for each file and print
         the line-wise and the total character error rates (CER).
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
         maxlevel = self.parameter['textequiv_level']
@@ -129,14 +142,14 @@ class OcropyRecognize(Processor):
             page = pcgts.get_Page()
             page_image, page_xywh, _ = self.workspace.image_from_page(
                 page, page_id)
-            
+
             LOG.info("Recognizing text in page '%s'", page_id)
             # region, line, word, or glyph level:
             regions = page.get_TextRegion()
             if not regions:
                 LOG.warning("Page '%s' contains no text regions", page_id)
             self.process_regions(regions, maxlevel, page_image, page_xywh)
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
@@ -160,7 +173,7 @@ class OcropyRecognize(Processor):
         for region in regions:
             region_image, region_xywh = self.workspace.image_from_segment(
                 region, page_image, page_xywh)
-            
+
             LOG.info("Recognizing text in region '%s'", region.id)
             textlines = region.get_TextLine()
             if not textlines:
@@ -178,7 +191,7 @@ class OcropyRecognize(Processor):
         for line in textlines:
             line_image, line_xywh = self.workspace.image_from_segment(
                 line, region_image, region_xywh)
-            
+
             LOG.info("Recognizing text in line '%s'", line.id)
             if line.get_TextEquiv():
                 linegt = line.TextEquiv[0].Unicode
@@ -190,22 +203,22 @@ class OcropyRecognize(Processor):
             line.set_Word([])
 
             if line_image.size[1] < 16:
-                LOG.error("bounding box is too narrow at line %s", line.id)
+                LOG.debug("ERROR: bounding box is too narrow at line %s", line.id)
                 continue
             # resize image to 48 pixel height
             final_img, scale = resize_keep_ratio(line_image)
-            
+
             # process ocropy:
             try:
                 linepred, clist, rlist, confidlist = recognize(
                     final_img, self.pad, self.network, check=True)
             except Exception as err:
-                LOG.error('error processing line "%s": %s', line.id, err)
+                LOG.debug('ERROR: error processing line "%s": %s', line.id, err)
                 continue
             LOG.debug("OCR '%s': '%s'", line.id, linepred)
             edits += Levenshtein.distance(linepred, linegt)
             lengs += len(linegt)
-            
+
             words = [x.strip() for x in linepred.split(' ') if x.strip()]
 
             word_r_list = [[0]] # r-positions of every glyph in every word

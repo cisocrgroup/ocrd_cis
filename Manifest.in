@@ -1,0 +1,2 @@
+include ocrd_cis/data/ocrd-cis.jar
+include ocrd_cis/data/3gs.csv.gz

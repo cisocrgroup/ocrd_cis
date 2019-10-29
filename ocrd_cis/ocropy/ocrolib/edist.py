@@ -4,10 +4,10 @@ import numpy as np
 from scipy.ndimage import filters
 
 def levenshtein(a,b):
-    """Calculates the Levenshtein distance between a and b. 
+    """Calculates the Levenshtein distance between a and b.
     (Clever compact Pythonic implementation from hetland.org)"""
     n, m = len(a), len(b)
-    if n > m: a,b = b,a; n,m = m,n       
+    if n > m: a,b = b,a; n,m = m,n
     current = list(range(n+1))
     for i in range(1,m+1):
         previous,current = current,[i]+[0]*n
@@ -81,4 +81,3 @@ def xlevenshtein(a,b,context=1):
     bgs = re.split(r'~+',bls)
     confusions = [(a,b) for a,b in zip(ags,bgs) if a!="" or b!=""]
     return cost,confusions
-

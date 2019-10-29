@@ -1,14 +1,14 @@
-#/bin/bash
+#!/bin/bash
 source $(dirname $0)/test_lib.sh
 
-other1=$tmp/other1.xml
+other1=$tmpdir/other1.xml
 cat $pagexmlfile \
 	| sed -e 's/Theil/Teyl/g' \
 		  -e 's/deſen/defen/g' \
 		  -e 's/Philadelphia/Philadclplia/g' \
 	> $other1
 
-other2=$tmp/other2.xml
+other2=$tmpdir/other2.xml
 cat $pagexmlfile | sed -e 's/ſ/f/g' > $other2
 
 # add page xml files to align
@@ -30,7 +30,7 @@ ocrd workspace add \
 	 "$other2"
 popd
 
-# align three page xml files
+# align the three workspaces
 ocrd-cis-align --log-level DEBUG \
 			   -I OCR-D-CIS-TEST-1,OCR-D-CIS-TEST-2,OCR-D-CIS-TEST-3 \
 			   -O OCR-D-CIS-ALIGN \
@@ -38,6 +38,6 @@ ocrd-cis-align --log-level DEBUG \
 
 pushd $tmpws
 if [[ ! -f $(ocrd workspace find -G OCR-D-CIS-ALIGN) ]]; then
-	echo "cannot find profile in workspace"
+	echo "cannot find aligned file group workspace"
 	exit 1
 fi

@@ -1,34 +1,16 @@
 PY ?= python3
-
-# Log level
-LOGLEVEL = DEBUG
-
-# Whether temporary directories should be kept
-PERSISTENT = no
-
-export
-
-# BEGIN-EVAL makefile-parser --make-help Makefile
-
-help:
-	@echo ""
-	@echo "  Targets"
-	@echo ""
-	@echo "    install  pip install -e ."
-	@echo "    test     Run align tests"
-	@echo ""
-	@echo "  Variables"
-	@echo ""
-	@echo "    LOGLEVEL    Log level"
-	@echo "    PERSISTENT  Whether temporary directories should be kept"
-
-# END-EVAL
+PIP ?= pip3
 
 install:
-	pip install -U pip -e .
-#
-# TESTS
-#
+	${PIP} install --upgrade pip .
+install-devel:
+	${PIP} install --upgrade pip -e .
+
+docker-build: Dockerfile
+	docker build -t flobar/ocrd_cis:latest .
+docker-push: docker-build
+	docker push flobar/ocrd_cis:latest
+
 TEST_SCRIPTS=$(wildcard tests/run_*.sh)
 .PHONY: $(TEST_SCRIPTS)
 $(TEST_SCRIPTS):
@@ -36,6 +18,4 @@ $(TEST_SCRIPTS):
 # run test scripts
 test: $(TEST_SCRIPTS)
 
-clean:
-	$(RM) -r tests/venv
-.PHONY: install test clean
+.PHONY: install test

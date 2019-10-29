@@ -3,8 +3,8 @@
 set -e
 
 PAGE_XML_MIME_TYPE="application/vnd.prima.page+xml"
-CACHE_DIR="/tmp/cis-ocrd-py-cache"
-TMP_DIR=${TMP_DIR:-$(mktemp -d -t cis-ocrd-tmp-XXXXXXXXX)}
+CACHE_DIR="/tmp/ocrd_cis-py-cache"
+TMP_DIR=${TMP_DIR:-$(mktemp -d -t ocrd_cis-tmp-XXXXXXXXX)}
 PAGE_XML_FILES=""
 PERSISTENT=${PERSISTENT:-no}
 JAR=""
