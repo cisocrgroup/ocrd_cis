@@ -162,7 +162,7 @@ class Aligner(Processor):
             ifg = word.input_file.input_file_group
             ddt = word.input_file.input_file_group + "/" + _id
             # if conf is none it is most likely ground truth data
-            conf = min([float(te0(x).get_conf()) or "1.0" for x in word.region])
+            conf = min([float(te0(x).get_conf() or "1.0") for x in word.region])
             self.log.debug("word alignment: %s [%s - %s]", _str, _id, ifg)
             if i != 0:
                 te = TextEquivType(
