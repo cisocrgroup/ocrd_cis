@@ -115,7 +115,7 @@ def estimate_skew(flat, bignore=0.1, maxskew=2, skewsteps=8):
     #     angles = np.concatenate([angles,
     #                              angles + 90])
     angle = estimate_skew_angle(est, angles)
-    # we must allow reshape/expand to avoid loosing information in the corners
+    # we must allow reshape/expand to avoid losing information in the corners
     # (but this also means that consumers of the AlternativeImage must
     #  offset coordinates by half the increased width/height besides
     #  correcting for rotation in the coordinates):
@@ -284,7 +284,7 @@ def check_region(binary, zoom=1.0):
     slots = int(w*h*1.0/(30*30)*zoom*zoom)
     _,ncomps = measurements.label(binary)
     if ncomps<5: return "too few connected components for a region image (got %d)"%(ncomps,)
-    if ncomps>slots*2 and ncomps>10: return "too many connnected components for a region image (%d > %d)"%(ncomps,slots)
+    if ncomps>slots*2 and ncomps>10: return "too many connected components for a region image (%d > %d)"%(ncomps,slots)
     return None
 
 # from ocropus-gpageseg, but with zoom parameter
@@ -308,7 +308,7 @@ def check_page(binary, zoom=1.0):
     slots = int(w*h*1.0/(30*30)*zoom*zoom)
     _,ncomps = measurements.label(binary)
     if ncomps<10: return "too few connected components for a page image (got %d)"%(ncomps,)
-    if ncomps>slots and ncomps>10: return "too many connnected components for a page image (%d > %d)"%(ncomps,slots)
+    if ncomps>slots and ncomps>10: return "too many connected components for a page image (%d > %d)"%(ncomps,slots)
     return None
 
 def odd(num):
@@ -361,7 +361,7 @@ def compute_separators_morph(binary,scale,
     #DSAVE('colseps1_dilated', thick)
     # second, open vertically to remove everything that
     # is vertically non-contiguous:
-    ## 5 instead of 10, because black colseps can also be discontinous:
+    ## 5 instead of 10, because black colseps can also be discontinuous:
     vert = morph.rb_opening(thick,(5*scale,1))
     #DSAVE('colseps2_opened', vert)
     # third, erode the same amount that was
@@ -373,7 +373,7 @@ def compute_separators_morph(binary,scale,
     # above certain thresholds to be vertical lines:
     ## min=1 instead of 3, because lines can be 1 pixel thin
     vert = morph.select_regions(vert,sl.dim1,min=1,nbest=2* maxseps)
-    ## 7 instead of 20, because black colseps can also be discontinous:
+    ## 7 instead of 20, because black colseps can also be discontinuous:
     vert = morph.select_regions(vert,sl.dim0,min=7*scale,nbest=maxseps)
     # lastly, reduce to the connected components properly contained
     # in the detected regions (to not chop off letters):

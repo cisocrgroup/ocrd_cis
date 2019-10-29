@@ -24,7 +24,7 @@ from ocrd import Processor, MIMETYPE_PAGE
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def cmd_to_string(cmd):
-    """remove unneded whitepsace from command strings"""
+    """remove unneeded whitespace from command strings"""
     return re.sub("""\\s+""", " ", cmd).strip()
 
 def subprocess_cmd(command, want=0):
@@ -173,7 +173,7 @@ class Importer(Processor):
                         wconfs = [(min(conf)+max(conf))/2 for conf in line_conf]
                         lineconf = (min(wconfs)+max(wconfs))/2
 
-                        line.replace_TextEquiv_at(0, TextEquivType(Unicode=linepred, conf=lineconf))
+                        line.replace_TextEquiv_at(0, TextEquivType(Unicode=linepred, conf=str(lineconf)))
 
 
                         if self.maxlevel == 'word' or 'glyph':
@@ -189,7 +189,7 @@ class Importer(Processor):
                                 word = WordType(id=word_id, Coords=CoordsType(points_from_x0y0x1y1(word_bbox)))
 
                                 line.add_Word(word)
-                                word.add_TextEquiv(TextEquivType(Unicode=w, conf=wconfs[w_no]))
+                                word.add_TextEquiv(TextEquivType(Unicode=w, conf=str(wconfs[w_no])))
 
                                 if self.maxlevel == 'glyph':
                                     for glyph_no, g in enumerate(w):
@@ -200,4 +200,4 @@ class Importer(Processor):
                                         glyph = GlyphType(id=glyph_id, Coords=CoordsType(points_from_x0y0x1y1(glyph_bbox)))
 
                                         word.add_Glyph(glyph)
-                                        glyph.add_TextEquiv(TextEquivType(Unicode=g, conf=line_conf[w_no][glyph_no]))
+                                        glyph.add_TextEquiv(TextEquivType(Unicode=g, conf=str(line_conf[w_no][glyph_no])))

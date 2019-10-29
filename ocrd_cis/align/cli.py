@@ -8,12 +8,9 @@ from ocrd.decorators import ocrd_cli_options
 from ocrd.decorators import ocrd_cli_wrap_processor
 from ocrd_utils import MIMETYPE_PAGE
 from ocrd_utils import getLogger
-from ocrd_utils import concat_padded
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml
 from ocrd_models.ocrd_page_generateds import TextEquivType
-from ocrd_models.ocrd_page_generateds import parse
-# from ocrd_cis.align.aligner import Aligner
 from ocrd_cis import JavaAligner
 from ocrd_cis import get_ocrd_tool
 
@@ -22,12 +19,13 @@ LOG_LEVEL = 'INFO'
 @click.command()
 @ocrd_cli_options
 def cis_ocrd_align(*args, **kwargs):
-    global LOG_LEVEL
     if 'log_level' in kwargs:
+        global LOG_LEVEL
         LOG_LEVEL = kwargs['log_level']
     return ocrd_cli_wrap_processor(Aligner, *args, **kwargs)
 
 class Aligner(Processor):
+    LOG_LEVEL = 'INFO'
     def __init__(self, *args, **kwargs):
         ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
@@ -43,7 +41,6 @@ class Aligner(Processor):
         for _id, ift in enumerate(ifts):
             alignments = json.loads(self.run_java_aligner(ift))
             pcgts = self.align(alignments, ift)
-            basename = os.path.basename(ift[0].input_file.url)
             # keep the right part after OCR-D-...-filename
             # and prepend output_file_grp
             # ID = concat_padded(self.output_file_grp, _id+1)
@@ -63,7 +60,7 @@ class Aligner(Processor):
     def align(self, alignments, ift):
         """align the alignment objects with the according input file tuples"""
         for t in ift:
-            self.log.info("tuple %s", os.path.basename(t.input_file.url))
+            self.log.debug("tuple %s", os.path.basename(t.input_file.url))
         pcgtst = self.open_input_file_tuples(ift)
         i = 0
         for mi, mr in enumerate(pcgtst[0].get_Page().get_TextRegion()):
@@ -92,19 +89,25 @@ class Aligner(Processor):
         if len(lines[0].region.get_TextEquiv()) > 1:
             del lines[0].region.get_TextEquiv()[1:]
         for i, line in enumerate(lines):
-            self.log.info('line alignment: %s [%s - %s]',
-                          line.region.get_TextEquiv()[0].Unicode,
+            if lines[0].region.get_TextEquiv() is None:
+                lines[0].region.TextEquiv = []
+            # ensure to append enough text equivs
+            while len(lines[0].region.get_TextEquiv()) <= i:
+                lines[0].region.add_TextEquiv(TextEquivType())
+            self.log.debug('line alignment: %s [%s - %s]',
+                          get_textequiv_unicode(line.region),
                           line.region.get_id(),
                           line.input_file.input_file_group)
             ddt = line.input_file.input_file_group + "/" + line.region.get_id()
             if i != 0:
                 te = TextEquivType(
-                    Unicode=line.region.get_TextEquiv()[0].Unicode,
-                    conf=line.region.get_TextEquiv()[0].conf,
+                    Unicode=get_textequiv_unicode(line.region),
+                    conf=get_textequiv_conf(line.region),
                     dataType="ocrd-cis-line-alignment",
                     dataTypeDetails=ddt)
                 lines[0].region.add_TextEquiv(te)
             else:
+                self.log.debug("len: %i, i: %i", len(lines[0].region.get_TextEquiv()), i)
                 lines[0].region.get_TextEquiv()[i].set_dataType(
                     "ocrd-cis-line-alignment-master-ocr")
             lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(ddt)
@@ -147,7 +150,7 @@ class Aligner(Processor):
         for i, word in enumerate(words):
             if not word.region:
                 ifg = word.input_file.input_file_group
-                self.log.info("(empty) word alignment: [%s]", ifg)
+                self.log.debug("(empty) word alignment: [%s]", ifg)
                 te = TextEquivType(
                     dataType="ocrd-cis-empty-word-alginment",
                     dataTypeDetails=ifg)
@@ -159,8 +162,8 @@ class Aligner(Processor):
             ifg = word.input_file.input_file_group
             ddt = word.input_file.input_file_group + "/" + _id
             # if conf is none it is most likely ground truth data
-            conf = min([te0(x).get_conf() or 1 for x in word.region])
-            self.log.info("word alignment: %s [%s - %s]", _str, _id, ifg)
+            conf = min([float(te0(x).get_conf() or "1.0") for x in word.region])
+            self.log.debug("word alignment: %s [%s - %s]", _str, _id, ifg)
             if i != 0:
                 te = TextEquivType(
                     Unicode=_str,
@@ -267,7 +270,7 @@ class Aligner(Processor):
                 self.workspace.mets.find_files(fileGrp=ifg),
                 key=lambda ifile: ifile.url)
             for i in ifiles:
-                self.log.info("sorted file: %s %s",
+                self.log.debug("sorted file: %s %s",
                               os.path.basename(i.url), i.ID)
             ifiles = [FileAlignment(self.workspace, x, ifg) for x in ifiles]
             files.append(ifiles)
@@ -279,11 +282,10 @@ class Aligner(Processor):
         pcgts = ifile.open()
         for region in pcgts.get_Page().get_TextRegion():
             for line in region.get_TextLine():
-                lines.append(line.get_TextEquiv()[0].Unicode)
+                lines.append(get_textequiv_unicode(line))
         return lines
 
     def run_java_aligner(self, ifs):
-        global LOG_LEVEL
         lines = list()
         for ifile in ifs:
             lines.append(self.read_lines_from_input_file(ifile))
@@ -292,7 +294,8 @@ class Aligner(Processor):
         for i in _input:
             self.log.debug("input line: %s", i)
         n = len(ifs)
-        p = JavaAligner(n, LOG_LEVEL)
+        self.log.debug("starting java client")
+        p = JavaAligner(n, LOG_LEVEL or 'INFO')
         return p.run("\n".join(_input))
 
 class FileAlignment:
@@ -312,3 +315,13 @@ class Alignment:
         self.input_file = ifile
         self.region = region
         self.alignment = alignment
+
+def get_textequiv_unicode(r):
+    if r is None or r.get_TextEquiv() is None or len(r.get_TextEquiv()) == 0:
+        return ""
+    return r.get_TextEquiv()[0].Unicode
+
+def get_textequiv_conf(r):
+    if r is None or r.get_TextEquiv() is None or len(r.get_TextEquiv()) == 0:
+        return 0.0
+    return r.get_TextEquiv()[0].conf

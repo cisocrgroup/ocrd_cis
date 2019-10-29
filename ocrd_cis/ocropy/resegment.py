@@ -202,7 +202,7 @@ class OcropyResegment(Processor):
                     # extended into the margin by its connected components
                     # to remove noise from neighbouring regions:
                     #region_labels = borderclean_bin(region_bin, margin=round(4/zoom)) + 1
-                    # too dangerous, because we risk loosing dots from i or punctuation;
+                    # too dangerous, because we risk losing dots from i or punctuation;
                     # fallback option2: only extend_margins
                     # instead, just provide a uniform label, so at least we get
                     # to extend the polygon margins:
