@@ -101,14 +101,22 @@ class JavaProcess:
             return output
 
     def exe(self):
+        """
+        Run the process with no imput returning no output.
+        """
         cmd = self.get_cmd()
         self.log.info('command: %s', " ".join(cmd))
-        ret = subprocess.run(cmd)
+        ret = subprocess.run(
+            cmd,
+            stderr=subprocess.PIPE,
+            check=False,
+            universal_newlines=True,
+        )
         self.log.debug("%s: %i", " ".join(cmd), ret.returncode)
         if ret.returncode != 0:
             raise ValueError(
-                "cannot execute {}: {}\n"
-                .format(" ".join(cmd), ret.returncode))
+                "cannot execute {}: {}\n{}"
+                .format(" ".join(cmd), ret.returncode, ret.stderr))
 
     def log_stderr(self, err):
         for line in err.decode("utf-8").split("\n"):
