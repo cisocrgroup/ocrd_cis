@@ -1,9 +1,9 @@
 from __future__ import absolute_import
 import json
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd import Processor, MIMETYPE_PAGE
+from ocrd_utils import getLogger
+from ocrd import Processor
 from ocrd_cis import get_ocrd_tool
-from ocrd.model.ocrd_page_generateds import parse, parsexml_, parsexmlstring_
+from ocrd.model.ocrd_page_generateds import parse
 from Levenshtein import distance
 
 

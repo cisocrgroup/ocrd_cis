@@ -3,8 +3,6 @@ from ocrd_utils import getLogger
 from ocrd_utils import concat_padded
 from ocrd.model.ocrd_page import to_xml
 from ocrd.model.ocrd_page import TextEquivType
-from ocrd.model.ocrd_page import GlyphType
-from ocrd.model.ocrd_page import WordType
 from ocrd import Processor
 from ocrd import MIMETYPE_PAGE
 from ocrd_cis import get_ocrd_tool

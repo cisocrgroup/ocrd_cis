@@ -2,23 +2,18 @@ from __future__ import absolute_import
 
 from ocrd_cis import get_ocrd_tool
 
-import re
 import sys
 import os.path
 import cv2
 import numpy as np
 from PIL import Image
-import subprocess
 
 
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
+from ocrd_utils import getLogger
 from ocrd_modelfactory import page_from_file
-from ocrd.model.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
-from ocrd import Processor, MIMETYPE_PAGE
-
+from ocrd import Processor
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 
 
 def bounding_box(coord_points):
