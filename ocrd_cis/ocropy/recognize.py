@@ -205,7 +205,7 @@ class OcropyRecognize(Processor):
             line.set_Word([])
 
             if line_image.size[1] < 16:
-                LOG.error("bounding box is too narrow at line %s", line.id)
+                LOG.debug("ERROR: bounding box is too narrow at line %s", line.id)
                 continue
             # resize image to 48 pixel height
             final_img, scale = resize_keep_ratio(line_image)
@@ -215,7 +215,7 @@ class OcropyRecognize(Processor):
                 linepred, clist, rlist, confidlist = recognize(
                     final_img, self.pad, self.network, check=True)
             except Exception as err:
-                LOG.error('error processing line "%s": %s', line.id, err)
+                LOG.debug('ERROR: error processing line "%s": %s', line.id, err)
                 continue
             LOG.debug("OCR '%s': '%s'", line.id, linepred)
             edits += Levenshtein.distance(linepred, linegt)

@@ -19,17 +19,19 @@ Installs:
 from setuptools import setup
 from setuptools import find_packages
 
+print(find_packages())
 setup(
-    include_package_data = True,
     name='ocrd_cis',
-    version='0.0.5',
+    version='0.0.6',
     description='description',
     long_description='long description',
     author='Florian Fink, Tobias Englmeier, Christoph Weber',
     author_email='finkf@cis.lmu.de, englmeier@cis.lmu.de, web_chris@msn.com',
     url='https://github.com/cisocrgroup/ocrd_cis',
     license='MIT',
+    #packages=['ocrd_cis', 'ocrd_cis.ocropy', 'ocrd_cis.data', 'ocrd_cis.wer', 'ocrd_cis.profile'],
     packages=find_packages(),
+    include_package_data = True,
     install_requires=[
         'ocrd>=1.0.0b17',
         'click',
@@ -41,8 +43,8 @@ setup(
         'calamari_ocr'
     ],
     package_data={
-        '': ['*.json', '*.yml', '*.yaml'],
-        'ocrd_cis': ['ocrd_cis/data/ocrd-cis.jar', 'ocrd_cis/data/3gs.csv.gz'],
+        '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar'],
+        # 'ocrd_cis': ['ocrd_cis/data/ocrd-cis.jar', 'ocrd_cis/data/3gs.csv.gz'],
     },
     scripts=[
         'bashlib/ocrd-cis-lib.sh',

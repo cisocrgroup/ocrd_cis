@@ -601,32 +601,17 @@
 					"description": "Configuration of post correction command",
 					"type": "object",
 					"required": [
-						"trigrams",
 						"maxCandidate",
 						"profiler",
-						"leFeatures",
-						"rrFeatures",
-						"dmFeatures"
+						"model",
+						"runLE",
+						"runDM"
 					],
 					"properties": {
-						"trigrams": {
-							"description": "Path to character trigrams csv file (format: n,trigram)",
-							"type": "string",
-							"required": true
-						},
 						"maxCandidate": {
 							"description": "Maximum number of considered profiler candidates per token",
 							"type": "integer",
 							"required": true
-						},
-						"filterClasses": {
-							"description": "List of filtered feature classes",
-							"required": false,
-							"type": "array",
-							"items": {
-								"description": "Class name of feature class to filter",
-								"type": "string"
-							}
 						},
 						"profiler": {
 							"description": "Profiler configuration",
@@ -648,86 +633,20 @@
 								}
 							}
 						},
-						"leFeatures": {
-							"description": "List of the lexicon extension features (leave empty to skip lexicon extension step)",
-							"required": true,
-							"type": "array",
-							"items": {
-								"description": "Feature configuration",
-								"type": "object",
-								"required": [
-									"type",
-									"name"
-								],
-								"properties": {
-									"name": {
-										"description": "Name of the feature",
-										"type": "string"
-									},
-									"type": {
-										"description": "Fully qualified java class name of the feature",
-										"type": "string"
-									},
-									"class": {
-										"description": "Class name of the feature",
-										"type": "string"
-									}
-								}
-							}
+						"model": {
+							"description": "Path to the post correction model file",
+							"type": "string",
+							"required": true
 						},
-						"rrFeatures": {
-							"description": "List of the reranker features (leave empty to skip reranking and decision maker steps)",
+						"runLE": {
+							"description": "Do run the lexicon extension step for the post correction",
 							"required": true,
-							"type": "array",
-							"items": {
-								"description": "Feature configuration",
-								"type": "object",
-								"required": [
-									"type",
-									"name"
-								],
-								"properties": {
-									"name": {
-										"description": "Name of the feature",
-										"type": "string"
-									},
-									"type": {
-										"description": "Fully qualified java class name of the feature",
-										"type": "string"
-									},
-									"class": {
-										"description": "Class name of the feature",
-										"type": "string"
-									}
-								}
-							}
+							"type": "boolean"
 						},
-						"dmFeatures": {
-							"description": "List of the desicion maker features",
+						"runDM": {
+							"description": "Do run the ranking and the decision step for the post correction",
 							"required": true,
-							"type": "array",
-							"items": {
-								"description": "Feature configuration",
-								"type": "object",
-								"required": [
-									"type",
-									"name"
-								],
-								"properties": {
-									"name": {
-										"description": "Name of the feature",
-										"type": "string"
-									},
-									"type": {
-										"description": "Fully qualified java class name of the feature",
-										"type": "string"
-									},
-									"class": {
-										"description": "Class name of the feature",
-										"type": "string"
-									}
-								}
-							}
+							"type": "boolean"
 						}
 					}
 				}
