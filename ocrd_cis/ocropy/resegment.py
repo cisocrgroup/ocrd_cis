@@ -14,6 +14,7 @@ from ocrd_utils import (
     concat_padded,
     coordinates_of_segment,
     coordinates_for_segment,
+    bbox_from_polygon,
     points_from_polygon,
     xywh_from_points,
     MIMETYPE_PAGE
@@ -56,6 +57,8 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     # mask from line polygon:
     line_mask = np.zeros_like(region_labels)
     line_mask[draw.polygon(line_polygon[:,1], line_polygon[:,0], line_mask.shape)] = 1
+    line_mask[draw.polygon_perimeter(line_polygon[:,1], line_polygon[:,0], line_mask.shape)] = 1
+    #DSAVE('line %s mask' % line_id, line_mask + 0.5 * region_bin)
     # pad line polygon (extend the mask):
     line_mask = filters.maximum_filter(line_mask, 1 + 2 * extend_margins)
     # intersect with region labels
@@ -80,6 +83,7 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     LOG.debug('Black pixels before/after resegment of line "%s" (nlabels=%d): %d/%d',
               line_id, len(label_counts.nonzero()[0]), total_count, max_count)
     line_mask = np.array(line_labels == max_label, np.uint8)
+    #DSAVE('line %s mask tight' % line_id, line_mask + 0.5 * region_bin)
     # find outer contour (parts):
     contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     # determine largest part by area:
@@ -87,7 +91,7 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     max_contour = np.argmax(contour_areas)
     max_area = contour_areas[max_contour]
     total_area = cv2.contourArea(np.expand_dims(line_polygon, 1))
-    if max_area / total_area < 0.5:
+    if max_area / total_area < 0.5 * threshold_relative:
         # using a different, more conservative threshold here:
         # avoid being overly strict with cropping background,
         # just ensure the contours are not a split of the mask
@@ -179,6 +183,9 @@ class OcropyResegment(Processor):
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
+                if len(lines) == 1:
+                    LOG.warning('Page "%s" region "%s" contains only one line', page_id, region.id)
+                    continue
                 region_image, region_xywh = self.workspace.image_from_segment(
                     region, page_image, page_xywh)
                 # ad-hoc binarization:
@@ -203,21 +210,19 @@ class OcropyResegment(Processor):
                     # fallback option3: keep unchanged
                     continue
                 for line in lines:
-                    alternative_image = line.get_AlternativeImage()
-                    if alternative_image:
+                    if line.get_AlternativeImage():
+                        # get cropped line image:
                         line_image, line_xywh = self.workspace.image_from_segment(
                             line, region_image, region_xywh)
                         LOG.debug("Using AlternativeImage (%s) for line '%s'",
                                   line_xywh['features'], line.id)
                         # crop region arrays accordingly:
-                        line_labels = region_labels[line_xywh['y']-region_xywh['y']:
-                                                    line_xywh['y']-region_xywh['y']+line_xywh['h'],
-                                                    line_xywh['x']-region_xywh['x']:
-                                                    line_xywh['x']-region_xywh['x']+line_xywh['w']]
-                        line_bin = region_bin[line_xywh['y']-region_xywh['y']:
-                                              line_xywh['y']-region_xywh['y']+line_xywh['h'],
-                                              line_xywh['x']-region_xywh['x']:
-                                              line_xywh['x']-region_xywh['x']+line_xywh['w']]
+                        line_polygon = coordinates_of_segment(line, region_image, region_xywh)
+                        line_bbox = bbox_from_polygon(line_polygon)
+                        line_labels = region_labels[line_bbox[1]:line_bbox[3],
+                                                    line_bbox[0]:line_bbox[2]]
+                        line_bin = region_bin[line_bbox[1]:line_bbox[3],
+                                              line_bbox[0]:line_bbox[2]]
                         # get polygon in relative (line) coordinates:
                         line_polygon = coordinates_of_segment(line, line_image, line_xywh)
                         line_polygon = resegment(line_polygon, line_labels, line_bin, line.id,

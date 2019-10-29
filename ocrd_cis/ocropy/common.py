@@ -13,7 +13,7 @@ from .ocrolib import morph, psegutils, sl
 
 from ocrd_utils import getLogger
 
-LOG = getLogger('') # to be refined by importer
+LOG = getLogger('ocrolib') # to be refined by importer
 
 # method similar to ocrolib.read_image_gray
 def pil2array(image, alpha=0):
@@ -84,15 +84,18 @@ def estimate_local_whitelevel(image, zoom=0.5, perc=80, range_=20):
     return flat
 
 # from ocropy-nlbin, but with threshold on variance
-def estimate_skew_angle(image, angles):
+def estimate_skew_angle(image, angles, min_factor=1.5):
     estimates = np.zeros_like(angles)
+    varmax = 0
     for i, a in enumerate(angles):
         v = np.mean(interpolation.rotate(image, a, order=0, mode='constant'), axis=1)
         v = np.var(v)
         estimates[i] = v
+        if v > varmax:
+            varmax = v
     # only return the angle of the largest entropy,
     # if it is considerably larger than the average:
-    if np.amax(estimates) / np.mean(estimates) > 1.5:
+    if varmax and varmax / np.mean(estimates) > min_factor:
         return angles[np.argmax(estimates)]
     else:
         return 0
@@ -548,7 +551,7 @@ def hmerge_line_seeds(seeds, threshold=0.2):
     overlap_count = dict([(label, (0, label)) for label in labels])
     for label in labels:
         # get maximum horizontal spread for current label:
-        mask = filters.maximum_filter(seeds == label, (1, seeds.shape[1]))
+        mask = filters.maximum_filter(seeds == label, (1, 2*seeds.shape[1]))
         # get overlap between other labels and mask:
         candidates, counts = np.unique(seeds * mask, return_counts=True)
         for candidate, count in zip(candidates, counts):
@@ -635,7 +638,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     else:
         hlines = np.zeros_like(binary)
         
-    bottom, top, boxmap = compute_gradmaps(binary, scale/2, usegauss=False,
+    bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
                                            hscale=1.0/zoom, vscale=1.0/zoom)
     #DSAVE("boxmap",[boxmap,bottom,top])
     if fullpage:
@@ -701,14 +704,21 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     #return segmentation
     return llabels, hlines, vlines, colseps
 
-# from ocropus-gpageseg, but as separate step on the PIL.Image
+# from ocropus-gpageseg, but on both foreground and background, and as separate step on the PIL.Image
 def remove_noise(image, maxsize=8):
     array = pil2array(image)
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
-    _, ncomps_before = morph.label(binary)
-    clean = ocrolib.remove_noise(binary, maxsize)
-    _, ncomps_after = morph.label(clean)
-    LOG.debug('black components before/after denoising (maxsize=%d): %d/%d',
-              maxsize, ncomps_before, ncomps_after)
-    array = np.maximum(array, binary - clean)
+    # FIXME: we should use opening/closing against fg/bg noise instead pixel counting
+    clean_bg = ocrolib.remove_noise(binary, maxsize)
+    clean_fg = ocrolib.remove_noise(1 - binary, maxsize)
+    if LOG.getEffectiveLevel() <= logging.DEBUG:
+        _, ncomps_before = morph.label(binary)
+        _, ncomps_after = morph.label(clean_bg)
+        LOG.debug('components before/after black denoising (maxsize=%d): %d/%d',
+                  maxsize, ncomps_before, ncomps_after)
+        _, ncomps_after = morph.label(1 - clean_fg)
+        LOG.debug('components before/after white denoising (maxsize=%d): %d/%d',
+                  maxsize, ncomps_before, ncomps_after)
+    array = np.maximum(array, binary - clean_bg) # cleaned bg becomes white
+    array = np.minimum(array, binary + clean_fg) # cleaned fg becomes black
     return array2pil(array)

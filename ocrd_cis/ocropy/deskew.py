@@ -1,13 +1,15 @@
 from __future__ import absolute_import
 
 import os.path
-from PIL import ImageStat
 
-from ocrd_utils import getLogger, concat_padded
+from ocrd_utils import (
+    getLogger, concat_padded,
+    rotate_image,
+    MIMETYPE_PAGE
+)
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml, AlternativeImageType, PageType
 from ocrd import Processor
-from ocrd_utils import MIMETYPE_PAGE
 
 from .. import get_ocrd_tool
 from . import common
@@ -70,14 +72,14 @@ class OcropyDeskew(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            page_image, page_xywh, _ = self.workspace.image_from_page(
+            page_image, page_coords, _ = self.workspace.image_from_page(
                 page, page_id,
                 # image must not have been rotated already,
                 # (we will overwrite @orientation anyway,)
                 # abort if no such image can be produced:
-                feature_filter='deskewed')
+                feature_filter='deskewed' if level == 'page' else '')
             if level == 'page':
-                self._process_segment(page, page_image, page_xywh,
+                self._process_segment(page, page_image, page_coords,
                                       "page '%s'" % page_id, input_file.pageId,
                                       file_id)
             else:
@@ -86,18 +88,15 @@ class OcropyDeskew(Processor):
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
                     # process region:
-                    region_image, region_xywh = self.workspace.image_from_segment(
-                        region, page_image, page_xywh,
+                    region_image, region_coords = self.workspace.image_from_segment(
+                        region, page_image, page_coords,
                         # image must not have been rotated already,
                         # (we will overwrite @orientation anyway,)
                         # abort if no such image can be produced:
                         feature_filter='deskewed')
-                    self._process_segment(region, region_image, region_xywh,
+                    self._process_segment(region, region_image, region_coords,
                                           "region '%s'" % region.id, input_file.pageId,
                                           file_id + '_' + region.id)
-                if page_xywh['angle']:
-                    # no pretense! (regardless of region results)
-                    page_xywh['features'] += ',deskewed'
             
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
@@ -114,28 +113,22 @@ class OcropyDeskew(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
     
-    def _process_segment(self, segment, segment_image, segment_xywh, segment_id, page_id, file_id):
-        features = segment_xywh['features']
+    def _process_segment(self, segment, segment_image, segment_coords, segment_id, page_id, file_id):
+        features = segment_coords['features'] # features already applied to segment_image
+        angle0 = segment_coords['angle'] # deskewing (w.r.t. top image) already applied to segment_image
         LOG.info("About to deskew %s", segment_id)
-        angle = deskew(segment_image, maxskew=self.parameter['maxskew'])
+        angle = deskew(segment_image, maxskew=self.parameter['maxskew']) # additional angle to be applied
         # segment angle: PAGE orientation is defined clockwise,
         # whereas PIL/ndimage rotation is in mathematical direction:
-        orientation = -angle
+        orientation = -(angle + angle0)
         orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
         segment.set_orientation(orientation)
         LOG.info("Found angle for %s: %.1f", segment_id, angle)
         if angle:
             LOG.debug("Rotating segment '%s' by %.2f°",
                       segment_id, angle)
-            background = ImageStat.Stat(segment_image).median[0]
-            if segment_image.mode in ['RGB', 'L', 'RGBA', 'LA']:
-                # ensure no information is lost by adding transparency
-                # (which rotation will respect):
-                segment_image.putalpha(255)
-            segment_image = segment_image.rotate(
-                angle, expand=True,
-                #resample=Image.BILINEAR,
-                fillcolor=background)
+            segment_image = rotate_image(segment_image, angle,
+                                         fill='background', transparency=True)
             features += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(

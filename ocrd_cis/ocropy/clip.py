@@ -145,6 +145,7 @@ class OcropyClip(Processor):
                     continue
                 for j, line in enumerate(lines):
                     if line.get_AlternativeImage():
+                        # FIXME: This should probably be an exception (bad workflow configuration).
                         LOG.warning('Page "%s" region "%s" line "%s" already contains image data: skipping',
                                     page_id, region.id, line.id)
                         continue
@@ -167,9 +168,15 @@ class OcropyClip(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
     
-    def process_segment(self, segment, neighbours, parent_image, parent_xywh, page_id, file_id):
-        segment_xywh = xywh_from_points(segment.get_Coords().points)
-        segment_polygon = coordinates_of_segment(segment, parent_image, parent_xywh)
+    def process_segment(self, segment, neighbours, parent_image, parent_coords, page_id, file_id):
+        # initialize AlternativeImage@comments classes from parent, except
+        # for those operations that can apply on multiple hierarchy levels:
+        features = ','.join(
+            [feature for feature in parent_coords['features'].split(',')
+             if feature in ['binarized', 'grayscale_normalized',
+                            'despeckled', 'dewarped']]) + ',clipped'
+        # mask segment within parent image:
+        segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
         segment_bbox = bbox_from_polygon(segment_polygon)
         segment_image = image_from_polygon(parent_image, segment_polygon)
         background = ImageStat.Stat(segment_image).median[0]
@@ -180,7 +187,7 @@ class OcropyClip(Processor):
         parent_array, _ = common.binarize(parent_array, maxskew=0) # just in case still raw
         parent_bin = np.array(parent_array <= midrange(parent_array), np.uint8)
         for neighbour in neighbours:
-            neighbour_polygon = coordinates_of_segment(neighbour, parent_image, parent_xywh)
+            neighbour_polygon = coordinates_of_segment(neighbour, parent_image, parent_coords)
             neighbour_bbox = bbox_from_polygon(neighbour_polygon)
             # not as precise as a (mutual) polygon intersection test, but that would add
             # a dependency on `shapely` (and we only loose a little speed here):
@@ -214,12 +221,24 @@ class OcropyClip(Processor):
                 # for consumers that do not have to rely on our
                 # guessed background color, but can cope with transparency:
                 segment_image.putalpha(ImageOps.invert(clip_mask))
-        # recrop segment into rectangle (also clipping with white):
-        segment_image = crop_image(segment_image,
-            box=(segment_xywh['x'] - parent_xywh['x'],
-                 segment_xywh['y'] - parent_xywh['y'],
-                 segment_xywh['x'] - parent_xywh['x'] + segment_xywh['w'],
-                 segment_xywh['y'] - parent_xywh['y'] + segment_xywh['h']))
+        # recrop segment into rectangle, just as image_from_segment would do
+        # (and also clipping with background colour):
+        segment_image = crop_image(segment_image,box=segment_bbox)
+        # rotate the image if necessary, just as image_from_segment would do:
+        if 'orientation' in segment.__dict__:
+            # region angle: PAGE @orientation is defined clockwise,
+            # whereas PIL/ndimage rotation is in mathematical direction:
+            angle = -(segment.get_orientation() or 0)
+        else:
+            angle = 0
+        if angle:
+            LOG.info("Rotating image for segment '%s' by %.2f°-%.2f°",
+                     segment.id, angle, parent_coords['angle'])
+            # @orientation is always absolute; if higher levels
+            # have already rotated, then we must compensate:
+            segment_image = rotate_image(segment_image, angle - parent_xywh['angle'],
+                                         fill='background')
+            features += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
             segment_image,
@@ -229,4 +248,4 @@ class OcropyClip(Processor):
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=parent_xywh['features'] + ',clipped'))
+            comments=features))

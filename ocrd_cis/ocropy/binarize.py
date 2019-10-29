@@ -115,8 +115,8 @@ class OcropyBinarize(Processor):
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             page_image, page_xywh, _ = self.workspace.image_from_page(
-                page, page_id)
-
+                page, page_id, feature_filter='binarized')
+            
             if level == 'page':
                 self.process_page(page, page_image, page_xywh,
                                   input_file.pageId, file_id)
@@ -127,7 +127,7 @@ class OcropyBinarize(Processor):
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
                     region_image, region_xywh = self.workspace.image_from_segment(
-                        region, page_image, page_xywh)
+                        region, page_image, page_xywh, feature_filter='binarized')
                     if level == 'region':
                         self.process_region(region, region_image, region_xywh,
                                             input_file.pageId, file_id + '_' + region.id)
@@ -137,7 +137,7 @@ class OcropyBinarize(Processor):
                         LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     for line in lines:
                         line_image, line_xywh = self.workspace.image_from_segment(
-                            line, region_image, region_xywh)
+                            line, region_image, region_xywh, feature_filter='binarized')
                         self.process_line(line, line_image, line_xywh,
                                           input_file.pageId, region.id,
                                           file_id + '_' + region.id + '_' + line.id)
@@ -243,16 +243,8 @@ class OcropyBinarize(Processor):
         # update PAGE (reference the image file):
         region.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-<<<<<<< HEAD
             comments=features))
 
-=======
-            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
-                      ',cropped' +
-                      (',despeckled' if self.parameter['noise_maxsize'] else '') +
-                      (',deskewed' if region_xywh['angle'] else ''))))
-
->>>>>>> fix-ci
     def process_line(self, line, line_image, line_xywh, page_id, region_id, file_id):
         LOG.info("About to binarize page '%s' region '%s' line '%s'",
                  page_id, region_id, line.id)
@@ -289,12 +281,4 @@ class OcropyBinarize(Processor):
         # update PAGE (reference the image file):
         line.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-<<<<<<< HEAD
             comments=features))
-
-=======
-            comments=(('grayscale_normalized' if self.parameter['grayscale'] else 'binarized') +
-                      ',cropped' +
-                      (',despeckled' if self.parameter['noise_maxsize'] else '') +
-                      (',deskewed' if angle else ''))))
->>>>>>> fix-ci
