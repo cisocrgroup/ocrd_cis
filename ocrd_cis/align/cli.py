@@ -41,7 +41,6 @@ class Aligner(Processor):
         for _id, ift in enumerate(ifts):
             alignments = json.loads(self.run_java_aligner(ift))
             pcgts = self.align(alignments, ift)
-            basename = os.path.basename(ift[0].input_file.url)
             # keep the right part after OCR-D-...-filename
             # and prepend output_file_grp
             # ID = concat_padded(self.output_file_grp, _id+1)
