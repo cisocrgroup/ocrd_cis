@@ -84,6 +84,17 @@ Helper tool to get the path of the installed data files. Usage:
 `ocrd-cis-data [-jar|-3gs]` to get the path of the jar library or the
 path to th default 3-grams language model file.
 
+### ocrd-cis-wer
+Helper tool to calculate the word error rate aligned ocr files.  It
+writes a simple JSON-formated stats file to the given output file group.
+
+Arguments:
+ * `--input-file-grp` input file group of aligned ocr results with
+   their respective ground truth.
+ * `--output-file-grp` name of the file group for the stats file
+ * `--log-level` set log level
+ * `--mets` path to METS file in workspace
+
 ### ocrd-cis-profile
 Run the profiler over the given files of the according the given input
 file grp and adds a gzipped JSON-formatted profile to the output file
