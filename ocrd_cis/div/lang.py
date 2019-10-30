@@ -42,45 +42,45 @@ class Lang(Processor):
                     try:
                         llang = line.primaryLanguage
                         linelang[llang] += 1
-                    except:
+                    except TypeError:
                         pass
 
                     try:
                         lfont = line.fontFamily
-                        linefont[lfont] +=1
-                    except:
+                        linefont[lfont] += 1
+                    except TypeError:
                         pass
 
                     words = line.get_Word()
                     for word in words:
                         try:
                             wlang = word.language
-                            wordlang[wlang] +=1
-                        except:
+                            wordlang[wlang] += 1
+                        except TypeError:
                             pass
 
                         try:
                             wfont = word.get_TextStyle().fontFamily
                             wordfont[wfont] += 1
-                        except:
+                        except TypeError:
                             pass
 
         #predominant language
         try:
             lang = max(linelang, key=lambda k: linelang[k])
-        except:
+        except TypeError:
             try:
                 lang = max(wordlang, key=lambda k: wordlang[k])
-            except:
+            except TypeError:
                 lang = 'German'
 
         #predominant font
         try:
             font = max(linefont, key=lambda k: linefont[k])
-        except:
+        except TypeError:
             try:
                 font = max(wordfont, key=lambda k: wordfont[k])
-            except:
+            except TypeError:
                 font = 'Antiqua'
 
 
