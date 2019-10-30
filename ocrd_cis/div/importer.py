@@ -13,7 +13,6 @@ from ocrd_utils import getLogger, concat_padded, points_from_x0y0x1y1
 from ocrd_modelfactory import page_from_file
 from ocrd.model.ocrd_page import to_xml
 from ocrd.model.ocrd_page import TextEquivType
-from ocrd.model.ocrd_page import to_CoordsType
 from ocrd.model.ocrd_page import GlyphType
 from ocrd.model.ocrd_page import WordType
 from ocrd import Processor
