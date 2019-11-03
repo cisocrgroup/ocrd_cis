@@ -224,11 +224,8 @@ pip install .
 
 Download and move tesseract models from:
 https://github.com/tesseract-ocr/tesseract/wiki/Data-Files
-or use your own models
+or use your own models and
 place them into: /usr/share/tesseract-ocr/4.00/tessdata
-
-Tesserocr v2.4.0 seems broken for tesseract 4.0.0-beta. Install
-Version v2.3.1 instead: `pip install tesseract==2.3.1`.
 
 ## Workflow configuration
 
