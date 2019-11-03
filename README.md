@@ -250,7 +250,7 @@ A decent pipeline might look like this:
 If GT is used, steps 1, 5 and 8 can be omitted. Else if a segmentation is used in 5 and 8 which does not produce overlapping sections, steps 6 and 9 can be omitted.
 
 ## Testing
-To run a view basic test type `make test` (`ocrd_cis` has to be
+To run a few basic tests type `make test` (`ocrd_cis` has to be
 installed in order to run any tests).
 
 ## OCR-D workspace
