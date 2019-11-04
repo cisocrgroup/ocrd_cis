@@ -13,7 +13,6 @@ import sysconfig
 import unicodedata
 import inspect
 import glob
-import six
 import gzip
 import pickle
 from .exceptions import (BadClassLabel, BadInput, FileNotFound,
@@ -32,7 +31,6 @@ from .default import getlocal
 from .toplevel import (checks, ABINARY2, AINT2, AINT3, BOOL, DARKSEG, GRAYSCALE,
                       LIGHTSEG, LINESEG, PAGESEG)
 from . import chars
-import codecs
 from . import ligatures
 from . import lstm
 from . import morph
@@ -618,7 +616,7 @@ def ocropus_find_file(fname, gz=True):
         * current working directory
         * ../../../../share/ocropus from this file's install location
         * `/usr/local/share/ocropus`
-        * `$PREFIX/share/ocropus` ($PREFIX being the Python installation 
+        * `$PREFIX/share/ocropus` ($PREFIX being the Python installation
            prefix, usually `/usr`)
     """
     possible_prefixes = []

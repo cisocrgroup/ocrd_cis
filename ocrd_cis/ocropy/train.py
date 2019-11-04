@@ -3,10 +3,7 @@ from __future__ import absolute_import
 import sys, os.path, cv2
 
 
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType
 from ocrd_modelfactory import page_from_file
-from ocrd_utils import MIMETYPE_PAGE
 from ocrd import Processor
 
 from ocrd_cis import get_ocrd_tool

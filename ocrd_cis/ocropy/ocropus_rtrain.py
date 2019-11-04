@@ -7,9 +7,6 @@ import random as pyrandom
 import numpy as np
 np.seterr(divide='raise',over='raise',invalid='raise',under='ignore')
 
-import matplotlib.pyplot as plt
-
-
 from ocrd_cis.ocropy import ocrolib
 from ocrd_cis.ocropy.ocrolib import lstm, lineest
 
@@ -22,14 +19,14 @@ def rtrain(inputs, load, output, ntrain):
     pad = 16
 
     #set the default height for line estimation, default: 48
-    height=48 
+    height=48
 
     # Number of LSTM state units, default: 100
     hiddensize=100
 
     #LSTM learning rate, default: 1e-4
     lrate=0.0001
-    
+
     quiet=False
 
     #LSTM save frequency, default: 1000
@@ -154,7 +151,7 @@ def rtrain(inputs, load, output, ntrain):
         # print(inputs)
         # fname = inputs[0]
         # print(fname)
-        
+
         base,_ = ocrolib.allsplitext(fname)
 
         line = ocrolib.read_image_gray(fname)

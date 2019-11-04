@@ -29,7 +29,7 @@ from .ocrolib import midrange
 from .ocrolib import morph
 from .ocrolib import sl
 from .common import (
-    pil2array, array2pil,
+    pil2array,
     # binarize,
     compute_line_labels
 )
@@ -39,7 +39,7 @@ LOG = getLogger('processor.OcropySegment')
 
 def segment(line_labels, region_bin, region_id):
     """Convert label masks into polygon coordinates.
-    
+
     Given a Numpy array of background labels ``line_labels``,
     and a Numpy array of the foreground ``region_bin``,
     iterate through all labels (except zero and those labels
@@ -47,7 +47,7 @@ def segment(line_labels, region_bin, region_id):
     their outer contours. Each contour part which is not too
     small and gives a (simplified) polygon of at least 4 points
     becomes a polygon.
-    
+
     Return a list of all such polygons concatenated.
     """
     lines = []
@@ -92,20 +92,20 @@ class OcropySegment(Processor):
 
     def process(self):
         """Segment pages into text regions or text regions into text lines.
-        
+
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested level.
-        
+
         Next, get each element image according to the layout annotation (from
         the alternative image of the page/region, or by cropping via coordinates
         into the higher-level image), binarize it (without deskewing), and
         compute a new line segmentation for that (as a label mask).
-        
+
         If ``level-of-operation`` is ``page``, aggregate text lines to text regions
         heuristically, and also detect all horizontal and up to ``maxseps`` vertical
         rulers (foreground separators), as well as up to ``maxcolseps`` column
         dividers (background separators).
-        
+
         Then for each resulting segment label, convert its background mask into
         polygon outlines by finding the outer contours consistent with the element's
         polygon outline. Annotate the result by adding it as a new TextLine/TextRegion:
@@ -113,7 +113,7 @@ class OcropySegment(Processor):
         remove any existing TextLine elements, and append the new lines to the region.
         If however it is ``page``, then (unless ``overwrite_regions`` is False)
         remove any existing TextRegion elements, and append the new regions to the page.
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
         # FIXME: attempt detecting or allow passing reading order / textline order
@@ -122,10 +122,10 @@ class OcropySegment(Processor):
         overwrite_lines = self.parameter['overwrite_lines']
         overwrite_regions = self.parameter['overwrite_regions']
         oplevel = self.parameter['level-of-operation']
-        
+
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            
+
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
@@ -139,7 +139,7 @@ class OcropySegment(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            
+
             regions = page.get_TextRegion()
             if oplevel == 'page':
                 if regions:
@@ -163,7 +163,7 @@ class OcropySegment(Processor):
                     region_image, region_xywh = self.workspace.image_from_segment(
                         region, page_image, page_xywh)
                     self._process_element(region, region_image, region_xywh, region.id, zoom)
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
@@ -180,10 +180,10 @@ class OcropySegment(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
-    
+
     def _process_element(self, element, image, xywh, element_id, zoom):
         """Add PAGE layout elements by segmenting an image.
-        
+
         Given a PageType or TextRegionType ``element``, and a corresponding
         PIL.Image object ``image`` with its bounding box ``xywh``, run
         ad-hoc binarization with Ocropy on the image (in case it was still
@@ -258,16 +258,16 @@ class OcropySegment(Processor):
 
     def _lines2regions(self, line_labels, page_id):
         """Aggregate text lines to text regions.
-        
+
         Given a Numpy array of text lines ``line_labels``, find
         direct neighbours that match in height and are consistent
         in horizontal position. Merge these into larger region
         labels. Then morphologically close them to fill the
         background between lines. Merge regions that now contain
         each other.
-        
+
         Return a Numpy array of text region labels.
-        
+
         Horizontal consistency rules (in 2 passes):
         - first, aggregate pairs that flush left _and_ right
         - second, add remainders that are indented left or rugged right
