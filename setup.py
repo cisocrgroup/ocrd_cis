@@ -36,7 +36,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.0.0a1',
+        'ocrd>=2.0.0',
         'click',
         'scipy',
         'numpy>=1.17.0',
