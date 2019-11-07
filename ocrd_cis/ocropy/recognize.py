@@ -104,7 +104,7 @@ class OcropyRecognize(Processor):
         path = os.path.join(ocropydir, 'models', model)
         if canread(path):
             return path
-        raise FileNotFoundError("cannot find model: " + model)
+        return model
 
     def process(self):
 
