@@ -24,6 +24,11 @@ if [[ $found_files != 3 ]]; then
 fi
 popd
 
+ocrd-cis-ocropy-clip --log-level DEBUG \
+					 --input-file-grp "$OCR_D_CIS_GT_FILEGRP" \
+					 --output-file-grp OCR-D-CIS-IMG-BIN \
+					 --mets "$tmpws/mets.xml"
+
 ocrd-cis-ocropy-binarize --log-level DEBUG \
 						 --input-file-grp "$OCR_D_CIS_GT_FILEGRP" \
 						 --output-file-grp OCR-D-CIS-IMG-BIN \
