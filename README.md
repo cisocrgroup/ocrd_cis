@@ -72,8 +72,9 @@ Arguments:
 
 ### ocrd-cis-train.sh
 Script to train a model from a list of ground-truth archives (see
-ocrd-tool.json) for the post correction.  The tool somewhat mimics the
-behaviour of other ocrd tools:
+ocrd-tool.json) for the post correction.
+
+The tool somewhat mimics the behaviour of other ocrd tools:
  * `--mets` for the workspace
  * `--log-level` is passed to other tools
  * `--parameter` is used as configuration
