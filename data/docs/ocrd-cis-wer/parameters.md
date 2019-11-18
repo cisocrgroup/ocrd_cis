@@ -1,4 +1,4 @@
-# Parameters
+# Parameters {#parameters .reference}
 The tool ocrd-cis-wer accepts the following configuration parameters:
 ```json
 {

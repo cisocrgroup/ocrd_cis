@@ -1,5 +1,6 @@
-# Options for ocrd-cis-wer
+# Options for ocrd-cis-wer {#Option .reference}
 Arguments:
+* `--parameter` set configuration file
 * `--input-file-grp` input file group of aligned ocr results with
 their respective ground truth.
 * `--output-file-grp` name of the file group for the stats file
