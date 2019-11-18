@@ -155,7 +155,7 @@ class OcropyClip(Processor):
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
-                file_id = concat_padded(self.page, n)
+                file_id = concat_padded(self.page_grp, n)
             file_path = os.path.join(self.page_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
