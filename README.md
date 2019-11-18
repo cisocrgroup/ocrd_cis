@@ -90,6 +90,7 @@ Helper tool to calculate the word error rate aligned ocr files.  It
 writes a simple JSON-formated stats file to the given output file group.
 
 Arguments:
+ * `--parameter` set configuration file
  * `--input-file-grp` input file group of aligned ocr results with
    their respective ground truth.
  * `--output-file-grp` name of the file group for the stats file
