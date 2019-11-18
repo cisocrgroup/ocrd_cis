@@ -52,4 +52,3 @@ RUN mkdir /apps/models \
 	&& wget ${DOWNLOAD_URL}/fraktur2-00062000.pyrnn.gz >/dev/null 2>&1
 
 VOLUME ["/data"]
-ENTRYPOINT ["/bin/sh", "-c"]
