@@ -49,7 +49,7 @@ This bash script runs the post correction using a pre-trained
 OCRs should be used, models for these OCR steps are required and must
 be configured in an according configuration file (see ocrd-tool.json).
 
-Arguments:
+This tool accepts the following Arguments:
  * `--parameter` path to configuration file
  * `--input-file-grp` name of the master-OCR file group
  * `--output-file-grp` name of the post-correction file group
@@ -62,7 +62,7 @@ This tool is used to align the master OCR with any additional support
 OCRs.  It accepts a comma-separated list of input file groups, which
 it aligns in order.
 
-Arguments:
+This tool accepts the following Arguments:
  * `--parameter` path to configuration file
  * `--input-file-grp` comma seperated list of the input file groups;
    first input file group is the master OCR
@@ -74,7 +74,8 @@ Arguments:
 Script to train a model from a list of ground-truth archives (see
 ocrd-tool.json) for the post correction.
 
-The tool somewhat mimics the behaviour of other ocrd tools:
+The tool somewhat mimics the behaviour of other ocrd tools and accepts
+the following Arguments:
  * `--mets` for the workspace
  * `--log-level` is passed to other tools
  * `--parameter` is used as configuration
@@ -89,7 +90,7 @@ path to th default 3-grams language model file.
 Helper tool to calculate the word error rate aligned ocr files.  It
 writes a simple JSON-formated stats file to the given output file group.
 
-Arguments:
+This tool accepts the following Arguments:
  * `--parameter` set configuration file
  * `--input-file-grp` input file group of aligned ocr results with
    their respective ground truth.
