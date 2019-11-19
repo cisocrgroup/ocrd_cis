@@ -7,6 +7,9 @@ mkdir -p "$tmpdir/download"
 pushd "$tmpws"
 ocrd-cis-download-and-add-gt-zip "$url" "$tmpdir/download"
 popd
+pushd "$tmpdir/download"
+wget -N "http://cis.lmu.de/~finkf/fraktur1-00085000.pyrnn.gz"
+popd
 
 # test if there are 3 gt files
 pushd "$tmpws"
@@ -24,19 +27,15 @@ if [[ $found_files != 3 ]]; then
 fi
 popd
 
-pushd "$tmpdir/download"
-wget -N "http://cis.lmu.de/~finkf/fraktur1-00085000.pyrnn.gz"
-cat <<EOF > ocr.json
-{
-	"textequiv_level": "word",
-	"model": "$tmpdir/download/fraktur1-00085000.pyrnn.gz"
-}
-EOF
-popd
-
 # run ocr
 ocrd-cis-ocropy-recognize --log-level DEBUG \
 						  --input-file-grp "$OCR_D_CIS_GT_FILEGRP" \
 						  --output-file-grp OCR-D-CIS-OCR \
 						  --mets "$tmpws/mets.xml" \
-						  --parameter "$tmpdir/download/ocr.json"
+						  --parameter <(cat <<EOF
+{
+	"textequiv_level": "word",
+	"model": "$tmpdir/download/fraktur1-00085000.pyrnn.gz"
+}
+EOF
+)
