@@ -508,7 +508,6 @@ def parallel_map(fun,jobs,parallel=0,chunksize=1):
         finally:
             pool.close()
             pool.join()
-            del pool
 
 def check_valid_class_label(s):
     """Determines whether the given character is a valid class label.

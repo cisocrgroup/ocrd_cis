@@ -86,7 +86,6 @@ class OcropyTrain(Processor):
                 outputpath = self.parameter + '/' + model
             if os.path.isfile(modelpath) == False:
                 raise Exception("configured model " + model + " is not in models folder")
-                sys.exit(1)
         else:
             modelpath = None
             outputpath = filepath + '/output/' + 'lstm'
