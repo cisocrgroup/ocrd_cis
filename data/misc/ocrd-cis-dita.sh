@@ -64,8 +64,9 @@ EOF
 	# installation
 	cat <<EOF > "$dir/installation.md"
 # Installation of $tool {#installation .task}
-1. (optional) Initialize virtualenv: \`python3 -m venv path/to/dir\`
+1. Initialize virtualenv: \`python3 -m venv path/to/dir\` (optional)
 2. Install ocrd_cis: \`make install\`
+3. Test the installation: \`make test\` (optional)
 EOF
 
 	# release notes
