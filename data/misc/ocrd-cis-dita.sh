@@ -7,19 +7,25 @@ for tool in ocrd-cis-wer; do
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
+  <topicref href="name.md" format="markdown"/>
+  <topicref href="release_notes.md" format="markdown"/>
+  <topicref href="installation.md" format="markdown"/>
   <topicref href="tool.md" format="markdown"/>
   <topicref href="description.md" format="markdown"/>
-  <topicref href="installation.md" format="markdown"/>
   <topicref href="option.md" format="markdown"/>
   <topicref href="parameters.md" format="markdown"/>
-  <!--
-  <topicref href="OutputFormatDescription.md" format="markdown"/>
-  <topicref href="Resources.md" format="markdown"/>
-  -->
+  <topicref href="authors.md" format="markdown"/>
+  <topicref href="reporting.md" format="markdown"/>
+  <topicref href="copyright.md" format="markdown"/>
 </map>
 EOF
 
-	# tool
+	# name
+	cat <<EOF > "$dir/name.md"
+# $tool
+EOF
+
+	# simple description
 	cat <<EOF > "$dir/tool.md"
 # Tool $tool {#Tool .concept}
 $(cat ocrd-tool.json | jq -r ".tools.\"$tool\".description")
@@ -41,6 +47,31 @@ EOF
 2. Install ocrd_cis: \`make install\`
 EOF
 
+	# release notes
+	cat <<EOF > "$dir/release_notes.md"
+# Release notes
+EOF
+
+	# Authors
+	cat<<EOF > "$dir/authors.md"
+# Authors
+1. Christoph Weber
+2. Florian Fink
+3. Robert Sachunsky
+4. Tobias Englmeier
+EOF
+
+	# Reporting
+	cat<<EOF > "$dir/reporting.md"
+# Reporting
+Reports any bugs/problems at the [issues page](https://github.com/cisocrgroup/ocrd_cis/issues)
+EOF
+
+	# Copyright
+	echo "# License" > "$dir/copyright.md"
+	cat LICENSE >> "$dir/copyright.md"
+
+	# generate description and options from README.md
 	blockn=0
 	ofile=""
 	while read line; do

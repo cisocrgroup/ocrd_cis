@@ -1,5 +1,5 @@
 # Options for ocrd-cis-wer {#option .reference}
-Arguments:
+This tool accepts the following Arguments:
 * `--parameter` set configuration file
 * `--input-file-grp` input file group of aligned ocr results with
 their respective ground truth.
