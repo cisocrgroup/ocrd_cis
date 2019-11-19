@@ -1,8 +1,25 @@
 #!/bin/bash
 
-for tool in ocrd-cis-wer; do
+overwrite=false
+tools=""
+for arg in $*; do
+	case $arg in
+		-f|--force)
+			overwrite=true;;
+		*)
+			tools="$arg $tools"
+			;;
+	esac
+done
+
+for tool in $tools; do
 	dir="data/docs/$tool"
+	if [[ $overwrite == true ]]; then
+		rm -rf "$dir"
+	fi
 	mkdir -p "$dir" || exit 1
+
+	# topicmap
 	cat <<EOF > "$dir/topicmap.xml"
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
