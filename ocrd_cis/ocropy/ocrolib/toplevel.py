@@ -141,7 +141,7 @@ class CheckWarning(CheckError):
         self.fun = kw.get("fun","?")
         self.var = kw.get("var","?")
         self.description = " ".join([strc(x) for x in args])
-        CheckError(self, *args, **kw)
+        CheckError.__init__(self, *args, **kw)
 
     def __str__(self):
         result = "\nCheckWarning for argument "

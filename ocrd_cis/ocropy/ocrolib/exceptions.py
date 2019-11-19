@@ -69,6 +69,6 @@ class FileNotFound(OcropusException):
     """Some file-not-found error during OCRopus processing."""
     def __init__(self,fname):
         self.fname = fname
-        OcropusException(self)
+        OcropusException.__init__(self)
     def __str__(self):
         return "file not found %s"%(self.fname,)
