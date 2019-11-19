@@ -26,10 +26,10 @@ popd
 
 ocrd-cis-ocropy-clip --log-level DEBUG \
 					 --input-file-grp "$OCR_D_CIS_GT_FILEGRP" \
-					 --output-file-grp OCR-D-CIS-IMG-BIN \
+					 --output-file-grp OCR-D-CIS-IMG-CLIP \
 					 --mets "$tmpws/mets.xml"
 
 ocrd-cis-ocropy-binarize --log-level DEBUG \
-						 --input-file-grp "$OCR_D_CIS_GT_FILEGRP" \
+						 --input-file-grp OCR-D-CIS-IMG-CLIP \
 						 --output-file-grp OCR-D-CIS-IMG-BIN \
 						 --mets "$tmpws/mets.xml"
