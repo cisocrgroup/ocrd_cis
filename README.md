@@ -87,8 +87,9 @@ Helper tool to get the path of the installed data files. Usage:
 path to th default 3-grams language model file.
 
 ### ocrd-cis-wer
-Helper tool to calculate the word error rate aligned ocr files.  It
-writes a simple JSON-formated stats file to the given output file group.
+Helper tool to calculate the word error rate of aligned ocr files.  It
+writes a simple JSON-formated stats file to the given output file
+group.
 
 This tool accepts the following Arguments:
  * `--parameter` set configuration file
