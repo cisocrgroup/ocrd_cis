@@ -31,9 +31,9 @@ def deskew(pil_image, maxskew=2):
 class OcropyDeskew(Processor):
 
     def __init__(self, *args, **kwargs):
-        self.ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
-        kwargs['version'] = self.ocrd_tool['version']
+        ocrd_tool = get_ocrd_tool()
+        kwargs['ocrd_tool'] = ocrd_tool['tools'][TOOL]
+        kwargs['version'] = ocrd_tool['version']
         super(OcropyDeskew, self).__init__(*args, **kwargs)
         if hasattr(self, 'output_file_grp'):
             try:

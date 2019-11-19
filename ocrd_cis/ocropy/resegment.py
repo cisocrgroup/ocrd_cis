@@ -52,7 +52,7 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     If ``extend_margins`` is larger than zero, then extend ``line_polygon``
     by that amount of pixels horizontally and vertically before.
     """
-    height, width = region_labels.shape
+    # height, width = region_labels.shape
     # mask from line polygon:
     line_mask = np.zeros_like(region_labels)
     line_mask[draw.polygon(line_polygon[:,1], line_polygon[:,0], line_mask.shape)] = 1
