@@ -8,9 +8,9 @@ for tool in ocrd-cis-wer; do
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
   <topicref href="tool.md" format="markdown"/>
-  <topicref href="Description.md" format="markdown"/>
+  <topicref href="description.md" format="markdown"/>
   <topicref href="installation.md" format="markdown"/>
-  <topicref href="Option.md" format="markdown"/>
+  <topicref href="option.md" format="markdown"/>
   <topicref href="parameters.md" format="markdown"/>
   <!--
   <topicref href="OutputFormatDescription.md" format="markdown"/>
@@ -46,13 +46,13 @@ EOF
 	while read line; do
 		if echo "$line" | grep $tool > /dev/null; then
 			# echo "setting blockn=1"
-			ofile="$dir/Description.md"
-			echo "# Description of $tool {#Description .concept}" > "$ofile"
+			ofile="$dir/description.md"
+			echo "# Description of $tool {#description .concept}" > "$ofile"
 			blockn=1
 		elif [[ $blockn == 1 ]] && [[ "$line" == "" ]]; then
 			# echo "setting blockn=2"
-			ofile="$dir/Option.md"
-			echo "# Options for $tool {#Option .reference}" > "$ofile"
+			ofile="$dir/option.md"
+			echo "# Options for $tool {#option .reference}" > "$ofile"
 			blockn=2
 		elif [[ $blockn == 2 ]] && [[ "$line" == "" ]]; then
 			# echo "setting blockn=0"

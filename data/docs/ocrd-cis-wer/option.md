@@ -1,4 +1,4 @@
-# Options for ocrd-cis-wer {#Option .reference}
+# Options for ocrd-cis-wer {#option .reference}
 Arguments:
 * `--parameter` set configuration file
 * `--input-file-grp` input file group of aligned ocr results with

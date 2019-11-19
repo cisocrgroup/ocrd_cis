@@ -2,9 +2,9 @@
 <!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
 <map>
   <topicref href="tool.md" format="markdown"/>
-  <topicref href="Description.md" format="markdown"/>
+  <topicref href="description.md" format="markdown"/>
   <topicref href="installation.md" format="markdown"/>
-  <topicref href="Option.md" format="markdown"/>
+  <topicref href="option.md" format="markdown"/>
   <topicref href="parameters.md" format="markdown"/>
   <!--
   <topicref href="OutputFormatDescription.md" format="markdown"/>
