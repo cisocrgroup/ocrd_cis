@@ -13,7 +13,11 @@ for tool in ocrd-cis-wer; do
   <topicref href="tool.md" format="markdown"/>
   <topicref href="description.md" format="markdown"/>
   <topicref href="option.md" format="markdown"/>
+  <topicref href="inputFormatDescription.md" format="markdown"/>
   <topicref href="parameters.md" format="markdown"/>
+  <topicref href="outputFormatDescription.md" format="markdown"/>
+  <topicref href="troubleshooting.xml"/>
+  <topicref href="glossary.xml"/>
   <topicref href="authors.md" format="markdown"/>
   <topicref href="reporting.md" format="markdown"/>
   <topicref href="copyright.md" format="markdown"/>
@@ -70,6 +74,102 @@ EOF
 	# Copyright
 	echo "# License" > "$dir/copyright.md"
 	cat LICENSE >> "$dir/copyright.md"
+
+	# input format description
+	if [[ ! -f "$dir/inputFormatDescription.md" ]]; then
+		cat<<EOF > "$dir/inputFormatDescription.md"
+# Input format {#inputFormatDescription .reference}
+EOF
+	fi
+
+	# output format description
+	if [[ ! -f "$dir/outputFormatDescription.md" ]]; then
+		cat<<EOF > "$dir/outputFormatDescription.md"
+# Output format {#outputFormatDescription .reference}
+EOF
+	fi
+
+	# Troubleshooting
+	if [[ ! -f "$dir/troubleshooting.xml" ]]; then
+		cat<<EOF > "$dir/troubleshooting.xml"
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE troubleshooting
+PUBLIC "-//OASIS//DTD DITA 1.3 Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="Troubleshooting">
+    <title>Troubleshooting</title>
+	<!--
+    <troublebody>
+        <condition>
+            <title>Condition</title>
+            <p></p>
+        </condition>
+        <troubleSolution>
+            <cause>
+                <title>Cause</title>
+                <p></p>
+            </cause>
+            <remedy>
+                <title>Remedy</title>
+                <responsibleParty></responsibleParty>
+                <steps>
+                    <step>
+                        <cmd></cmd>
+                    </step>
+                </steps>
+            </remedy>
+        </troubleSolution>
+    </troublebody>
+	-->
+</troubleshooting>
+EOF
+	fi
+
+	if [[ ! -f "$dir/glossary.xml" ]]; then
+		cat<<EOF > "$dir/glossary.xml"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE glossgroup
+PUBLIC "-//OASIS//DTD DITA Glossary Group//EN" "glossgroup.dtd">
+<glossgroup id="Glossar">
+    <title>Glossar</title>
+	<!--
+    <glossentry id="txtline">
+        <glossterm>Textline</glossterm>
+        <glossdef>A TextLine is a block of text without line break.
+        </glossdef>
+    </glossentry>
+    <glossentry id="gt">
+        <glossterm>Ground Truth</glossterm>
+        <glossdef>Ground truth (GT) in the context of OCR-D are
+        transcriptions, specific structure descriptions and word lists.
+        These are essentially available in PAGE XML format in
+        combination with the original image. Essential parts of
+        the GT were created manually.
+    </glossdef>
+    -->
+</glossgroup>
+<!--
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE glossgroup
+PUBLIC "-//OASIS//DTD DITA Glossary Group//EN" "glossgroup.dtd">
+<glossgroup id="Glossar">
+    <title>Glossar</title>
+    <glossentry id="txtline">
+        <glossterm>Textline</glossterm>
+        <glossdef>A TextLine is a block of text without line break.
+        </glossdef>
+    </glossentry>
+    <glossentry id="gt">
+        <glossterm>Ground Truth</glossterm>
+        <glossdef>Ground truth (GT) in the context of OCR-D are
+        transcriptions, specific structure descriptions and word lists.
+        These are essentially available in PAGE XML format in
+        combination with the original image. Essential parts of
+        the GT were created manually.
+        </glossdef>
+</glossgroup>
+-->
+EOF
+	fi
 
 	# generate description and options from README.md
 	blockn=0

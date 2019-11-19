@@ -7,7 +7,11 @@
   <topicref href="tool.md" format="markdown"/>
   <topicref href="description.md" format="markdown"/>
   <topicref href="option.md" format="markdown"/>
+  <topicref href="inputFormatDescription.md" format="markdown"/>
   <topicref href="parameters.md" format="markdown"/>
+  <topicref href="outputFormatDescription.md" format="markdown"/>
+  <topicref href="troubleshooting.xml"/>
+  <topicref href="glossary.xml"/>
   <topicref href="authors.md" format="markdown"/>
   <topicref href="reporting.md" format="markdown"/>
   <topicref href="copyright.md" format="markdown"/>
