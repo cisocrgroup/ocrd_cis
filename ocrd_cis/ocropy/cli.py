@@ -15,52 +15,52 @@ from ocrd_cis.ocropy.rec import OcropyRec
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_binarize(*args, **kwargs):
+def ocrd_cis_ocropy_binarize(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyBinarize, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_deskew(*args, **kwargs):
+def ocrd_cis_ocropy_deskew(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyDeskew, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_denoise(*args, **kwargs):
+def ocrd_cis_ocropy_denoise(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyDenoise, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_clip(*args, **kwargs):
+def ocrd_cis_ocropy_clip(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyClip, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_resegment(*args, **kwargs):
+def ocrd_cis_ocropy_resegment(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyResegment, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_dewarp(*args, **kwargs):
+def ocrd_cis_ocropy_dewarp(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyDewarp, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_recognize(*args, **kwargs):
+def ocrd_cis_ocropy_recognize(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyRecognize, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_segment(*args, **kwargs):
+def ocrd_cis_ocropy_segment(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropySegment, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_ocropy_train(*args, **kwargs):
+def ocrd_cis_ocropy_train(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyTrain, *args, **kwargs)
 
 @click.command()
 @click.option('-f', '--fromdir', default = os.getcwd())
 @click.option('-t', '--todir', default = os.getcwd())
 @click.option('-m', '--model', default='en-default.pyrnn.gz')
-def cis_ocrd_ocropy_rec(fromdir, todir , model):
+def ocrd_cis_ocropy_rec(fromdir, todir , model):
     return OcropyRec(fromdir, todir, model)

@@ -11,7 +11,7 @@ LOG_LEVEL = 'INFO'
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_profile(*args, **kwargs):
+def ocrd_cis_profile(*args, **kwargs):
     global LOG_LEVEL
     if 'log_level' in kwargs:
         LOG_LEVEL = kwargs['log_level']
