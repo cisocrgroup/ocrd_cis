@@ -33,3 +33,18 @@ ocrd-cis-ocropy-binarize --log-level DEBUG \
 						 --input-file-grp OCR-D-CIS-IMG-CLIP \
 						 --output-file-grp OCR-D-CIS-IMG-BIN \
 						 --mets "$tmpws/mets.xml"
+
+ocrd-cis-ocropy-denoise --log-level DEBUG \
+						--input-file-grp OCR-D-CIS-IMG-BIN \
+						--output-file-grp OCR-D-CIS-IMG-DEN \
+						--mets "$tmpws/mets.xml"
+
+ocrd-cis-ocropy-deskew --log-level DEBUG \
+					   --input-file-grp OCR-D-CIS-IMG-DEN \
+					   --output-file-grp OCR-D-CIS-IMG-DES \
+					   --mets "$tmpws/mets.xml"
+
+ocrd-cis-ocropy-dewarp --log-level DEBUG \
+					   --input-file-grp OCR-D-CIS-IMG-DES \
+					   --output-file-grp OCR-D-CIS-IMG-DEW \
+					   --mets "$tmpws/mets.xml"
