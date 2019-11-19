@@ -342,7 +342,8 @@
 			"steps": [
 				"postprocessing/alignment"
 			],
-			"description": "Align multiple OCRs and/or GTs"
+			"description": "Align multiple OCRs and/or GTs",
+			"parameters": {}
 		},
 		"ocrd-cis-wer": {
 			"executable": "ocrd-cis-wer",
