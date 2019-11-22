@@ -103,7 +103,7 @@ class OcropyDenoise(Processor):
                             line, region_image, region_xywh,
                             feature_selector='binarized')
                         self.process_segment(line, line_image, line_xywh, zoom,
-                                             input_file.pageId, #region.id,
+                                             input_file.pageId,
                                              file_id + '_' + region.id + '_' + line.id)
 
             # update METS (add the PAGE file):
