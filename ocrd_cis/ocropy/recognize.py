@@ -182,6 +182,11 @@ class OcropyRecognize(Processor):
                 edits_, lengs_ = self.process_lines(textlines, maxlevel, region_image, region_coords)
                 edits += edits_
                 lengs += lengs_
+            # update region text by concatenation for consistency
+            region_unicode = u'\n'.join(line.get_TextEquiv()[0].Unicode
+                                        if line.get_TextEquiv()
+                                        else u'' for line in textlines)
+            region.set_TextEquiv([TextEquivType(Unicode=region_unicode)])
         if lengs > 0:
             LOG.info('CER: %.1f%%', 100.0 * edits / lengs)
 
