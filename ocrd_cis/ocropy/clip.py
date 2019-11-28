@@ -15,7 +15,6 @@ from ocrd_utils import (
     getLogger,
     concat_padded,
     coordinates_of_segment,
-    xywh_from_points,
     bbox_from_polygon,
     image_from_polygon,
     polygon_mask,
@@ -52,27 +51,27 @@ class OcropyClip(Processor):
 
     def process(self):
         """Clip text regions / lines of the workspace at intersections with neighbours.
-        
+
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested
         ``level-of-operation``.
-        
+
         Next, get each segment image according to the layout annotation (by cropping
         via coordinates into the higher-level image), as well as all its neighbours',
         binarize them (without deskewing), and make a connected component analysis.
         (Segments must not already have AlternativeImage or orientation angle
          annotated, otherwise they will be skipped.)
-        
+
         Then, for each section of overlap with a neighbour, re-assign components
         which are only contained in the neighbour by clipping them to white (background),
         and export the (final) result as image file.
-        
+
         Add the new image file to the workspace with the fileGrp USE given
         in the second position of the output fileGrp, or ``OCR-D-IMG-CLIP``,
         and an ID based on the input file and input element.
-        
+
         Reference each new image in the AlternativeImage of the element.
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
         # This makes best sense for overlapping segmentation, like current GT
@@ -86,13 +85,13 @@ class OcropyClip(Processor):
         # deskewing, because that would make segments incomensurable with their
         # neighbours.
         level = self.parameter['level-of-operation']
-        
+
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
             if file_id == input_file.ID:
                 file_id = concat_padded(self.image_grp, n)
-            
+
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
@@ -106,7 +105,7 @@ class OcropyClip(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            
+
             regions = page.get_TextRegion()
             other_regions = (
                 page.get_AdvertRegion() +
@@ -152,11 +151,11 @@ class OcropyClip(Processor):
                     self.process_segment(line, lines[:j] + lines[j+1:],
                                          region_image, region_xywh,
                                          input_file.pageId, file_id + '_' + region.id + '_' + line.id)
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
-                file_id = concat_padded(self.page, n)
+                file_id = concat_padded(self.page_grp, n)
             file_path = os.path.join(self.page_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
@@ -167,7 +166,7 @@ class OcropyClip(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
-    
+
     def process_segment(self, segment, neighbours, parent_image, parent_coords, page_id, file_id):
         # initialize AlternativeImage@comments classes from parent, except
         # for those operations that can apply on multiple hierarchy levels:

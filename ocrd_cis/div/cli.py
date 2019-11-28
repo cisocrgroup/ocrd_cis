@@ -9,20 +9,20 @@ from ocrd_cis.div.importer import Importer
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_stats(*args, **kwargs):
+def ocrd_cis_stats(*args, **kwargs):
     return ocrd_cli_wrap_processor(Stats, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_lang(*args, **kwargs):
+def ocrd_cis_lang(*args, **kwargs):
     return ocrd_cli_wrap_processor(Lang, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_cutter(*args, **kwargs):
+def ocrd_cis_cutter(*args, **kwargs):
     return ocrd_cli_wrap_processor(Cutter, *args, **kwargs)
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_importer(*args, **kwargs):
+def ocrd_cis_importer(*args, **kwargs):
     return ocrd_cli_wrap_processor(Importer, *args, **kwargs)

@@ -1,14 +1,12 @@
 
 
-import functools
 import linecache
 import os
 import sys
 import warnings
-# FIXME from ... import wrap
 
 import numpy as np
-from functools import reduce
+from functools import (reduce, wraps)
 
 ### printing
 
@@ -26,7 +24,7 @@ def strc(arg,n=10):
 
 def deprecated(f):
     """Prints a deprecation warning when called."""
-    @functools.wraps(f)
+    @wraps(f)
     def wrapper(*args,**kw):
         warnings.warn_explicit("calling deprecated function %s"%f.__name__,
                                category=DeprecationWarning,
@@ -36,7 +34,7 @@ def deprecated(f):
     return wrapper
 
 def failfunc(f):
-    @functools.wraps(f)
+    @wraps(f)
     def wrapper(*args,**kw):
         raise Exception("don't call %s anymore"%f)
     return wrapper
@@ -51,7 +49,7 @@ def trace1(f):
     """Print arguments/return values for the decorated function before each call."""
     name = f.__name__
     argnames = f.__code__.co_varnames[:f.__code__.co_argcount]
-    @functools.wraps(f)
+    @wraps(f)
     def wrapper(*args,**kw):
         try:
             global _trace1_depth
@@ -107,7 +105,7 @@ def disabled(value=None):
     """Disables the function so that it does nothing.  Optionally
     returns the given value."""
     def wrapper(f):
-        @functools.wraps(f)
+        @wraps(f)
         def g(*args,**kw):
             return value
         return g
@@ -116,7 +114,7 @@ def disabled(value=None):
 def replacedby(g):
     """Replace the function with another function."""
     def wrapper(f):
-        @functools.wraps(f)
+        @wraps(f)
         def wrapped(*args,**kw):
             return g(*args,**kw)
         return wrapped
@@ -143,6 +141,8 @@ class CheckWarning(CheckError):
         self.fun = kw.get("fun","?")
         self.var = kw.get("var","?")
         self.description = " ".join([strc(x) for x in args])
+        CheckError.__init__(self, *args, **kw)
+
     def __str__(self):
         result = "\nCheckWarning for argument "
         result += str(self.var)
@@ -183,7 +183,7 @@ def checktype(value,type_):
     # for tuples, check that all conditions are satisfied
     if type(type_)==tuple:
         for t in type_:
-            checktype(value,type_)
+            checktype(value,t) #type_)
         return value
     # callables are just called and should either use assertions or
     # explicitly raise CheckError
@@ -196,7 +196,7 @@ def checktype(value,type_):
 def checks(*types,**ktypes):
     """Check argument and return types against type specs at runtime."""
     def argument_check_decorator(f):
-        @functools.wraps(f)
+        @wraps(f)
         def argument_checks(*args,**kw):
             # print("@@@", f, "decl", types, ktypes, "call",
             #       [strc(x) for x in args], kw)

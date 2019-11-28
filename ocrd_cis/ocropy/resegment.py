@@ -16,7 +16,6 @@ from ocrd_utils import (
     coordinates_for_segment,
     bbox_from_polygon,
     points_from_polygon,
-    xywh_from_points,
     MIMETYPE_PAGE
 )
 
@@ -24,7 +23,7 @@ from .. import get_ocrd_tool
 from . import common
 from .ocrolib import midrange
 from .common import (
-    pil2array, array2pil,
+    pil2array,
     # binarize,
     compute_line_labels
     #borderclean_bin
@@ -39,7 +38,7 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
               extend_margins=3,
               threshold_relative=0.8, threshold_absolute=50):
     """Reduce line polygon in a labelled region to the largest intersection.
-    
+
     Given a Numpy array ``line_polygon`` of relative coordinates
     in a region given by a Numpy array ``region_labels`` of numbered
     segments and a Numpy array ``region_bin`` of foreground pixels,
@@ -49,11 +48,11 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     within the whole polygon is larger than ``threshold_relative``,
     then compute the contour of that intersection and return it
     as a new polygon. Otherwise, return None.
-    
+
     If ``extend_margins`` is larger than zero, then extend ``line_polygon``
     by that amount of pixels horizontally and vertically before.
     """
-    height, width = region_labels.shape
+    # height, width = region_labels.shape
     # mask from line polygon:
     line_mask = np.zeros_like(region_labels)
     line_mask[draw.polygon(line_polygon[:,1], line_polygon[:,0], line_mask.shape)] = 1
@@ -123,26 +122,26 @@ class OcropyResegment(Processor):
 
     def process(self):
         """Resegment lines of the workspace.
-        
+
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the line level.
-        
+
         Next, get each region image according to the layout annotation (from
         the alternative image of the region, or by cropping via coordinates
         into the higher-level image), binarize it (without deskewing), and
         compute a new line segmentation from that (as a label mask).
-        
+
         Then for each line within the region, find the label with the largest
         foreground area in the binarized image within the annotated polygon
         (or rectangle) of the line. Unless its relative area is too small,
         or its center is far off, convert that label's mask into a polygon
         outline, intersect with the old polygon, and find the contour of that
         segment. Annotate the result as new coordinates of the line.
-        
+
         Add a new image file to the workspace with the fileGrp USE given
         in the second position of the output fileGrp, or ``OCR-D-IMG-RESEG``,
         and an ID based on input file and input element.
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
         # This makes best sense for bad/coarse segmentation, like current GT.
@@ -154,13 +153,13 @@ class OcropyResegment(Processor):
         # and the explicit binarization after resegmentation could be, too.
         threshold = self.parameter['min_fraction']
         margin = self.parameter['extend_margins']
-        
+
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
             if file_id == input_file.ID:
                 file_id = concat_padded(self.image_grp, n)
-            
+
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
@@ -174,7 +173,7 @@ class OcropyResegment(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            
+
             regions = page.get_TextRegion()
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
@@ -255,7 +254,7 @@ class OcropyResegment(Processor):
                     line.add_AlternativeImage(AlternativeImageType(
                         filename=file_path,
                         comments=region_xywh['features']))
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
@@ -270,4 +269,3 @@ class OcropyResegment(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
-    

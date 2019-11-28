@@ -36,37 +36,37 @@ class OcropyDenoise(Processor):
 
     def process(self):
         """Despeckle the pages / regions / lines of the workspace.
-        
+
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested
         ``level-of-operation``.
-        
+
         Next, for each file, crop each segment image according to the layout
         annotation (via coordinates into the higher-level image, or from the
         alternative image). Then despeckle by removing connected components
         smaller than ``noise_maxsize``. Apply results to the image and export
         it as an image file.
-        
+
         Add the new image file to the workspace with the fileGrp USE given
         in the second position of the output fileGrp, or ``OCR-D-IMG-DESPECK``,
         and an ID based on input file and input element.
-        
+
         Reference each new image in the AlternativeImage of the element.
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
         level = self.parameter['level-of-operation']
-        
+
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
             if file_id == input_file.ID:
                 file_id = concat_padded(self.image_grp, n)
-            
+
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            
+
             page_image, page_xywh, page_image_info = self.workspace.image_from_page(
                 page, page_id,
                 feature_selector='binarized' if level == 'page' else '')
@@ -78,7 +78,7 @@ class OcropyDenoise(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            
+
             if level == 'page':
                 self.process_segment(page, page_image, page_xywh, zoom,
                                      input_file.pageId, file_id)
@@ -105,7 +105,7 @@ class OcropyDenoise(Processor):
                         self.process_segment(line, line_image, line_xywh, zoom,
                                              input_file.pageId,
                                              file_id + '_' + region.id + '_' + line.id)
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
@@ -120,7 +120,7 @@ class OcropyDenoise(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
-    
+
     def process_segment(self, segment, segment_image, segment_xywh, zoom, page_id, file_id):
         LOG.info("About to despeckle '%s'", file_id)
         bin_image = remove_noise(segment_image,
@@ -135,4 +135,3 @@ class OcropyDenoise(Processor):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
             comments=segment_xywh['features'] + ',despeckled'))
-        

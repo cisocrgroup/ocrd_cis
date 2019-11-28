@@ -25,13 +25,13 @@ class Unimplemented(OcropusException):
     trace = 1
     "Exception raised when a feature is unimplemented."
     def __init__(self,s):
-        Exception.__init__(self,inspect.stack()[1][3])
+        OcropusException.__init__(self,inspect.stack()[1][3])
 
 class Internal(OcropusException):
     trace = 1
     "Exception raised when a feature is unimplemented."
     def __init__(self,s):
-        Exception.__init__(self,inspect.stack()[1][3])
+        OcropusException.__init__(self,inspect.stack()[1][3])
 
 class RecognitionError(OcropusException):
     trace = 1
@@ -41,7 +41,7 @@ class RecognitionError(OcropusException):
         s = [explanation]
         s += ["%s=%s"%(k,summary(kw[k])) for k in kw]
         message = " ".join(s)
-        Exception.__init__(self,message)
+        OcropusException.__init__(self,message)
 
 class Warning(OcropusException):
     trace = 0
@@ -52,7 +52,7 @@ class BadClassLabel(OcropusException):
     trace = 0
     "Exception for bad class labels in a dataset or input."
     def __init__(self,s):
-        Exception.__init__(self,s)
+        OcropusException.__init__(self,s)
 
 class BadImage(OcropusException):
     trace = 0
@@ -69,5 +69,6 @@ class FileNotFound(OcropusException):
     """Some file-not-found error during OCRopus processing."""
     def __init__(self,fname):
         self.fname = fname
+        OcropusException.__init__(self)
     def __str__(self):
         return "file not found %s"%(self.fname,)

@@ -13,9 +13,9 @@ from .. import get_ocrd_tool
 from .ocrolib import lineest
 from .common import (
     pil2array, array2pil,
-    check_line, check_page,
+    check_line,
 )
-    
+
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 LOG = getLogger('processor.OcropyDewarp')
@@ -32,18 +32,18 @@ class InadequateLine(Exception):
 # from ocropus-dewarp, but without resizing
 def dewarp(image, lnorm, check=True):
     line = pil2array(image)
-    
+
     if np.prod(line.shape) == 0:
         raise InvalidLine('image dimensions are zero')
     if np.amax(line) == np.amin(line):
         raise InvalidLine('image is blank')
-    
+
     temp = np.amax(line)-line # inverse, zero-closed
     if check:
         report = check_line(temp)
         if report:
             raise InadequateLine(report)
-    
+
     temp = temp * 1.0 / np.amax(temp) # normalized
     if check:
         report = lnorm.check(temp)
@@ -52,7 +52,7 @@ def dewarp(image, lnorm, check=True):
 
     lnorm.measure(temp) # find centerline
     line = lnorm.dewarp(line, cval=np.amax(line))
-    
+
     return array2pil(line)
 
 # pad with white above and below (as a fallback for dewarp)
@@ -83,30 +83,30 @@ class OcropyDewarp(Processor):
 
     def process(self):
         """Dewarp the lines of the workspace.
-        
+
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the TextLine level.
-        
+
         Next, get each line image according to the layout annotation (from
         the alternative image of the line, or by cropping via coordinates
         into the higher-level image), and dewarp it (without resizing).
         Export the result as an image file.
-        
+
         Add the new image file to the workspace with a fileGrp USE given
         in the second position of the output fileGrp, or ``OCR-D-IMG-DEWARP``,
         and an ID based on input file and input element.
-        
+
         Reference each new image in the AlternativeImage of the element.
-        
+
         Produce a new output file by serialising the resulting hierarchy.
         """
-        
+
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
             if file_id == input_file.ID:
                 file_id = concat_padded(self.image_grp, n)
-            
+
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
@@ -120,21 +120,21 @@ class OcropyDewarp(Processor):
                 zoom = 300.0/dpi
             else:
                 zoom = 1
-            
+
             regions = page.get_TextRegion()
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
                 region_image, region_xywh = self.workspace.image_from_segment(
                     region, page_image, page_xywh)
-                
+
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Region %s contains no text lines', region.id)
                 for line in lines:
                     line_image, line_xywh = self.workspace.image_from_segment(
                         line, region_image, region_xywh)
-                    
+
                     LOG.info("About to dewarp page '%s' region '%s' line '%s'",
                              page_id, region.id, line.id)
                     try:
@@ -159,7 +159,7 @@ class OcropyDewarp(Processor):
                     line.add_AlternativeImage(AlternativeImageType(
                         filename=file_path,
                         comments=line_xywh['features'] + ',dewarped'))
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
             if file_id == input_file.ID:
@@ -174,4 +174,3 @@ class OcropyDewarp(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
-    

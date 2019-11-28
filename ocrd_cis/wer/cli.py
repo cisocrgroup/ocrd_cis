@@ -10,7 +10,7 @@ import os
 
 @click.command()
 @ocrd_cli_options
-def cis_ocrd_wer(*args, **kwargs):
+def ocrd_cis_wer(*args, **kwargs):
     return ocrd_cli_wrap_processor(WERer, *args, **kwargs)
 
 class WERer(Processor):

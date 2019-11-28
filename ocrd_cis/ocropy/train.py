@@ -1,14 +1,9 @@
 from __future__ import absolute_import
 
 import sys, os.path, cv2
-
-
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType
 from ocrd_modelfactory import page_from_file
-from ocrd_utils import MIMETYPE_PAGE
 from ocrd import Processor
-
+from ocrd_utils import getLogger
 from ocrd_cis import get_ocrd_tool
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -63,11 +58,11 @@ def binarize(pil_image):
 class OcropyTrain(Processor):
 
     def __init__(self, *args, **kwargs):
+        self.log = getLogger('OcropyTrain')
         ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-ocropy-train']
         kwargs['version'] = ocrd_tool['version']
         super(OcropyTrain, self).__init__(*args, **kwargs)
-        self.log = getLogger('OcropyTrain')
 
 
     def process(self):
@@ -91,7 +86,6 @@ class OcropyTrain(Processor):
                 outputpath = self.parameter + '/' + model
             if os.path.isfile(modelpath) == False:
                 raise Exception("configured model " + model + " is not in models folder")
-                sys.exit(1)
         else:
             modelpath = None
             outputpath = filepath + '/output/' + 'lstm'
@@ -115,11 +109,11 @@ class OcropyTrain(Processor):
             self.log.info("page %s", pcgts)
             for region in pcgts.get_Page().get_TextRegion():
                 textlines = region.get_TextLine()
-                self.log.info("About to recognize text in %i lines of region '%s'", len(textlines), region.id)
+                self.log.info("About to extract %i lines in region '%s'", len(textlines), region.id)
                 for line in textlines:
 
                     if self.parameter['textequiv_level'] == 'line':
-                        self.log.debug("Recognizing text in line '%s'", line.id)
+                        self.log.debug("Extracting line '%s'", line.id)
 
                         #get box from points
                         box = bounding_box(line.get_Coords().points)
@@ -152,7 +146,7 @@ class OcropyTrain(Processor):
                         for word in line.get_Word():
 
                             if self.parameter['textequiv_level'] == 'word':
-                                self.log.debug("Recognizing text in word '%s'", word.id)
+                                self.log.debug("Extracting word '%s'", word.id)
 
                                 #get box from points
                                 box = bounding_box(word.get_Coords().points)
@@ -182,7 +176,7 @@ class OcropyTrain(Processor):
 
                             else:
                                 for glyph in word.get_Glyph():
-                                    self.log.debug("Recognizing text in glyph '%s'", glyph.id)
+                                    self.log.debug("Extracting glyph '%s'", glyph.id)
 
                                     #get box from points
                                     box = bounding_box(glyph.get_Coords().points)

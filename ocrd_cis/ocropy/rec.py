@@ -2,20 +2,11 @@ from __future__ import absolute_import
 
 from ocrd_cis.ocropy.ocrolib import lstm
 from ocrd_cis.ocropy import ocrolib
-from ocrd_cis import get_ocrd_tool
 
 import sys
 import os.path
-import cv2
 import numpy as np
 from PIL import Image
-
-from ocrd_utils import getLogger, concat_padded, xywh_from_points, points_from_x0y0x1y1
-from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
-from ocrd_models.ocrd_page_generateds import TextStyleType, MetadataItemType, LabelsType, LabelType
-from ocrd_utils import MIMETYPE_PAGE
-from ocrd import Processor
 
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

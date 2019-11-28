@@ -18,11 +18,11 @@ LOG = getLogger('ocrolib') # to be refined by importer
 # method similar to ocrolib.read_image_gray
 def pil2array(image, alpha=0):
     """Convert image to floating point grayscale array.
-    
+
     Given a PIL.Image instance (of any colorspace),
     convert to a grayscale Numpy array
     (with 1.0 for white and 0.0 for black).
-    
+
     If ``alpha`` is not zero, and an alpha channel is present,
     then preserve it (the array will now have 3 dimensions,
     with 2 coordinates in the last: luminance and transparency).
@@ -52,7 +52,7 @@ def pil2array(image, alpha=0):
 
 def array2pil(array):
     """Convert floating point grayscale array to an image.
-    
+
     Given a grayscale Numpy array
     (with 1.0 for white and 0.0 for black),
     convert to a (grayscale) PIL.Image instance.
@@ -190,17 +190,17 @@ def binarize(image,
 # inspired by OLD/ocropus-lattices --borderclean
 def borderclean(array, margin=4):
     """Remove components that are only contained within the margin.
-    
+
     Given a grayscale-normalized image as Numpy array `array`,
     find and remove those black components that do not exceed
     the top/bottom margins.
     (This can be used to get rid of ascenders and descenders from
     neighbouring regions/lines, which cannot be found by resegment()
     within the region/line.
-    
+
     This should happen before deskewing, because the latter increases
     the margins by an unpredictable amount.)
-    
+
     Return a Numpy array (with 0 for black and 1 for white).
     """
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
@@ -208,17 +208,17 @@ def borderclean(array, margin=4):
 
 def borderclean_bin(binary, margin=4):
     """Remove components that are only contained within the margin.
-    
+
     Given a binarized, inverted image as Numpy array `binary`,
     find those foreground components that do not exceed
     the top/bottom margins, and return a mask to remove them.
     (This can be used to get rid of ascenders and descenders from
     neighbouring regions/lines, which cannot be found by resegment()
     within the region/line.
-    
+
     This should happen before deskewing, because the latter increases
     the margins by an unpredictable amount.)
-    
+
     Return a Numpy array (with 0 for stay and 1 for remove).
     """
     h, w = binary.shape
@@ -238,12 +238,12 @@ def borderclean_bin(binary, margin=4):
 # from ocropus-rpred, but with zoom parameter
 def check_line(binary, zoom=1.0):
     """Validate binary as a plausible text line image.
-    
+
     Given a binarized, inverted image as Numpy array `binary`
     (with 0 for white and 1 for black),
     check the array has the right dimensions, is in fact inverted,
     and does not have too few or too many connected black components.
-    
+
     Returns an error report, or None if valid.
     """
     if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
@@ -266,12 +266,12 @@ def check_line(binary, zoom=1.0):
 # inspired by ocropus-gpageseg check_page
 def check_region(binary, zoom=1.0):
     """Validate binary as a plausible text region image.
-    
+
     Given a binarized, inverted image as Numpy array `binary`
     (with 0 for white and 1 for black),
     check the array has the right dimensions, is in fact inverted,
     and does not have too few or too many connected black components.
-    
+
     Returns an error report, or None if valid.
     """
     if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
@@ -290,12 +290,12 @@ def check_region(binary, zoom=1.0):
 # from ocropus-gpageseg, but with zoom parameter
 def check_page(binary, zoom=1.0):
     """Validate binary as a plausible printed text page image.
-    
+
     Given a binarized, inverted image as Numpy array `binary`
     (with 0 for white and 1 for black),
     check the array has the right dimensions, is in fact inverted,
     and does not have too few or too many connected black components.
-    
+
     Returns an error report, or None if valid.
     """
     if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
@@ -338,7 +338,7 @@ def remove_hlines(binary,scale,maxsize=10):
     labels,_ = morph.label(binary)
     objects = morph.find_objects(labels)
     for i,b in enumerate(objects):
-        if (sl.width(b)>maxsize*scale and 
+        if (sl.width(b)>maxsize*scale and
             sl.height(b)<scale):
             labels[b][labels[b]==i+1] = 0
     result = np.array(labels!=0,'B')
@@ -386,7 +386,7 @@ def compute_colseps_conv(binary,scale=1.0, csminheight=10, maxcolseps=2):
     """Find column separators by convolution and
     thresholding."""
     # FIXME: make zoomable
-    h,w = binary.shape
+    # h,w = binary.shape
     # find vertical whitespace by thresholding
     smoothed = filters.gaussian_filter(1.0*binary,(scale,scale*0.5))
     smoothed = filters.uniform_filter(smoothed,(5.0*scale,1))
@@ -431,7 +431,7 @@ def compute_gradmaps(binary,scale,
     # because we will have remainders of (possibly rotated and)
     # chopped lines at the region boundaries,
     # which we want to regard as neighbouring full lines
-    # when estimating segmentation to re-segment (and mask) lines:    
+    # when estimating segmentation to re-segment (and mask) lines:
     boxmap = psegutils.compute_boxmap(binary,scale, threshold=(0.1,4))
     #DSAVE("boxmap",boxmap)
     cleaned = boxmap*binary
@@ -595,7 +595,7 @@ def hmerge_line_seeds(seeds, threshold=0.2):
 # - without final unmasking
 def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0, spread_dist=None, check=True):
     """Find text line segmentation within a region or page.
-    
+
     Given a grayscale-normalized image as Numpy array ``array``, compute
     a complete segmentation into text lines for it, avoiding any single
     horizontal splits (unless `fullpage`` is true).
@@ -605,7 +605,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     and return them separately.
     If ``spread_dist`` is given, labels are not spread from the background
     seeds, but from the foreground, with the given distance.
-    
+
     Return a tuple of:
     - Numpy array of the background labels
       (not the foreground or the masked image),
@@ -637,7 +637,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
         hlines, binary = binary - binary2, binary2
     else:
         hlines = np.zeros_like(binary)
-        
+
     bottom, top, boxmap = compute_gradmaps(binary, scale, usegauss=False,
                                            hscale=1.0/zoom, vscale=1.0/zoom)
     #DSAVE("boxmap",[boxmap,bottom,top])
@@ -649,7 +649,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
     else:
         colseps = np.zeros(binary.shape, np.uint8)
         vlines = np.zeros_like(binary)
-    
+
     sepmask = morph.r_dilation(np.maximum(colseps, np.maximum(hlines, vlines)),
                                (scale//2, scale//2))
     seeds = compute_line_seeds(binary, bottom, top, sepmask, scale)

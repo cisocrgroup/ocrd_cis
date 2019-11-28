@@ -13,17 +13,14 @@ import sysconfig
 import unicodedata
 import inspect
 import glob
-import six
 import gzip
 import pickle
 from .exceptions import (BadClassLabel, BadInput, FileNotFound,
                                 OcropusException)
-
-import numpy
 from numpy import (amax, amin, array, bitwise_and, clip, dtype, mean, minimum,
-                   nan, sin, sqrt, zeros)
-import pylab
-from pylab import (clf, cm, ginput, gray, imshow, ion, subplot, where)
+                   nan, sin, sqrt, zeros, unique, fromstring)
+from pylab import (clf, cm, ginput, gray, imshow, ion, subplot,
+                   where, xticks, yticks, title, xlabel, ylabel)
 from scipy.ndimage import morphology, measurements
 import PIL
 
@@ -32,7 +29,6 @@ from .default import getlocal
 from .toplevel import (checks, ABINARY2, AINT2, AINT3, BOOL, DARKSEG, GRAYSCALE,
                       LIGHTSEG, LINESEG, PAGESEG)
 from . import chars
-import codecs
 from . import ligatures
 from . import lstm
 from . import morph
@@ -116,20 +112,20 @@ def write_text(fname,text,nonl=0,normalize=1):
 
 def pil2array(im,alpha=0):
     if im.mode=="L":
-        a = numpy.fromstring(im.tobytes(),'B')
+        a = fromstring(im.tobytes(),'B')
         a.shape = im.size[1],im.size[0]
         return a
     if im.mode=="LA":
-        a = numpy.fromstring(im.tobytes(),'B')
+        a = fromstring(im.tobytes(),'B')
         a.shape = im.size[1],im.size[0],2
         if not alpha: a = a[:,:,0]
         return a
     if im.mode=="RGB":
-        a = numpy.fromstring(im.tobytes(),'B')
+        a = fromstring(im.tobytes(),'B')
         a.shape = im.size[1],im.size[0],3
         return a
     if im.mode=="RGBA":
-        a = numpy.fromstring(im.tobytes(),'B')
+        a = fromstring(im.tobytes(),'B')
         a.shape = im.size[1],im.size[0],4
         if not alpha: a = a[:,:,:3]
         return a
@@ -512,7 +508,6 @@ def parallel_map(fun,jobs,parallel=0,chunksize=1):
         finally:
             pool.close()
             pool.join()
-            del pool
 
 def check_valid_class_label(s):
     """Determines whether the given character is a valid class label.
@@ -618,7 +613,7 @@ def ocropus_find_file(fname, gz=True):
         * current working directory
         * ../../../../share/ocropus from this file's install location
         * `/usr/local/share/ocropus`
-        * `$PREFIX/share/ocropus` ($PREFIX being the Python installation 
+        * `$PREFIX/share/ocropus` ($PREFIX being the Python installation
            prefix, usually `/usr`)
     """
     possible_prefixes = []
@@ -643,7 +638,7 @@ def ocropus_find_file(fname, gz=True):
     # Unique entries with preserved order in possible_prefixes
     # http://stackoverflow.com/a/15637398/201318
     possible_prefixes = [possible_prefixes[i] for i in
-            sorted(numpy.unique(possible_prefixes, return_index=True)[1])]
+            sorted(unique(possible_prefixes, return_index=True)[1])]
     for prefix in possible_prefixes:
         if not os.path.isdir(prefix):
             continue
@@ -829,12 +824,12 @@ def showgrid(l,cols=None,n=400,titles=None,xlabels=None,ylabels=None,**kw):
     if cols is None: cols = int(sqrt(n))
     rows = (n+cols-1)//cols
     for i in range(n):
-        pylab.xticks([]) ;pylab.yticks([])
-        pylab.subplot(rows,cols,i+1)
-        pylab.imshow(l[i],**kw)
-        if titles is not None: pylab.title(str(titles[i]))
-        if xlabels is not None: pylab.xlabel(str(xlabels[i]))
-        if ylabels is not None: pylab.ylabel(str(ylabels[i]))
+        xticks([]) ;yticks([])
+        subplot(rows,cols,i+1)
+        imshow(l[i],**kw)
+        if titles is not None: title(str(titles[i]))
+        if xlabels is not None: xlabel(str(xlabels[i]))
+        if ylabels is not None: ylabel(str(ylabels[i]))
 
 def gt_explode(s):
     l = re.split(r'_(.{1,4})_',s)

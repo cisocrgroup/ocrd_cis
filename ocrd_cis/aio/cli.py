@@ -11,7 +11,7 @@ from ocrd_cis.aio.aio import AllInOne
 @click.option('-l', '--download', is_flag=True, help='downloads and updates all projects automatically.')
 
 
-def cis_ocrd_aio(directory, parameter, verbose, download):
+def ocrd_cis_aio(directory, parameter, verbose, download):
     if directory == '.':
         directory = os.getcwd()
     return AllInOne(directory, parameter, verbose, download)
