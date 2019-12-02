@@ -1,4 +1,3 @@
-![build status](https://travis-ci.org/cisocrgroup/ocrd_cis.svg?branch=dev)
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/cisocrgroup/ocrd_cis.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cisocrgroup/ocrd_cis/context:python)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/cisocrgroup/ocrd_cis.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cisocrgroup/ocrd_cis/alerts/)
 # ocrd_cis
