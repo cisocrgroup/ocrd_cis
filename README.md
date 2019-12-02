@@ -1,4 +1,5 @@
 ![build status](https://travis-ci.org/cisocrgroup/ocrd_cis.svg?branch=dev)
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/cisocrgroup/ocrd_cis.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cisocrgroup/ocrd_cis/alerts/)
 # ocrd_cis
 
 [CIS](http://www.cis.lmu.de) [OCR-D](http://ocr-d.de) command line
