@@ -43,7 +43,7 @@ setup(
         'pillow>=6.2.0',
         'matplotlib>3.0.0',
         'python-Levenshtein',
-        'calamari_ocr'
+        'calamari_ocr == 0.3.5'
     ],
     package_data={
         '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar'],
