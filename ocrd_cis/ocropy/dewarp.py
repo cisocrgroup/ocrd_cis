@@ -30,29 +30,29 @@ class InadequateLine(Exception):
     pass
 
 # from ocropus-dewarp, but without resizing
-def dewarp(image, lnorm, check=True):
+def dewarp(image, lnorm, check=True, max_neighbour=0.02, zoom=1.0):
     line = pil2array(image)
-
+    
     if np.prod(line.shape) == 0:
         raise InvalidLine('image dimensions are zero')
     if np.amax(line) == np.amin(line):
         raise InvalidLine('image is blank')
-
+    
     temp = np.amax(line)-line # inverse, zero-closed
     if check:
-        report = check_line(temp)
+        report = check_line(temp, zoom=zoom)
         if report:
             raise InadequateLine(report)
-
+    
     temp = temp * 1.0 / np.amax(temp) # normalized
     if check:
-        report = lnorm.check(temp)
+        report = lnorm.check(temp, max_ignore=max_neighbour)
         if report:
             raise InvalidLine(report)
 
     lnorm.measure(temp) # find centerline
     line = lnorm.dewarp(line, cval=np.amax(line))
-
+    
     return array2pil(line)
 
 # pad with white above and below (as a fallback for dewarp)
@@ -138,7 +138,9 @@ class OcropyDewarp(Processor):
                     LOG.info("About to dewarp page '%s' region '%s' line '%s'",
                              page_id, region.id, line.id)
                     try:
-                        dew_image = dewarp(line_image, self.lnorm, check=True)
+                        dew_image = dewarp(line_image, self.lnorm, check=True,
+                                           max_neighbour=self.parameter['max_neighbour'],
+                                           zoom=zoom)
                     except InvalidLine as err:
                         LOG.error('cannot dewarp line "%s": %s', line.id, err)
                         continue
