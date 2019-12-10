@@ -199,8 +199,15 @@
 			"parameters": {
 				"range": {
 					"type": "number",
+					"format": "float",
 					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels)",
-					"default": 4
+					"default": 4.0
+				},
+				"max_neighbour": {
+					"type": "number",
+					"format": "float",
+					"description": "maximum rate of foreground pixels intruding from neighbouring lines (line will not be processed above that)",
+					"default": 0.02
 				}
 			}
 		},
