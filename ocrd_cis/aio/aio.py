@@ -1,3 +1,11 @@
+'''
+All in One Tool for:
+    Unpacking GT-Files
+    Adding them to a Workspace
+    Recognizing the Text from Images with different models
+    Aligning
+'''
+
 import re
 import os
 import json
@@ -13,16 +21,8 @@ from ocrd_cis import JavaEvalRRDM
 import string
 
 from ocrd_utils import getLogger
-from ocrd.model.ocrd_page_generateds import parse
+from ocrd_models.ocrd_page_generateds import parse
 
-
-'''
-All in One Tool for:
-    Unpacking GT-Files
-    Adding them to a Workspace
-    Recognizing the Text from Images with different models
-    Aligning
-'''
 
 OCRD_IMG_FGROUP = 'OCR-D-IMG'
 OCRD_GT_FGROUP = 'OCR-D-GT'
@@ -468,9 +468,9 @@ def detect_language(text, stopwordspath):
         languages = json.load(f)
 
     for language in languages:
-            stopwords_set = set(languages[language])
-            common_elements = words_set.intersection(stopwords_set)
-            languages_ratios[language] = len(common_elements)
+        stopwords_set = set(languages[language])
+        common_elements = words_set.intersection(stopwords_set)
+        languages_ratios[language] = len(common_elements)
 
     most_rated_language = max(languages_ratios, key=languages_ratios.get)
 

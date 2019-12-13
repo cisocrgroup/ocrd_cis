@@ -81,21 +81,13 @@ def tracing(f):
             print("%s(%s): %s" % (base, lineno,
                                   linecache.getline(fname, lineno)))
         return localtrace
-    @wrap(f)
+    @wraps(f)
     def wrapper(*args,**kw):
         sys.settrace(globaltrace)
         result = f(*args,**kw)
         sys.settrace(None)
         return result
     return wrapper
-
-def method(cls):
-    """Adds the function as a method to the given class."""
-    import new
-    def _wrap(f):
-        cls.__dict__[f.__name__] = new.instancemethod(f,None,cls)
-        return None
-    return _wrap
 
 def unchanged(f):
     "This decorator doesn't add any behavior"
@@ -207,7 +199,7 @@ def checks(*types,**ktypes):
                 try:
                     checktype(value,type_)
                 except AssertionError as e:
-                    raise CheckError(e.message,*e.args,var=var,fun=f)
+                    raise CheckError(e.value,*e.args,var=var,fun=f)
                 except CheckError as e:
                     e.fun = f
                     e.var = var

@@ -1,12 +1,14 @@
 from __future__ import absolute_import
-from ocrd_utils import getLogger
-from ocrd_utils import concat_padded
-from ocrd.model.ocrd_page import to_xml
-from ocrd.model.ocrd_page import TextEquivType
+from ocrd_utils import (
+    getLogger, concat_padded,
+    MIMETYPE_PAGE
+)
+from ocrd_models.ocrd_page import (
+    TextEquivType, to_xml
+)
 from ocrd import Processor
-from ocrd import MIMETYPE_PAGE
 from ocrd_cis import get_ocrd_tool
-from ocrd.model.ocrd_page_generateds import parse
+from ocrd_models.ocrd_page_generateds import parse
 
 class Clean(Processor):
 
