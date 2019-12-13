@@ -239,21 +239,6 @@ class OcropyClip(Processor):
         # recrop segment into rectangle, just as image_from_segment would do
         # (and also clipping with background colour):
         segment_image = crop_image(segment_image,box=segment_bbox)
-        # rotate the image if necessary, just as image_from_segment would do:
-        if 'orientation' in segment.__dict__:
-            # region angle: PAGE @orientation is defined clockwise,
-            # whereas PIL/ndimage rotation is in mathematical direction:
-            angle = -(segment.get_orientation() or 0)
-        else:
-            angle = 0
-        if angle:
-            LOG.info("Rotating image for segment '%s' by %.2f°-%.2f°",
-                     segment.id, angle, parent_coords['angle'])
-            # @orientation is always absolute; if higher levels
-            # have already rotated, then we must compensate:
-            segment_image = rotate_image(segment_image, angle - parent_xywh['angle'],
-                                         fill='background')
-            features += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
             segment_image,
