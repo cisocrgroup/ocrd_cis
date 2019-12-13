@@ -3,7 +3,7 @@ import json
 from ocrd_utils import getLogger
 from ocrd import Processor
 from ocrd_cis import get_ocrd_tool
-from ocrd.model.ocrd_page_generateds import parse
+from ocrd_models.ocrd_page_generateds import parse
 from Levenshtein import distance
 
 
