@@ -49,12 +49,15 @@ class CenterNormalizer:
         smoothed, _ = measurements.label(smoothed)
         #DSAVE('lineest check 9 labelled', smoothed + 0.5*line)
         counts = np.bincount((smoothed * line.astype(np.uint8)).flatten())[1:] # no bg
-        # thresh = max_ignore * np.sum(line) # at least that many fg pixels belong to other line?
-        thresh = (1-max_ignore) * np.sum(line) # at most that many fg pixels belong to largest line?
+        largest = np.amax(counts)
+        total = np.sum(line)
+        # thresh = max_ignore * total # at least that many fg pixels belong to other line?
+        thresh = (1-max_ignore) * total # at most that many fg pixels belong to largest line?
         #DSAVE('lineest check counts %s vs %d' % (str(counts), thresh), smoothed + 0.5*line)
         # if np.count_nonzero(counts > thresh) > 1:
-        if np.amax(counts) < thresh:
-            return "found more than 1 textline, most likely from bad cropping"
+        if largest < thresh:
+            return "found more than 1 textline (only %.2f fg), most likely from bad cropping" % (
+                largest/total)
         return None
     def measure(self,line):
         h,w = line.shape
