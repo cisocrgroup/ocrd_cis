@@ -14,7 +14,12 @@ from ocrd_utils import (
     MIMETYPE_PAGE
 )
 from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import to_xml, TextEquivType, CoordsType, GlyphType, WordType
+from ocrd_models.ocrd_page import (
+    MetadataItemType,
+    LabelsType, LabelType,
+    to_xml, TextEquivType,
+    CoordsType, GlyphType, WordType
+)
 from ocrd import Processor
 
 from .. import get_ocrd_tool
@@ -24,6 +29,7 @@ from .common import (
     check_line
 )
 
+TOOL = 'ocrd-cis-ocropy-recognize'
 LOG = getLogger('processor.OcropyRecognize')
 
 def resize_keep_ratio(image, baseheight=48):
@@ -77,7 +83,7 @@ class OcropyRecognize(Processor):
 
     def __init__(self, *args, **kwargs):
         self.ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = self.ocrd_tool['tools']['ocrd-cis-ocropy-recognize']
+        kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
 
@@ -140,6 +146,20 @@ class OcropyRecognize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
+            
+            # add metadata about this operation and its runtime parameters:
+            metadata = pcgts.get_Metadata() # ensured by from_file()
+            metadata.add_MetadataItem(
+                MetadataItemType(type_="processingStep",
+                                 name=self.ocrd_tool['steps'][0],
+                                 value=TOOL,
+                                 Labels=[LabelsType(
+                                     externalModel="ocrd-tool",
+                                     externalId="parameters",
+                                     Label=[LabelType(type_=name,
+                                                      value=self.parameter[name])
+                                            for name in self.parameter.keys()])]))
+                
             page_image, page_coords, _ = self.workspace.image_from_page(
                 page, page_id)
 
