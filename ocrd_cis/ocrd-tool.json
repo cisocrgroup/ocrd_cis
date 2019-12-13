@@ -207,7 +207,7 @@
 					"type": "number",
 					"format": "float",
 					"description": "maximum rate of foreground pixels intruding from neighbouring lines (line will not be processed above that)",
-					"default": 0.02
+					"default": 0.05
 				}
 			}
 		},
