@@ -8,3 +8,5 @@ env/*
 env-dir/*
 .envrc
 /venv*
+/build
+/dist

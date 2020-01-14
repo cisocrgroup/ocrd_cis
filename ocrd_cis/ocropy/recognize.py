@@ -83,19 +83,11 @@ class OcropyRecognize(Processor):
 
     def __init__(self, *args, **kwargs):
         self.ocrd_tool = get_ocrd_tool()
+        self.pad = 16 # ocropus-rpred default
+        self.network = None # set in process
         kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyRecognize, self).__init__(*args, **kwargs)
-
-        # from ocropus-rpred:
-        self.network = load_object(self.get_model(), verbose=1)
-        for x in self.network.walk():
-            x.postLoad()
-        for x in self.network.walk():
-            if isinstance(x, lstm.LSTM):
-                x.allocate(5000)
-
-        self.pad = 16 # ocropus-rpred default
 
     def get_model(self):
         """Search for the model file.  First checks if
@@ -138,6 +130,14 @@ class OcropyRecognize(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        # from ocropus-rpred:
+        self.network = load_object(self.get_model(), verbose=1)
+        for x in self.network.walk():
+            x.postLoad()
+        for x in self.network.walk():
+            if isinstance(x, lstm.LSTM):
+                x.allocate(5000)
+
         maxlevel = self.parameter['textequiv_level']
 
         # LOG.info("Using model %s in %s for recognition", model)
@@ -236,7 +236,7 @@ class OcropyRecognize(Processor):
             # process ocropy:
             try:
                 linepred, clist, rlist, confidlist = recognize(
-                    final_img, self.pad, self.network, check=True)
+                    final_img, pad, self.network, check=True)
             except Exception as err:
                 LOG.debug('ERROR: error processing line "%s": %s', line.id, err)
                 continue
