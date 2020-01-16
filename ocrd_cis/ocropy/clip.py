@@ -61,8 +61,8 @@ class OcropyClip(Processor):
         Next, get each segment image according to the layout annotation (by cropping
         via coordinates into the higher-level image), as well as all its neighbours',
         binarize them (without deskewing), and make a connected component analysis.
-        (Segments must not already have AlternativeImage or orientation angle
-         annotated, otherwise they will be skipped.)
+        (Segments must not already have AlternativeImage annotated, otherwise they
+        will be skipped.)
 
         Then, for each section of overlap with a neighbour, re-assign components
         which are only contained in the neighbour by clipping them to white (background),
@@ -142,10 +142,6 @@ class OcropyClip(Processor):
                 if level == 'region':
                     if region.get_AlternativeImage():
                         LOG.warning('Page "%s" region "%s" already contains image data: skipping',
-                                    page_id, region.id)
-                        continue
-                    if region.get_orientation():
-                        LOG.warning('Page "%s" region "%s" has non-zero orientation: skipping',
                                     page_id, region.id)
                         continue
                     self.process_segment(region, regions[:i] + regions[i+1:] + other_regions,
