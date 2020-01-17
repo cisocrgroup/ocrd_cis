@@ -110,6 +110,12 @@
 					"description": "maximum size in points (pt) for connected components to regard as noise (0 will deactivate denoising)",
 					"default": 3.0
 				},
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
 				"level-of-operation": {
 					"type": "string",
 					"enum": ["page", "region", "line"],
@@ -143,6 +149,12 @@
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "region"
 				},
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
 				"min_fraction": {
 					"type": "number",
 					"format": "float",
@@ -167,6 +179,12 @@
 			],
 			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
 			"parameters": {
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
 				"min_fraction": {
 					"type": "number",
 					"format": "float",
@@ -197,6 +215,12 @@
 				"OCR-D-SEG-LINE"
 			],
 			"parameters": {
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
 				"range": {
 					"type": "number",
 					"format": "float",
@@ -275,6 +299,12 @@
 			],
 			"description": "Segment pages into regions or regions into lines with ocropy",
 			"parameters": {
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
 				"level-of-operation": {
 					"type": "string",
 					"enum": ["page", "region"],
