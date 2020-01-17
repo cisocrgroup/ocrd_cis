@@ -281,10 +281,11 @@ def check_region(binary, zoom=1.0):
     if h>5000/zoom: return "image too tall for a region image %s"%(binary.shape,)
     if w<100/zoom: return "image too narrow for a region image %s"%(binary.shape,)
     if w>5000/zoom: return "line too wide for a region image %s"%(binary.shape,)
-    slots = int(w*h*1.0/(30*30)*zoom*zoom)
+    # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
+    slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
     if ncomps<5: return "too few connected components for a region image (got %d)"%(ncomps,)
-    if ncomps>slots*2 and ncomps>10: return "too many connected components for a region image (%d > %d)"%(ncomps,slots)
+    if ncomps>slots and ncomps>10: return "too many connected components for a region image (%d > %d)"%(ncomps,slots)
     return None
 
 # from ocropus-gpageseg, but with zoom parameter
@@ -305,7 +306,8 @@ def check_page(binary, zoom=1.0):
     if h>10000/zoom: return "image too tall for a page image %s"%(binary.shape,)
     if w<600/zoom: return "image too narrow for a page image %s"%(binary.shape,)
     if w>10000/zoom: return "line too wide for a page image %s"%(binary.shape,)
-    slots = int(w*h*1.0/(30*30)*zoom*zoom)
+    # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
+    slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
     if ncomps<10: return "too few connected components for a page image (got %d)"%(ncomps,)
     if ncomps>slots and ncomps>10: return "too many connected components for a page image (%d > %d)"%(ncomps,slots)
