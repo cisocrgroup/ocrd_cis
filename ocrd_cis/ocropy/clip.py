@@ -114,7 +114,7 @@ class OcropyClip(Processor):
                                                       value=self.parameter[name])
                                             for name in self.parameter.keys()])]))
             
-            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+            page_image, page_coords, page_image_info = self.workspace.image_from_page(
                 page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
                 zoom = 300.0/self.parameter['dpi']
@@ -127,8 +127,9 @@ class OcropyClip(Processor):
             else:
                 zoom = 1
 
-            regions = page.get_TextRegion()
-            other_regions = (
+            regions = list(page.get_TextRegion())
+            num_texts = len(regions)
+            regions += (
                 page.get_AdvertRegion() +
                 page.get_ChartRegion() +
                 page.get_ChemRegion() +
@@ -141,50 +142,78 @@ class OcropyClip(Processor):
                 page.get_SeparatorRegion() +
                 page.get_TableRegion() +
                 page.get_UnknownRegion())
-            if not regions:
+            if not num_texts:
                 LOG.warning('Page "%s" contains no text regions', page_id)
+            background = ImageStat.Stat(page_image).median[0]
             if level == 'region':
-                polygons = [Polygon(polygon_from_points(region.get_Coords().points))
+                background_image = Image.new('L', page_image.size, background)
+                page_array = pil2array(page_image)
+                page_bin = np.array(page_array <= midrange(page_array), np.uint8)
+                # in absolute coordinates merely for comparison/intersection
+                shapes = [Polygon(polygon_from_points(region.get_Coords().points))
+                          for region in regions]
+                # in relative coordinates for mask/cropping
+                polygons = [coordinates_of_segment(region, page_image, page_coords)
                             for region in regions]
-                other_polygons = [Polygon(polygon_from_points(region.get_Coords().points))
-                                  for region in other_regions]
+                masks = [pil2array(polygon_mask(page_image, polygon)).astype(np.uint8)
+                         for polygon in polygons]
+                for i, mask in enumerate(masks[num_texts:], num_texts):
+                    # for non-text regions, extend mask by 3 pixels in each direction
+                    # to ensure they do not leak components accidentally
+                    # (accounts for bad cropping of such regions in GT):
+                    masks[i] = filters.maximum_filter(mask, 7)
             for i, region in enumerate(regions):
+                if i >= num_texts:
+                    break # keep non-text regions unchanged
                 if level == 'region':
                     if region.get_AlternativeImage():
                         LOG.warning('Page "%s" region "%s" already contains image data: skipping',
                                     page_id, region.id)
                         continue
-                    polygon = prep(polygons[i])
-                    self.process_segment(region,
-                                         [neighreg for neighreg, neighpoly in zip(
-                                             regions[:i] + regions[i+1:] + other_regions,
-                                             polygons[:i] + polygons[i+1:] + other_polygons)
-                                          if polygon.intersects(neighpoly)],
-                                         page_image, page_xywh,
+                    shape = prep(shapes[i])
+                    self.process_segment(region, masks[i], polygons[i],
+                                         [(regionj, maskj) for shapej, regionj, maskj in zip(
+                                             shapes[:i] + shapes[i+1:],
+                                             regions[:i] + regions[i+1:],
+                                             masks[:i] + masks[i+1:])
+                                          if shape.intersects(shapej)],
+                                         background_image,
+                                         page_image, page_coords, page_bin,
                                          input_file.pageId, file_id + '_' + region.id)
                     continue
                 # level == 'line':
-                region_image, region_xywh = self.workspace.image_from_segment(
-                    region, page_image, page_xywh, feature_selector='binarized')
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
-                polygons = [Polygon(polygon_from_points(line.get_Coords().points))
+                region_image, region_xywh = self.workspace.image_from_segment(
+                    region, page_image, page_coords, feature_selector='binarized')
+                background_image = Image.new('L', region_image.size, background)
+                region_array = pil2array(region_image)
+                region_bin = np.array(region_array <= midrange(region_array), np.uint8)
+                # in absolute coordinates merely for comparison/intersection
+                shapes = [Polygon(polygon_from_points(line.get_Coords().points))
+                          for line in lines]
+                # in relative coordinates for mask/cropping
+                polygons = [coordinates_of_segment(line, region_image, region_coords)
                             for line in lines]
+                masks = [pil2array(polygon_mask(region_image, polygon)).astype(np.uint8)
+                         for polygon in polygons]
                 for j, line in enumerate(lines):
                     if line.get_AlternativeImage():
                         # FIXME: This should probably be an exception (bad workflow configuration).
                         LOG.warning('Page "%s" region "%s" line "%s" already contains image data: skipping',
                                     page_id, region.id, line.id)
                         continue
-                    polygon = prep(polygons[j])
-                    self.process_segment(line,
-                                         [neighline for neighline, neighpoly in zip(
+                    shape = prep(shapes[j])
+                    self.process_segment(line, masks[j], polygons[j],
+                                         [(linej, maskj) for shapej, linej, maskj in zip(
+                                             shapes[:j] + shapes[j+1:],
                                              lines[:j] + lines[j+1:],
-                                             polygons[:j] + polygons[j+1:])
-                                          if polygon.intersects(neighpoly)],
-                                         region_image, region_xywh,
+                                             masks[:j] + masks[j+1:])
+                                          if shape.intersects(shapej)],
+                                         background_image,
+                                         region_image, region_xywh, region_bin,
                                          input_file.pageId, file_id + '_' + region.id + '_' + line.id)
 
             # update METS (add the PAGE file):
@@ -202,7 +231,9 @@ class OcropyClip(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.page_grp, out.local_filename)
 
-    def process_segment(self, segment, neighbours, parent_image, parent_coords, page_id, file_id):
+    def process_segment(self, segment, segment_mask, segment_polygon, neighbours,
+                        background_image, parent_image, parent_coords, parent_bin,
+                        page_id, file_id):
         # initialize AlternativeImage@comments classes from parent, except
         # for those operations that can apply on multiple hierarchy levels:
         features = ','.join(
@@ -210,23 +241,9 @@ class OcropyClip(Processor):
              if feature in ['binarized', 'grayscale_normalized',
                             'despeckled', 'dewarped']]) + ',clipped'
         # mask segment within parent image:
-        segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
-        segment_bbox = bbox_from_polygon(segment_polygon)
         segment_image = image_from_polygon(parent_image, segment_polygon)
-        background = ImageStat.Stat(segment_image).median[0]
-        background_image = Image.new('L', segment_image.size, background)
-        segment_mask = pil2array(polygon_mask(parent_image, segment_polygon)).astype(np.uint8)
-        # ad-hoc binarization:
-        parent_array = pil2array(parent_image)
-        parent_bin = np.array(parent_array <= midrange(parent_array), np.uint8)
-        for neighbour in neighbours:
-            neighbour_polygon = coordinates_of_segment(neighbour, parent_image, parent_coords)
-            neighbour_bbox = bbox_from_polygon(neighbour_polygon)
-            neighbour_mask = pil2array(polygon_mask(parent_image, neighbour_polygon)).astype(np.uint8)
-            # extend mask by 3 pixel in each direction to ensure it does not leak components accidentally
-            # (accounts for bad cropping of non-text regions in GT):
-            if not isinstance(neighbour, (TextRegionType, TextLineType)):
-                neighbour_mask = filters.maximum_filter(neighbour_mask, 7)
+        segment_bbox = bbox_from_polygon(segment_polygon)
+        for neighbour, neighbour_mask in neighbours:
             # find connected components that (only) belong to the neighbour:
             intruders = segment_mask * morph.keep_marked(parent_bin, neighbour_mask > 0) # overlaps neighbour
             intruders -= morph.keep_marked(intruders, segment_mask - neighbour_mask > 0) # but exclusively
