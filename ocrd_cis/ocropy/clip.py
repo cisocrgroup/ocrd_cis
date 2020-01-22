@@ -4,6 +4,8 @@ import os.path
 import numpy as np
 from PIL import Image, ImageStat, ImageOps
 from scipy.ndimage import filters
+from shapely.geometry import Polygon
+from shapely.prepared import prep
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -17,6 +19,7 @@ from ocrd_utils import (
     getLogger,
     concat_padded,
     coordinates_of_segment,
+    polygon_from_points,
     bbox_from_polygon,
     image_from_polygon,
     polygon_mask,
@@ -140,29 +143,47 @@ class OcropyClip(Processor):
                 page.get_UnknownRegion())
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
+            if level == 'region':
+                polygons = [Polygon(polygon_from_points(region.get_Coords().points))
+                            for region in regions]
+                other_polygons = [Polygon(polygon_from_points(region.get_Coords().points))
+                                  for region in other_regions]
             for i, region in enumerate(regions):
                 if level == 'region':
                     if region.get_AlternativeImage():
                         LOG.warning('Page "%s" region "%s" already contains image data: skipping',
                                     page_id, region.id)
                         continue
-                    self.process_segment(region, regions[:i] + regions[i+1:] + other_regions,
+                    polygon = prep(polygons[i])
+                    self.process_segment(region,
+                                         [neighreg for neighreg, neighpoly in zip(
+                                             regions[:i] + regions[i+1:] + other_regions,
+                                             polygons[:i] + polygons[i+1:] + other_polygons)
+                                          if polygon.intersects(neighpoly)],
                                          page_image, page_xywh,
                                          input_file.pageId, file_id + '_' + region.id)
                     continue
+                # level == 'line':
                 region_image, region_xywh = self.workspace.image_from_segment(
                     region, page_image, page_xywh)
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
+                polygons = [Polygon(polygon_from_points(line.get_Coords().points))
+                            for line in lines]
                 for j, line in enumerate(lines):
                     if line.get_AlternativeImage():
                         # FIXME: This should probably be an exception (bad workflow configuration).
                         LOG.warning('Page "%s" region "%s" line "%s" already contains image data: skipping',
                                     page_id, region.id, line.id)
                         continue
-                    self.process_segment(line, lines[:j] + lines[j+1:],
+                    polygon = prep(polygons[j])
+                    self.process_segment(line,
+                                         [neighline for neighline, neighpoly in zip(
+                                             lines[:j] + lines[j+1:],
+                                             polygons[:j] + polygons[j+1:])
+                                          if polygon.intersects(neighpoly)],
                                          region_image, region_xywh,
                                          input_file.pageId, file_id + '_' + region.id + '_' + line.id)
 
@@ -202,13 +223,6 @@ class OcropyClip(Processor):
         for neighbour in neighbours:
             neighbour_polygon = coordinates_of_segment(neighbour, parent_image, parent_coords)
             neighbour_bbox = bbox_from_polygon(neighbour_polygon)
-            # not as precise as a (mutual) polygon intersection test, but that would add
-            # a dependency on `shapely` (and we only loose a little speed here):
-            if not (segment_bbox[2] >= neighbour_bbox[0] and
-                    neighbour_bbox[2] >= segment_bbox[0] and
-                    segment_bbox[3] >= neighbour_bbox[1] and
-                    neighbour_bbox[3] >= segment_bbox[1]):
-                continue
             neighbour_mask = pil2array(polygon_mask(parent_image, neighbour_polygon)).astype(np.uint8)
             # extend mask by 3 pixel in each direction to ensure it does not leak components accidentally
             # (accounts for bad cropping of non-text regions in GT):
