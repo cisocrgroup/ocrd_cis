@@ -167,26 +167,28 @@ class OcropyClip(Processor):
                     break # keep non-text regions unchanged
                 if level == 'region':
                     if region.get_AlternativeImage():
+                        # FIXME: This should probably be an exception (bad workflow configuration).
                         LOG.warning('Page "%s" region "%s" already contains image data: skipping',
                                     page_id, region.id)
                         continue
                     shape = prep(shapes[i])
-                    self.process_segment(region, masks[i], polygons[i],
-                                         [(regionj, maskj) for shapej, regionj, maskj in zip(
-                                             shapes[:i] + shapes[i+1:],
-                                             regions[:i] + regions[i+1:],
-                                             masks[:i] + masks[i+1:])
-                                          if shape.intersects(shapej)],
-                                         background_image,
-                                         page_image, page_coords, page_bin,
-                                         input_file.pageId, file_id + '_' + region.id)
+                    neighbours = [(regionj, maskj) for shapej, regionj, maskj
+                                  in zip(shapes[:i] + shapes[i+1:],
+                                         regions[:i] + regions[i+1:],
+                                         masks[:i] + masks[i+1:])
+                                  if shape.intersects(shapej)]
+                    if neighbours:
+                        self.process_segment(region, masks[i], polygons[i],
+                                             neighbours, background_image,
+                                             page_image, page_coords, page_bin,
+                                             input_file.pageId, file_id + '_' + region.id)
                     continue
                 # level == 'line':
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
                     continue
-                region_image, region_xywh = self.workspace.image_from_segment(
+                region_image, region_coords = self.workspace.image_from_segment(
                     region, page_image, page_coords, feature_selector='binarized')
                 background_image = Image.new('L', region_image.size, background)
                 region_array = pil2array(region_image)
@@ -206,15 +208,16 @@ class OcropyClip(Processor):
                                     page_id, region.id, line.id)
                         continue
                     shape = prep(shapes[j])
-                    self.process_segment(line, masks[j], polygons[j],
-                                         [(linej, maskj) for shapej, linej, maskj in zip(
-                                             shapes[:j] + shapes[j+1:],
-                                             lines[:j] + lines[j+1:],
-                                             masks[:j] + masks[j+1:])
-                                          if shape.intersects(shapej)],
-                                         background_image,
-                                         region_image, region_xywh, region_bin,
-                                         input_file.pageId, file_id + '_' + region.id + '_' + line.id)
+                    neighbours = [(linej, maskj) for shapej, linej, maskj
+                                  in zip(shapes[:j] + shapes[j+1:],
+                                         lines[:j] + lines[j+1:],
+                                         masks[:j] + masks[j+1:])
+                                  if shape.intersects(shapej)]
+                    if neighbours:
+                        self.process_segment(line, masks[j], polygons[j],
+                                             neighbours, background_image,
+                                             region_image, region_coords, region_bin,
+                                             input_file.pageId, file_id + '_' + region.id + '_' + line.id)
 
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
@@ -258,7 +261,6 @@ class OcropyClip(Processor):
             LOG.debug('segment "%s" vs neighbour "%s": suppressing %d pixels on page "%s"',
                       segment.id, neighbour.id, np.count_nonzero(intruders), page_id)
             clip_mask = array2pil(intruders)
-            #parent_bin[intruders] = 0 # suppress in binary for next iteration
             segment_image.paste(background_image, mask=clip_mask) # suppress in raw image
             if segment_image.mode in ['RGB', 'L', 'RGBA', 'LA']:
                 # for consumers that do not have to rely on our
