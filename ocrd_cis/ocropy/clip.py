@@ -115,7 +115,7 @@ class OcropyClip(Processor):
                                             for name in self.parameter.keys()])]))
             
             page_image, page_xywh, page_image_info = self.workspace.image_from_page(
-                page, page_id)
+                page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
                 zoom = 300.0/self.parameter['dpi']
             elif page_image_info.resolution != 1:
@@ -165,7 +165,7 @@ class OcropyClip(Processor):
                     continue
                 # level == 'line':
                 region_image, region_xywh = self.workspace.image_from_segment(
-                    region, page_image, page_xywh)
+                    region, page_image, page_xywh, feature_selector='binarized')
                 lines = region.get_TextLine()
                 if not lines:
                     LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
@@ -218,7 +218,6 @@ class OcropyClip(Processor):
         segment_mask = pil2array(polygon_mask(parent_image, segment_polygon)).astype(np.uint8)
         # ad-hoc binarization:
         parent_array = pil2array(parent_image)
-        parent_array, _ = common.binarize(parent_array, maxskew=0) # just in case still raw
         parent_bin = np.array(parent_array <= midrange(parent_array), np.uint8)
         for neighbour in neighbours:
             neighbour_polygon = coordinates_of_segment(neighbour, parent_image, parent_coords)
