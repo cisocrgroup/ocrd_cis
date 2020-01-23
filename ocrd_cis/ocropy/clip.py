@@ -11,8 +11,7 @@ from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
     MetadataItemType,
     LabelsType, LabelType,
-    to_xml, AlternativeImageType,
-    TextRegionType, TextLineType
+    to_xml, AlternativeImageType
 )
 from ocrd import Processor
 from ocrd_utils import (
@@ -28,7 +27,6 @@ from ocrd_utils import (
 )
 
 from .. import get_ocrd_tool
-from . import common
 from .ocrolib import midrange, morph
 from .common import (
     # binarize,

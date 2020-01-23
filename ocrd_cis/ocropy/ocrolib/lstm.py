@@ -219,15 +219,13 @@ class Network:
             if self.verbose:
                 print(n, (np.amin(w), np.amax(w)), (np.amin(dw), np.amax(dw)))
 
-''' The following are subclass responsibility:
-
     def forward(self,xs):
         """Propagate activations forward through the network.
         This needs to be implemented in subclasses.
         It updates the internal state of the object for an (optional)
         subsequent call to `backward`.
         """
-        pass
+        raise NotImplementedError
 
     def backward(self,deltas):
         """Propagate error signals backward through the network.
@@ -236,9 +234,7 @@ class Network:
         been computed by a call to `forward`.
         It should not perform weight updates (that is handled by
         the `update` method)."""
-        pass
-
-'''
+        raise NotImplementedError
 
 class Logreg(Network):
     """A logistic regression layer, a straightforward implementation
@@ -563,7 +559,7 @@ class LSTM(Network):
         n = len(deltas)
         self.last_n = n
         N = len(self.gi)
-        if n>N: raise ocrolib.RecognitionError("input too large for LSTM model")
+        if n>N: raise RecognitionError("input too large for LSTM model")
         backward_py(n,N,ni,ns,na,deltas,
                     self.source,
                     self.gix,self.gfx,self.gox,self.cix,
@@ -877,7 +873,7 @@ class SeqRecognizer:
         if "cerror_log" not in dir(self): self.cerror_log = []
         if "key_log" not in dir(self): self.key_log = []
     def info(self):
-        self.net.info()
+        self.lstm.info()
     def setLearningRate(self,r,momentum=0.9):
         self.lstm.setLearningRate(r,momentum)
     def predictSequence(self,xs):

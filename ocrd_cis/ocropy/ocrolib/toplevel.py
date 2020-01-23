@@ -171,7 +171,7 @@ def checktype(value,type_):
     if type(type_)==set:
         for t in type_:
             if isinstance(value,t): return value
-        raise CheckError("set membership failed",value,type_,var=var) # FIXME var?
+        raise CheckError("set membership failed",value,type_)
     # for tuples, check that all conditions are satisfied
     if type(type_)==tuple:
         for t in type_:
@@ -199,7 +199,7 @@ def checks(*types,**ktypes):
                 try:
                     checktype(value,type_)
                 except AssertionError as e:
-                    raise CheckError(e.value,*e.args,var=var,fun=f)
+                    raise CheckError(str(e),*e.args,var=var,fun=f)
                 except CheckError as e:
                     e.fun = f
                     e.var = var

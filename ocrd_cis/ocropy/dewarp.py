@@ -28,11 +28,9 @@ FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-DEWARP'
 
 class InvalidLine(Exception):
     """Line image does not allow dewarping and should be ignored."""
-    pass
 
 class InadequateLine(Exception):
     """Line image is not safe for dewarping and should be padded instead."""
-    pass
 
 # from ocropus-dewarp, but without resizing
 def dewarp(image, lnorm, check=True, max_neighbour=0.02, zoom=1.0):

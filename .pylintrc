@@ -1,6 +1,11 @@
 [MASTER]
-extension-pkg-whitelist=lxml
-ignored-modules=cv2,Levenshtein
+extension-pkg-whitelist = lxml, numpy, cv2
+ignored-modules = Levenshtein
+
+[TYPECHECK]
+generated-members = cv2.*, matplotlib.cm.*, np.*, ocrd_cis.ocropy.ocrolib.lstm.LSTM.*
+# generated-members still buggy with pylint 2.4.4, so:
+ignored-classes = cv2, matplotlib.cm, np.*, ocrd_cis.ocropy.ocrolib.lstm.LSTM
 
 [MESSAGES CONTROL]
 # as we have legacy code in ocrolib which
