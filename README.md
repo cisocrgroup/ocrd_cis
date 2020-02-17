@@ -251,6 +251,7 @@ If GT is used, steps 1, 5 and 8 can be omitted. Else if a segmentation is used i
 To run a few basic tests type `make test` (`ocrd_cis` has to be
 installed in order to run any tests).
 
+# Miscellaneous
 ## OCR-D workspace
 
 * Create a new (empty) workspace: `ocrd workspace init workspace-dir`
