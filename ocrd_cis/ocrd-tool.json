@@ -384,20 +384,28 @@
 		"ocrd-cis-wer": {
 			"executable": "ocrd-cis-wer",
 			"categories": [
-				"evaluation"
+				"Quality assurance"
 			],
 			"steps": [
-				"evaluation"
+				"recognition/post-correction"
 			],
 			"description": "calculate the word error rate for aligned page xml files",
+			"input_file_grp": [
+				"OCR-D-ALIGNMENT"
+			],
+			"output_file_grp": [
+				"OCR-D-WORD-ERROR-RATE"
+			],
 			"parameters": {
 				"testIndex": {
 					"description": "text equiv index for the test/ocr tokens",
-					"type": "integer",
+					"type": "number",
+					"format": "integer",
 					"default": 0
 				},
 				"gtIndex": {
-					"type": "integer",
+					"type": "number",
+					"format": "integer",
 					"description": "text equiv index for the gt tokens",
 					"default": -1
 				}
