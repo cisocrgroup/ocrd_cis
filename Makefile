@@ -1,5 +1,6 @@
 PY ?= python3
 PIP ?= pip3
+V ?= > /dev/null 2>&1
 
 install:
 	${PIP} install --upgrade pip .
@@ -14,8 +15,7 @@ docker-push: docker-build
 TEST_SCRIPTS=$(wildcard tests/run_*.sh)
 .PHONY: $(TEST_SCRIPTS)
 $(TEST_SCRIPTS):
-	bash $@
-# run test scripts
+	bash $@ $V
 test: $(TEST_SCRIPTS)
-
+	echo $^
 .PHONY: install test
