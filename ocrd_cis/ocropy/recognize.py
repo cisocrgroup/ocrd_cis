@@ -146,7 +146,7 @@ class OcropyRecognize(Processor):
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            
+
             # add metadata about this operation and its runtime parameters:
             metadata = pcgts.get_Metadata() # ensured by from_file()
             metadata.add_MetadataItem(
@@ -159,7 +159,7 @@ class OcropyRecognize(Processor):
                                      Label=[LabelType(type_=name,
                                                       value=self.parameter[name])
                                             for name in self.parameter.keys()])]))
-                
+
             page_image, page_coords, _ = self.workspace.image_from_page(
                 page, page_id)
 
@@ -169,7 +169,7 @@ class OcropyRecognize(Processor):
             if not regions:
                 LOG.warning("Page '%s' contains no text regions", page_id)
             self.process_regions(regions, maxlevel, page_image, page_coords)
-            
+
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
                                             self.output_file_grp)
@@ -236,7 +236,7 @@ class OcropyRecognize(Processor):
             # process ocropy:
             try:
                 linepred, clist, rlist, confidlist = recognize(
-                    final_img, pad, self.network, check=True)
+                    final_img, self.pad, self.network, check=True)
             except Exception as err:
                 LOG.debug('ERROR: error processing line "%s": %s', line.id, err)
                 continue
