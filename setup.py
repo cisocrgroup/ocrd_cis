@@ -57,7 +57,6 @@ setup(
     entry_points={
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:ocrd_cis_align',
-            'ocrd-cis-profile=ocrd_cis.profile.cli:ocrd_cis_profile',
             'ocrd-cis-wer=ocrd_cis.wer.cli:ocrd_cis_wer',
             'ocrd-cis-data=ocrd_cis.data.__main__:main',
             'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_binarize',
