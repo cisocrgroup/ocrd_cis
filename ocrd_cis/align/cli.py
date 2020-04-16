@@ -118,7 +118,7 @@ class Aligner(Processor):
         # self.log.info(json.dumps(lines[0].alignment))
         mregion = lines[0].region.get_Word()
         oregion = [lines[i].region.get_Word() for i in range(1, len(lines))]
-        for word in lines[0].alignment['words']:
+        for word in lines[0].alignment['wordAlignments']:
             self.log.debug("aligning word %s", word['master'])
             master, rest = self.find_word([word['master']], mregion, "master")
             mregion = rest
