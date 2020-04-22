@@ -57,7 +57,7 @@ for cmd in $(cat $PARAMETER | jq -r '.ocrSteps[] | @base64'); do
 	eval $cmd || exit 1
 	alignfgs="$alignfgs,$XML_OUTPUT_FILE_GRP"
 done
-alignfg="$XML_INPUT_FILE_GRP-ALIGN"
+alignfg="$(echo "$XML_OUTPUT_FILE_GRP"|sed 's|,|_|g')-ALIGN"
 ocrd-cis-debug ocrd-cis-align --mets $METS \
 			   --input-file-grp "$alignfgs" \
 			   --output-file-grp "$alignfg"
