@@ -25,9 +25,9 @@ if ocrd-cis-getopt -l --log-level $*; then
 	LOG_LEVEL=$OCRD_CIS_OPTARG
 fi
 ocrd-cis-debug "log-level: $LOG_LEVEL"
-ocrd-cis-getopt -m --mets $* || ocrd-cis-fail "error: missing METS file (--mets)"
+ocrd-cis-getopt -m --mets $* || OCRD_CIS_OPTARG='mets.xml'
 METS=$OCRD_CIS_OPTARG
-METS=$(realpath $METS)
+METS=$(set -e; realpath $METS)
 ocrd-cis-debug "mets: $METS"
 ocrd-cis-getopt -p --parameter $* || ocrd-cis-fail "error: missing configuration file (--parameter)"
 PARAMETER=$OCRD_CIS_OPTARG
