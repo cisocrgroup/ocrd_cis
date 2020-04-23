@@ -40,10 +40,11 @@ class PostCorrector(Processor):
         profiler["path"] = self.parameter["profilerPath"]
         profiler["config"] = self.parameter["profilerConfig"]
         self.parameter["profiler"] = profiler
+        self.parameter["runDM"] = True
+        metspath = os.path.join(self.workspace.directory, "mets.xml")
         print(json.dumps(self.parameter, indent=4))
-        p = JavaPostCorrector(self.workspace.directory + "/mets.xml", ",".join(ifgs), ofg, self.parameter, LOG_LEVEL)
+        p = JavaPostCorrector(metspath, ",".join(ifgs), ofg, self.parameter, LOG_LEVEL)
         p.exe()
-        # reload the mets file to prevent it from overriding the java version
-        self.log.debug("loading new mets")
-        self.workspace.mets = OcrdMets(filename=self.workspace.directory + "/mets.xml")
-        self.log.debug("loaded new mets")
+        # reload the mets file to prevent it from overriding the
+        # updated version from the java process
+        self.workspace.mets = OcrdMets(filename=metspath)
