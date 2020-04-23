@@ -1,8 +1,7 @@
 """
 Installs:
     - ocrd-cis-align
-    - ocrd-cis-post-correct
-    - ocrd-cis-profile
+    - ocrd-cis-postcorrect
     - ocrd-cis-data
     - ocrd-cis-ocropy-clip
     - ocrd-cis-ocropy-denoise
@@ -48,10 +47,6 @@ setup(
     package_data={
         '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar', '*.zip'],
     },
-    scripts=[
-        'bashlib/ocrd-cis-lib.sh',
-        'bashlib/ocrd-cis-train.sh',
-    ],
     entry_points={
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:ocrd_cis_align',
