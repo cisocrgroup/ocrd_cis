@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE troubleshooting
+PUBLIC "-//OASIS//DTD DITA 1.3 Troubleshooting//EN" "troubleshooting.dtd">
+<troubleshooting id="Troubleshooting">
+    <title>Troubleshooting</title>
+	<!--
+    <troublebody>
+        <condition>
+            <title>Condition</title>
+            <p></p>
+        </condition>
+        <troubleSolution>
+            <cause>
+                <title>Cause</title>
+                <p></p>
+            </cause>
+            <remedy>
+                <title>Remedy</title>
+                <responsibleParty></responsibleParty>
+                <steps>
+                    <step>
+                        <cmd></cmd>
+                    </step>
+                </steps>
+            </remedy>
+        </troubleSolution>
+    </troublebody>
+	-->
+</troubleshooting>

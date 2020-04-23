@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE map PUBLIC "-//OASIS//DTD DITA Map//EN" "map.dtd">
+<map>
+  <topicref href="name.md" format="markdown"/>
+  <topicref href="release_notes.md" format="markdown"/>
+  <topicref href="installation.md" format="markdown"/>
+  <topicref href="tool.md" format="markdown"/>
+  <topicref href="description.md" format="markdown"/>
+  <topicref href="option.md" format="markdown"/>
+  <topicref href="inputFormatDescription.md" format="markdown"/>
+  <topicref href="parameters.md" format="markdown"/>
+  <topicref href="outputFormatDescription.md" format="markdown"/>
+  <topicref href="troubleshooting.xml"/>
+  <topicref href="glossary.xml"/>
+  <topicref href="authors.md" format="markdown"/>
+  <topicref href="reporting.md" format="markdown"/>
+  <topicref href="copyright.md" format="markdown"/>
+</map>

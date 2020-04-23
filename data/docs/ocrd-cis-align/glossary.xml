@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE glossgroup
+PUBLIC "-//OASIS//DTD DITA Glossary Group//EN" "glossgroup.dtd">
+<glossgroup id="Glossar">
+    <title>Glossar</title>
+	<!--
+    <glossentry id="txtline">
+        <glossterm>Textline</glossterm>
+        <glossdef>A TextLine is a block of text without line break.
+        </glossdef>
+    </glossentry>
+    <glossentry id="gt">
+        <glossterm>Ground Truth</glossterm>
+        <glossdef>Ground truth (GT) in the context of OCR-D are
+        transcriptions, specific structure descriptions and word lists.
+        These are essentially available in PAGE XML format in
+        combination with the original image. Essential parts of
+        the GT were created manually.
+    </glossdef>
+    -->
+</glossgroup>
+<!--
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE glossgroup
+PUBLIC "-//OASIS//DTD DITA Glossary Group//EN" "glossgroup.dtd">
+<glossgroup id="Glossar">
+    <title>Glossar</title>
+    <glossentry id="txtline">
+        <glossterm>Textline</glossterm>
+        <glossdef>A TextLine is a block of text without line break.
+        </glossdef>
+    </glossentry>
+    <glossentry id="gt">
+        <glossterm>Ground Truth</glossterm>
+        <glossdef>Ground truth (GT) in the context of OCR-D are
+        transcriptions, specific structure descriptions and word lists.
+        These are essentially available in PAGE XML format in
+        combination with the original image. Essential parts of
+        the GT were created manually.
+        </glossdef>
+</glossgroup>
+-->
