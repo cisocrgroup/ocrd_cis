@@ -1,11 +1,14 @@
 PY ?= python3
 PIP ?= pip3
 V ?= > /dev/null 2>&1
+PKG = ocrd_cis
 
 install:
 	${PIP} install --upgrade pip .
 install-devel:
 	${PIP} install --upgrade pip -e .
+uninstall:
+	${PIP} uninstall ${PKG}
 
 docker-build: Dockerfile
 	docker build -t flobar/ocrd_cis:latest .
