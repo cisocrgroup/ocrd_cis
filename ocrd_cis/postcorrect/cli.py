@@ -39,6 +39,7 @@ class PostCorrector(Processor):
         profiler = {}
         profiler["path"] = self.parameter["profilerPath"]
         profiler["config"] = self.parameter["profilerConfig"]
+        profiler["noCache"] = True
         self.parameter["profiler"] = profiler
         self.parameter["runDM"] = True
         metspath = os.path.join(self.workspace.directory, "mets.xml")
