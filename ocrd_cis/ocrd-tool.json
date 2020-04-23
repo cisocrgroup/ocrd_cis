@@ -436,48 +436,6 @@
       ],
       "description": "Align multiple OCRs and/or GTs"
     },
-    "ocrd-cis-wer": {
-      "executable": "ocrd-cis-wer",
-      "categories": [
-        "Quality assurance"
-      ],
-      "steps": [
-        "recognition/post-correction"
-      ],
-      "description": "calculate the word error rate for aligned page xml files",
-      "input_file_grp": [
-        "OCR-D-ALIGNMENT"
-      ],
-      "output_file_grp": [
-        "OCR-D-WORD-ERROR-RATE"
-      ],
-      "parameters": {
-        "testIndex": {
-          "description": "text equiv index for the test/ocr tokens",
-          "type": "number",
-          "format": "integer",
-          "default": 0
-        },
-        "gtIndex": {
-          "type": "number",
-          "format": "integer",
-          "description": "text equiv index for the gt tokens",
-          "default": -1
-        }
-      }
-    },
-    "ocrd-cis-jar": {
-      "executable": "ocrd-cis-jar",
-      "categories": [
-        "Text recognition and optimization"
-      ],
-      "steps": [
-        "recognition/post-correction"
-      ],
-      "input_file_grp": [],
-      "output_file_grp": [],
-      "description": "Output path to the ocrd-cis.jar file"
-    },
     "ocrd-cis-postcorrect": {
       "executable": "ocrd-cis-post-correct.sh",
       "categories": [
@@ -525,11 +483,6 @@
           "description": "Do run the lexicon extension step for the post correction",
   		  "type": "boolean",
 		  "default": false
-        },
-        "runDM": {
-          "description": "Do run the ranking and the decision step for the post correction",
-		  "type": "boolean",
-		  "default": true
         }
       }
     }
