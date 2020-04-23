@@ -74,10 +74,10 @@ Arguments:
 
 ### ocrd-cis-data
 Helper tool to get the path of the installed data files. Usage:
-`ocrd-cis-data [-jar|-3gs|-model]` to get the path of the jar library,
-the pre-trained post correction model or the path to the default
-3-grams language model file.  This tool does not follow the OCR-D
-conventions.
+`ocrd-cis-data [-h|-jar|-3gs|-model]` to get the path of the jar
+library, the pre-trained post correction model or the path to the
+default 3-grams language model file.  This tool does not follow the
+OCR-D conventions.
 
 ### ocrd-cis-ocropy-train
 The ocropy-train tool can be used to train LSTM models.
