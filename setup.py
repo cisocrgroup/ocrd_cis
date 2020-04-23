@@ -1,9 +1,8 @@
 """
 Installs:
     - ocrd-cis-align
-    - ocrd-cis-training
+    - ocrd-cis-post-correct
     - ocrd-cis-profile
-    - ocrd-cis-wer
     - ocrd-cis-data
     - ocrd-cis-ocropy-clip
     - ocrd-cis-ocropy-denoise
@@ -47,17 +46,16 @@ setup(
         'calamari_ocr == 0.3.5'
     ],
     package_data={
-        '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar'],
+        '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar', '*.zip'],
     },
     scripts=[
         'bashlib/ocrd-cis-lib.sh',
         'bashlib/ocrd-cis-train.sh',
-        'bashlib/ocrd-cis-post-correct.sh',
     ],
     entry_points={
         'console_scripts': [
             'ocrd-cis-align=ocrd_cis.align.cli:ocrd_cis_align',
-            'ocrd-cis-wer=ocrd_cis.wer.cli:ocrd_cis_wer',
+            'ocrd-cis-postcorrect=ocrd_cis.postcorrect.cli:ocrd_cis_postcorrect',
             'ocrd-cis-data=ocrd_cis.data.__main__:main',
             'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_binarize',
             'ocrd-cis-ocropy-clip=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_clip',

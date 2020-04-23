@@ -14,52 +14,13 @@ def JavaAligner(n, loglvl):
                              '--log-level', loglvl,
                              '--parameter', '{}'.format(json.dumps({'n':n}))])
 
-def JavaProfiler(mets, ifg, ofg, params, loglvl):
-    return JavaProcess(JAR, ['-c', 'profile',
+def JavaPostCorrector(mets, ifg, ofg, params, loglvl):
+    return JavaProcess(JAR, ['-c', 'post-correct',
                              '--log-level', loglvl,
                              '--input-file-grp', ifg,
                              '--output-file-grp', ofg,
                              '--mets', mets,
                              '-p', "{}".format(json.dumps(params))])
-
-
-def JavaTrain(jar, mets, ifgs, parameter, loglvl="DEBUG"):
-    args = [
-        "-c", "train",
-        "--mets", mets,
-        "--log-level", loglvl,
-        "--parameter", parameter
-    ]
-    for ifg in ifgs:
-        args.append("-I")
-        args.append(ifg)
-    return JavaProcess(jar, args)
-
-
-def JavaEvalDLE(jar, mets, ifgs, parameter, loglvl="DEBUG"):
-    args = [
-        '-c', 'evaluate-dle',
-        '--mets', mets,
-        '--log-level', loglvl,
-        '--parameter', parameter
-    ]
-    for ifg in ifgs:
-        args.append('-I')
-        args.append(ifg)
-    return JavaProcess(jar, args)
-
-
-def JavaEvalRRDM(jar, mets, ifgs, parameter, loglvl="DEBUG"):
-    args = [
-        '-c', 'evaluate-rrdm',
-        '--mets', mets,
-        '--log-level', loglvl,
-        '--parameter', parameter
-    ]
-    for ifg in ifgs:
-        args.append('-I')
-        args.append(ifg)
-    return JavaProcess(jar, args)
 
 
 class JavaProcess:
@@ -106,17 +67,17 @@ class JavaProcess:
         """
         cmd = self.get_cmd()
         self.log.info('command: %s', " ".join(cmd))
-        ret = subprocess.run(
-            cmd,
-            stderr=subprocess.PIPE,
-            check=False,
-            universal_newlines=True,
-        )
-        self.log.debug("%s: %i", " ".join(cmd), ret.returncode)
-        if ret.returncode != 0:
-            raise ValueError(
-                "cannot execute {}: {}\n{}"
-                .format(" ".join(cmd), ret.returncode, ret.stderr))
+        with subprocess.Popen(
+                cmd,
+                stderr=subprocess.PIPE
+        ) as p:
+            sout, eout = p.communicate()
+            self.log_stderr(eout)
+            retval = p.wait()
+            if retval != 0:
+                raise ValueError(
+                    "cannot execute {}: {}\n{}"
+                    .format(" ".join(cmd), retval, eout.decode('utf-8')))
 
     def log_stderr(self, err):
         for line in err.decode("utf-8").split("\n"):
