@@ -74,20 +74,23 @@ Arguments:
 
 ### ocrd-cis-data
 Helper tool to get the path of the installed data files. Usage:
-`ocrd-cis-data [-h|-jar|-3gs|-model]` to get the path of the jar
-library, the pre-trained post correction model or the path to the
-default 3-grams language model file.  This tool does not follow the
-OCR-D conventions.
+`ocrd-cis-data [-h|-jar|-3gs|-model|-config]` to get the path of the
+jar library, the pre-trained post correction model, the path to the
+default 3-grams language model file or the default training
+configuration file.  This tool does not follow the OCR-D conventions.
 
-### ocrd-cis-ocropy-train
-The ocropy-train tool can be used to train LSTM models.
-It takes ground truth from the workspace and saves (image+text) snippets from the corresponding pages.
-Then a model is trained on all snippets for 1 million (or the given number of) randomized iterations from the parameter file.
+### Trainining
+There is no dedicated training script provided. Models are trained
+using the java implementation directly (check out the [training test
+script](tests/run_training_test.bash) for more information.  Training
+a model requires a workspace containing multiple file groups
+consisting of aligned OCR and ground-truth documents.
 ```sh
-ocrd-cis-ocropy-train \
-  --input-file-grp OCR-D-GT-SEG-LINE \
-  --mets mets.xml
-  --parameter file:///path/to/config.json
+java -jar $(ocrd-cis-data -jar) \
+	 -c train \
+     --log-level DEBUG \
+	 -m mets.xml \
+	 --parameter $(ocrd-cis-data -config)
 ```
 
 ### ocrd-cis-ocropy-clip
@@ -193,9 +196,8 @@ pip install .
 ```
 
 Download and move tesseract models from:
-https://github.com/tesseract-ocr/tesseract/wiki/Data-Files
-or use your own models and
-place them into: /usr/share/tesseract-ocr/4.00/tessdata
+https://github.com/tesseract-ocr/tesseract/wiki/Data-Files or use your
+own models and place them into: /usr/share/tesseract-ocr/4.00/tessdata
 
 ## Workflow configuration
 
