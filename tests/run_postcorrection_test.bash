@@ -1,5 +1,5 @@
 #!/bin/bash
-source ocrd-cis-lib.sh
+set -e
 source $(dirname $0)/test_lib.bash
 
 ocrd_cis_init_ws blumenbach_anatomie_1805.ocrd.zip
