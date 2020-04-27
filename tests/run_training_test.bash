@@ -28,8 +28,7 @@ for f in $(ocrd workspace find -G OCR-D-CIS-ALIGN); do
 	sed -i -e 's#<pc:Unicode>E</pc:Unicode>#<pc:Unicode>Säugethieren</pc:Unicode>#' $f
 done
 popd
-rm -rf tmpws
-cp -r $tmpws tmpws
+
 mkdir "$tmpdir/bin"
 cat > "$tmpdir/bin/profiler.bash" <<EOF
 #!/bin/bash
