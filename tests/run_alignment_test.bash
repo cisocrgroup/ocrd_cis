@@ -19,36 +19,7 @@ if [[ $found_files != 3 ]]; then
 fi
 popd
 
-# download ocr models
-wget -P "$tmpdir/download" "http://cis.lmu.de/~finkf/fraktur1-00085000.pyrnn.gz"
-wget -P "$tmpdir/download" "http://cis.lmu.de/~finkf/fraktur2-00062000.pyrnn.gz"
-# run ocr
-ocrd-cis-ocropy-recognize --log-level DEBUG \
-						  --input-file-grp "OCR-D-GT-SEG-LINE" \
-						  --output-file-grp OCR-D-CIS-OCR-1 \
-						  --mets "$tmpws/mets.xml" \
-						  --parameter <(cat <<EOF
-{
-	"textequiv_level": "word",
-	"model": "$tmpdir/download/fraktur1-00085000.pyrnn.gz"
-}
-EOF
-)
-ocrd-cis-ocropy-recognize --log-level DEBUG \
-						  --input-file-grp "OCR-D-GT-SEG-LINE" \
-						  --output-file-grp OCR-D-CIS-OCR-2 \
-						  --mets "$tmpws/mets.xml" \
-						  --parameter <(cat <<EOF
-{
-	"textequiv_level": "word",
-	"model": "$tmpdir/download/fraktur2-00062000.pyrnn.gz"
-}
-EOF
-)
-ocrd-cis-align --log-level DEBUG \
-			   -I OCR-D-CIS-OCR-1,OCR-D-CIS-OCR-2,OCR-D-GT-SEG-LINE \
-			   -O OCR-D-CIS-ALIGN \
-			   -m $tmpws/mets.xml
+ocrd_cis_align
 
 pushd $tmpws
 found_files=0
