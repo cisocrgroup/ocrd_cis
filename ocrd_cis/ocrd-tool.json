@@ -437,7 +437,7 @@
       "description": "Align multiple OCRs and/or GTs"
     },
     "ocrd-cis-postcorrect": {
-      "executable": "ocrd-cis-post-correct.sh",
+      "executable": "ocrd-cis-postcorrect",
       "categories": [
         "Text recognition and optimization"
       ],
@@ -464,7 +464,7 @@
           "type": "string"
         },
         "profilerConfig": {
-          "description": "Path to the profiler language config file",
+          "description": "Path to the profiler's language config file",
           "required": true,
           "type": "string"
         },
