@@ -82,12 +82,13 @@ configuration file.  This tool does not follow the OCR-D conventions.
 ### Trainining
 There is no dedicated training script provided. Models are trained
 using the java implementation directly (check out the [training test
-script](tests/run_training_test.bash) for more information.  Training
-a model requires a workspace containing multiple file groups
+script](tests/run_training_test.bash) for an example).  Training
+a model requires a workspace containing one or more file groups
 consisting of aligned OCR and ground-truth documents.
 ```sh
 java -jar $(ocrd-cis-data -jar) \
 	 -c train \
+	 --input-file-grp A,B,C \
      --log-level DEBUG \
 	 -m mets.xml \
 	 --parameter $(ocrd-cis-data -config)
