@@ -2,13 +2,13 @@
 	"runLE": true,
 	"runDM": true,
 	"profiler": {
-		"path": "${ocrd-cis-profiler-exe}",
-		"config": ""
+		"path": "/path/to/profiler",
+		"config": "/path/to/language.ini"
 	},
 	"nOCR": 2,
 	"maxCandidates": 10,
-	"dir": "${ocrd-cis-train-dir}",
-	"trigrams": "${ocrd-cis-trigrams}",
+	"dir": "/path/to/train.dir",
+	"trigrams": "/path/to/trigrams.csv",
 	"ocropusOCRExtensions": [],
 	"ocropusImageExtension": "",
 	"filterClasses": ["deactivate"],

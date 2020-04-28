@@ -52,9 +52,9 @@ java -jar $(ocrd-cis-data -jar) -c train \
 	 -m $tmpws/mets.xml \
 	 --parameter <(
 cat $(ocrd-cis-data -config) \
-	| sed -e "s#\${ocrd-cis-profiler-exe}#$tmpdir/bin/profiler.bash#" \
-	| sed -e "s#\${ocrd-cis-trigrams}#$(ocrd-cis-data -3gs)#" \
-	| sed -e "s#\${ocrd-cis-train-dir}#$tmpdir/train#"
+	| sed -e "s#/path/to/profiler#$tmpdir/bin/profiler.bash#" \
+	| sed -e "s#/path/to/trigrams.csv#$(ocrd-cis-data -3gs)#" \
+	| sed -e "s#/path/to/train.dir#$tmpdir/train#"
 )
 
 if [[ ! -f $tmpdir/train/model.zip ]]; then
