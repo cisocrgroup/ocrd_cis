@@ -132,7 +132,6 @@ class OcropyDeskew(Processor):
                      file_id, self.page_grp, out.local_filename)
 
     def _process_segment(self, segment, segment_image, segment_coords, segment_id, page_id, file_id):
-        features = segment_coords['features'] # features already applied to segment_image
         angle0 = segment_coords['angle'] # deskewing (w.r.t. top image) already applied to segment_image
         LOG.info("About to deskew %s", segment_id)
         angle = deskew(segment_image, maxskew=self.parameter['maxskew']) # additional angle to be applied
@@ -147,7 +146,6 @@ class OcropyDeskew(Processor):
                       segment_id, angle)
             segment_image = rotate_image(segment_image, angle,
                                          fill='background', transparency=True)
-            features += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
             segment_image,
@@ -156,4 +154,5 @@ class OcropyDeskew(Processor):
             file_grp=self.image_grp)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
-            filename=file_path, comments=features))
+            filename=file_path,
+            comments=segment_coords['features'] + ',deskewed'))
