@@ -129,6 +129,7 @@ def reading_order(lines,highlight=None,debug=0):
         if w[0].stop<min(u[0].start,v[0].start): return 0
         if w[0].start>max(u[0].stop,v[0].stop): return 0
         if w[1].start<u[1].stop and w[1].stop>v[1].start: return 1
+        return 0
     if highlight is not None:
         plt.clf()
         plt.title("highlight")
@@ -224,4 +225,3 @@ def rgbshow(r,g,b=None,gn=1,cn=0,ab=0,**kw):
         combo = np.abs(combo)
     if np.amin(combo)<0: print("warning: values less than zero")
     plt.imshow(np.clip(combo,0,1),**kw)
-

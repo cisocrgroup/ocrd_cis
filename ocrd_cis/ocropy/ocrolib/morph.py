@@ -270,12 +270,15 @@ def propagate_labels(image,labels,conflict=0):
     outputs[0] = 0
     return outputs[rlabels]
 
-@checks(ABINARY2,True)
+@checks(ANY(ABINARY2,SEGMENTATION),True)
 def select_regions(binary,f,min=0,nbest=100000):
     """Given a scoring function f over slice tuples (as returned by
     find_objects), keeps at most nbest components whose scores is higher
     than min."""
-    labels,n = label(binary)
+    if binary.max() == 1:
+        labels,_ = label(binary)
+    else:
+        labels = binary
     objects = find_objects(labels)
     scores = [f(o) for o in objects]
     best = argsort(scores)
@@ -354,6 +357,53 @@ def renumber_by_xcenter(seg):
     segmap = zeros(amax(seg)+1,'i')
     for i,j in enumerate(order): segmap[j] = i
     return segmap[seg]
+
+@checks(SEGMENTATION)
+def reading_order(seg,rl=False,bt=False):
+    """Compute a new order for labeled objects based on y and x centers.
+    
+    ``seg`` may have discontinuous labels.
+    ``rl`` whether to sort from right to left within a line
+    ``bt`` whether to sort from bottom to top across lines
+    
+    First, sort by ycenter, then group by mutual ycenter_in.
+    Second, sort groups by xcenter, then concatenate all groups.
+    
+    Return a map for the labels which will put them in reading order.
+    """
+    # TODO can be done better
+    segmap = zeros(amax(seg)+1,'i')
+    objects = [(slice(0,0),slice(0,0))]+find_objects(seg)
+    if len(objects) <= 2:
+        # nothing to do
+        segmap[1:] = 1
+        return segmap
+    def pos(f,l):
+        return array([f(x) if x else nan for x in l])
+    ys = pos(sl.ycenter,objects)
+    yorder = argsort(ys)[::-1 if bt else 1]
+    groups = [[yorder[0]]]
+    for i,j in zip(yorder[:-1],yorder[1:]):
+        oi = objects[i]
+        oj = objects[j]
+        if (oi and oj and
+            sl.yoverlaps(oi,oj) and
+            (sl.ycenter_in(oi,oj) or
+             sl.ycenter_in(oj,oi)) and
+            not any([sl.xoverlaps(oj,objects[k]) and sl.xoverlap_rel(oj,objects[k]) > 0.1
+                     for k in groups[-1]])):
+            groups[-1].append(j)
+        else:
+            groups.append([j])
+    rorder = list()
+    for group in groups:
+        group = array(group)
+        xs = pos(sl.xcenter,[objects[i] for i in group])
+        xorder = argsort(xs)[::-1 if rl else 1]
+        rorder.extend(group[xorder])
+    for i,j in enumerate(rorder):
+        segmap[j] = i
+    return segmap
 
 @checks(SEGMENTATION)
 def ordered_by_xcenter(seg):
