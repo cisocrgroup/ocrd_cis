@@ -15,7 +15,8 @@ from ocrd_models.ocrd_page import (
     TextLineType,
     TextRegionType,
     SeparatorRegionType,
-    PageType
+    PageType,
+    AlternativeImageType
 )
 from ocrd_models.ocrd_page_generateds import (
     TableRegionType,
@@ -39,13 +40,11 @@ from ocrd_utils import (
 )
 
 from .. import get_ocrd_tool
-from . import common
 from .ocrolib import midrange
 from .ocrolib import morph
-from .ocrolib import sl
 from .common import (
     pil2array,
-    # binarize,
+    array2pil,
     check_page, check_region,
     compute_segmentation,
     lines2regions
@@ -53,6 +52,7 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-segment'
 LOG = getLogger('processor.OcropySegment')
+FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-CLIP'
 
 def masks2polygons(bg_labels, fg_bin, name, min_area=None):
     """Convert label masks into polygon coordinates.
@@ -199,6 +199,10 @@ class OcropySegment(Processor):
 
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
+            file_id = input_file.ID.replace(self.input_file_grp,
+                                            self.output_file_grp)
+            if file_id == input_file.ID:
+                file_id = concat_padded(self.output_file_grp, n)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
@@ -288,7 +292,7 @@ class OcropySegment(Processor):
                     ro.set_OrderedGroup(rogroup)
                 # go get TextRegions with TextLines (and SeparatorRegions):
                 self._process_element(page, ignore, page_image, page_coords,
-                                      page_id, zoom, rogroup=rogroup)
+                                      page_id, file_id, zoom, rogroup=rogroup)
             elif oplevel == 'table':
                 ignore.extend(page.get_TextRegion())
                 regions = list(page.get_TableRegion())
@@ -333,7 +337,7 @@ class OcropySegment(Processor):
                         reading_order[region.id] = roelem
                     # go get TextRegions with TextLines (and SeparatorRegions)
                     self._process_element(region, subignore, region_image, region_coords,
-                                          region.id, zoom, rogroup=roelem)
+                                          region.id, file_id + '_' + region.id, zoom, rogroup=roelem)
             else: # 'region'
                 regions = list(page.get_TextRegion())
                 # besides top-level text regions, line-segment any table cells,
@@ -364,13 +368,9 @@ class OcropySegment(Processor):
                         region, page_image, page_coords, feature_selector='binarized')
                     # go get TextLines
                     self._process_element(region, ignore, region_image, region_coords,
-                                          region.id, zoom)
+                                          region.id, file_id + '_' + region.id, zoom)
 
             # update METS (add the PAGE file):
-            file_id = input_file.ID.replace(self.input_file_grp,
-                                            self.output_file_grp)
-            if file_id == input_file.ID:
-                file_id = concat_padded(self.output_file_grp, n)
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
@@ -382,7 +382,7 @@ class OcropySegment(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def _process_element(self, element, ignore, image, coords, element_id, zoom=1.0, rogroup=None):
+    def _process_element(self, element, ignore, image, coords, element_id, file_id, zoom=1.0, rogroup=None):
         """Add PAGE layout elements by segmenting an image.
 
         Given a PageType, TableRegionType or TextRegionType ``element``, and
@@ -622,6 +622,14 @@ class OcropySegment(Processor):
                 # annotate result:
                 element.add_SeparatorRegion(SeparatorRegionType(id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
+            # annotate a text/image-separated image
+            element_array[sepmask] = np.amax(element_array) # clip to white/bg
+            image_clipped = array2pil(element_array)
+            file_path = self.workspace.save_image_file(
+                image_clipped, file_id + '_clip',
+                file_grp=self.image_file_grp)
+            element.add_AlternativeImage(AlternativeImageType(
+                filename=file_path, comments=coords['features'] + ',clipped'))
         else:
             LOG.info('Found %d text lines for region "%s"',
                      len(np.unique(line_labels)) - 1, element_id)
