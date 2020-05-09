@@ -25,7 +25,7 @@ with codecs.open('README.md', encoding='utf-8') as f:
 
 setup(
     name='ocrd_cis',
-    version='0.0.6',
+    version='0.0.7',
     description='CIS OCR-D command line tools',
     long_description=README,
     long_description_content_type='text/markdown',
@@ -36,7 +36,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.0.0',
+        'ocrd>=2.4.0',
         'click',
         'scipy',
         'numpy>=1.17.0',

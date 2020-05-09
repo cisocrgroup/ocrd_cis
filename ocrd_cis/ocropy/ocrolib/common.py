@@ -454,7 +454,7 @@ def load_object(fname,zip=0,nofind=0,verbose=0):
             return pickle.load(stream, encoding='latin1')
     else:
         with open(fname,"rb") as stream:
-            unpickler = pickle.Unpickler(stream)
+            unpickler = pickle.Unpickler(stream, encoding='latin1')
             #unpickler.find_global = unpickle_find_global
             return unpickler.load()
 
