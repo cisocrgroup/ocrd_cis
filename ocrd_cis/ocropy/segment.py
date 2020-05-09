@@ -153,9 +153,10 @@ class OcropySegment(Processor):
         
         Produce a new output file by serialising the resulting hierarchy.
         """
-        # FIXME: attempt detecting or allow passing reading order / textline order
+        # FIXME: allow passing a-priori info on reading order / textline order
         overwrite_lines = self.parameter['overwrite_lines']
         overwrite_regions = self.parameter['overwrite_regions']
+        overwrite_separators = self.parameter['overwrite_separators']
         oplevel = self.parameter['level-of-operation']
 
         for (n, input_file) in enumerate(self.input_files):
@@ -193,14 +194,11 @@ class OcropySegment(Processor):
                 zoom = 1
 
             # aggregate existing regions so their foreground can be ignored
-            # FIXME This cries for a generic iterator in core
             ignore = (page.get_ImageRegion() +
                       page.get_LineDrawingRegion() +
                       page.get_GraphicRegion() +
-                      page.get_TableRegion() +
                       page.get_ChartRegion() +
                       page.get_MapRegion() +
-                      page.get_SeparatorRegion() +
                       page.get_MathsRegion() +
                       page.get_ChemRegion() +
                       page.get_MusicRegion() +
@@ -208,9 +206,23 @@ class OcropySegment(Processor):
                       page.get_NoiseRegion() +
                       page.get_UnknownRegion() +
                       page.get_CustomRegion())
-            regions = list(page.get_TextRegion())
+            if oplevel == 'page' and overwrite_separators:
+                page.set_SeparatorRegion([])
+            else:
+                ignore.extend(page.get_SeparatorRegion())
+            # prepare reading order
+            reading_order = dict()
+            ro = page.get_ReadingOrder()
+            if ro:
+                rogroup = ro.get_OrderedGroup() or ro.get_UnorderedGroup()
+                if rogroup:
+                    page_get_reading_order(reading_order, rogroup)
+            # get segments to process / overwrite
             if oplevel == 'page':
+                ignore.extend(page.get_TableRegion())
+                regions = list(page.get_TextRegion())
                 if regions:
+                    # page is already region-segmented
                     if overwrite_regions:
                         LOG.info('removing existing TextRegions in page "%s"', page_id)
                         # we could remove all other region types as well,
@@ -221,35 +233,65 @@ class OcropySegment(Processor):
                     else:
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
                         ignore.extend(regions)
-                # prepare reading order
+                if not ro:
+                    ro = ReadingOrderType()
+                    page.set_ReadingOrder(ro)
+                # create reading order if necessary
                 reading_order = dict()
                 ro = page.get_ReadingOrder()
                 if not ro:
                     ro = ReadingOrderType()
                     page.set_ReadingOrder(ro)
                 rogroup = ro.get_OrderedGroup() or ro.get_UnorderedGroup()
-                if rogroup:
-                    page_get_reading_order(reading_order, rogroup)
-                else:
+                if not rogroup:
                     # new top-level group
                     rogroup = OrderedGroupType(id="reading-order")
                     ro.set_OrderedGroup(rogroup)
                 # go get TextRegions with TextLines (and SeparatorRegions):
                 self._process_element(page, ignore, page_image, page_coords, page_id, zoom,
                                       rogroup=rogroup)
-                # besides top-level text regions,
-                # page-segment pre-existing tables
+            elif oplevel == 'table':
+                ignore.extend(page.get_TextRegion())
+                regions = list(page.get_TableRegion())
                 for region in page.get_TableRegion():
                     subregions = region.get_TextRegion()
                     if subregions:
                         # table is already cell-segmented
-                        continue
+                        if overwrite_regions:
+                            LOG.info('removing existing TextRegions in table "%s"', region.id)
+                            region.set_TextRegion([])
+                            roelem = reading_order.get(region.id)
+                            if isinstance(roelem, (OrderedGroupType,UnorderedGroupType,RegionRefType)):
+                                getattr(roelem.parent_object_, {
+                                    OrderedGroupType: 'get_OrderedGroup',
+                                    UnorderedGroupType: 'get_UnorderedGroup',
+                                    RegionRefType: 'get_RegionRef',
+                                }.get(roelem.__class__))().remove(roelem)
+                                roelem2 = RegionRefType(id=region.id + '_ref',
+                                                        regionRef=roelem.regionRef)
+                                roelem.parent_object_.add_OrderedGroup(roelem2)
+                                reading_order[region.id] = roelem2
+                            elif isinstance(roelem, (OrderedGroupType,UnorderedGroupType,RegionRefType)):
+                                getattr(roelem.parent_object_, {
+                                    OrderedGroupIndexedType: 'get_OrderedIndexedGroup',
+                                    UnorderedGroupIndexedType: 'get_UnorderedIndexedGroup',
+                                    RegionRefIndexedType: 'get_RegionRefIndexed'
+                                }.get(roelem.__class__))().remove(roelem)
+                                roelem2 = RegionRefIndexedType(id=region.id + '_ref',
+                                                               index=roelem.index,
+                                                               regionRef=roelem.regionRef)
+                                roelem.parent_object_.add_OrderedGroupIndexed(roelem2)
+                                reading_order[region.id] = roelem2
+                        else:
+                            LOG.warning('skipping table "%s" with existing TextRegions', region.id)
+                            continue
                     # TODO: also allow grayscale_normalized (try/except?)
                     region_image, region_coords = self.workspace.image_from_segment(
                         region, page_image, page_coords, feature_selector='binarized')
+                    # ignore everything but the current table region
                     subignore = regions + ignore
                     subignore.remove(region)
-                    # prepare reading order
+                    # create reading order group if necessary
                     roelem = reading_order.get(region.id)
                     if not roelem:
                         LOG.warning("Page '%s' table region '%s' is not referenced in reading order (%s)",
@@ -282,10 +324,10 @@ class OcropySegment(Processor):
                     self._process_element(region, subignore, region_image, region_coords, region.id, zoom,
                                           rogroup=roelem)
             else:
+                regions = list(page.get_TextRegion())
                 # besides top-level text regions, line-segment any table cells,
                 # and for tables without any cells, add a pseudo-cell
                 for region in page.get_TableRegion():
-                    ignore.remove(region)
                     subregions = region.get_TextRegion()
                     if subregions:
                         regions.extend(subregions)
@@ -353,7 +395,7 @@ class OcropySegment(Processor):
         sep_bin = np.zeros_like(element_bin, np.bool)
         for segment in ignore:
             LOG.debug('suppressing foreground of %s "%s" for "%s"',
-                      type(segment).__name__[:-4].lower(), segment.id, element_id)
+                      type(segment).__name__[:-4], segment.id, element_id)
             # suppress these segments' foreground (e.g. separator regions)
             # (for workflows where they have been detected already)
             segment_polygon = coordinates_of_segment(segment, image, coords)
