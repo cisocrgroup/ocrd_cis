@@ -111,7 +111,7 @@ Arguments:
  * `--mets` path to METS file in the workspace
 
 ### ocrd-cis-ocropy-train
-The ocropy-train tool can be used to train LSTM models.
+The `ocropy-train` tool can be used to train LSTM models.
 It takes ground truth from the workspace and saves (image+text) snippets from the corresponding pages.
 Then a model is trained on all snippets for 1 million (or the given number of) randomized iterations from the parameter file.
 ```sh
@@ -122,8 +122,9 @@ ocrd-cis-ocropy-train \
 ```
 
 ### ocrd-cis-ocropy-clip
-The ocropy-clip tool can be used to remove intrusions of neighbouring segments in regions / lines of a workspace.
-It runs a (ad-hoc binarization and) connected component analysis on every text region / line of every PAGE in the input file group, as well as its overlapping neighbours, and for each binary object of conflict, determines whether it belongs to the neighbour, and can therefore be clipped to white. It references the resulting segment image files in the output PAGE (as AlternativeImage).
+The `ocropy-clip` tool can be used to remove intrusions of neighbouring segments in regions / lines of a page.
+It runs a connected component analysis on every text region / line of every PAGE in the input file group, as well as its overlapping neighbours, and for each binary object of conflict, determines whether it belongs to the neighbour, and can therefore be clipped to the background. It references the resulting segment image files in the output PAGE (as AlternativeImage).
+(Use this to suppress separators and neighbouring text.)
 ```sh
 ocrd-cis-ocropy-clip \
   --input-file-grp OCR-D-SEG-LINE \
@@ -133,8 +134,9 @@ ocrd-cis-ocropy-clip \
 ```
 
 ### ocrd-cis-ocropy-resegment
-The ocropy-resegment tool can be used to remove overlap between lines of a workspace.
-It runs a (ad-hoc binarization and) line segmentation on every text region of every PAGE in the input file group, and for each line already annotated, determines the label of largest extent within the original coordinates (polygon outline) in that line, and annotates the resulting coordinates in the output PAGE.
+The `ocropy-resegment` tool can be used to remove overlap between neighbouring lines of a page.
+It runs a line segmentation on every text region of every PAGE in the input file group, and for each line already annotated, determines the label of largest extent within the original coordinates (polygon outline) in that line, and annotates the resulting coordinates in the output PAGE.
+(Use this to polygonalise text lines poorly segmented, e.g. via bounding boxes.)
 ```sh
 ocrd-cis-ocropy-resegment \
   --input-file-grp OCR-D-SEG-LINE \
@@ -144,8 +146,9 @@ ocrd-cis-ocropy-resegment \
 ```
 
 ### ocrd-cis-ocropy-segment
-The ocropy-segment tool can be used to segment regions into lines.
-It runs a (ad-hoc binarization and) line segmentation on every text region of every PAGE in the input file group, and adds a TextLine element with the resulting polygon outline to the annotation of the output PAGE.
+The `ocropy-segment` tool can be used to segment (pages or) regions of a page into lines.
+It runs a line segmentation on every (page or) text region of every PAGE in the input file group, and adds (text regions containing) TextLine elements with the resulting polygon outlines to the annotation of the output PAGE.
+(Does not detect tables or images.)
 ```sh
 ocrd-cis-ocropy-segment \
   --input-file-grp OCR-D-SEG-BLOCK \
@@ -155,8 +158,9 @@ ocrd-cis-ocropy-segment \
 ```
 
 ### ocrd-cis-ocropy-deskew
-The ocropy-deskew tool can be used to deskew pages / regions of a workspace.
-It runs the Ocropy thresholding and deskewing estimation on every segment of every PAGE in the input file group and annotates the orientation angle in the output PAGE.
+The `ocropy-deskew` tool can be used to deskew pages / regions of a page.
+It runs a projection profile-based skew estimation on every segment of every PAGE in the input file group and annotates the orientation angle in the output PAGE.
+(Does not include orientation detection.)
 ```sh
 ocrd-cis-ocropy-deskew \
   --input-file-grp OCR-D-SEG-LINE \
@@ -166,8 +170,8 @@ ocrd-cis-ocropy-deskew \
 ```
 
 ### ocrd-cis-ocropy-denoise
-The ocropy-denoise tool can be used to despeckle pages / regions / lines of a workspace.
-It runs the Ocropy "nlbin" denoising on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage).
+The `ocropy-denoise` tool can be used to despeckle pages / regions / lines of a page.
+It runs a connected component analysis and removes small components (black or white) on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage).
 ```sh
 ocrd-cis-ocropy-denoise \
   --input-file-grp OCR-D-SEG-LINE-DES \
@@ -177,8 +181,8 @@ ocrd-cis-ocropy-denoise \
 ```
 
 ### ocrd-cis-ocropy-binarize
-The ocropy-binarize tool can be used to binarize, denoise and deskew pages / regions / lines of a workspace.
-It runs the Ocropy "nlbin" adaptive thresholding, deskewing estimation and denoising on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.) Images can also be produced grayscale-normalized.
+The `ocropy-binarize` tool can be used to binarize (and optionally denoise and deskew) pages / regions / lines of a page.
+It runs the "nlbin" adaptive whitelevel thresholding on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as AlternativeImage). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.) Images can also be produced grayscale-normalized.
 ```sh
 ocrd-cis-ocropy-binarize \
   --input-file-grp OCR-D-SEG-LINE-DES \
@@ -188,8 +192,8 @@ ocrd-cis-ocropy-binarize \
 ```
 
 ### ocrd-cis-ocropy-dewarp
-The ocropy-dewarp tool can be used to dewarp text lines of a workspace.
-It runs the Ocropy baseline estimation and dewarping on every line in every text region of every PAGE in the input file group and references the resulting line image files in the output PAGE (as AlternativeImage).
+The `ocropy-dewarp` tool can be used to dewarp text lines of a page.
+It runs the baseline estimation and center normalizer algorithm on every line in every text region of every PAGE in the input file group and references the resulting line image files in the output PAGE (as AlternativeImage).
 ```sh
 ocrd-cis-ocropy-dewarp \
   --input-file-grp OCR-D-SEG-LINE-BIN \
@@ -199,8 +203,8 @@ ocrd-cis-ocropy-dewarp \
 ```
 
 ### ocrd-cis-ocropy-recognize
-The ocropy-recognize tool can be used to recognize lines / words / glyphs from pages of a workspace.
-It runs the Ocropy optical character recognition on every line in every text region of every PAGE in the input file group and adds the resulting text annotation in the output PAGE.
+The `ocropy-recognize` tool can be used to recognize the lines / words / glyphs of a page.
+It runs LSTM optical character recognition on every line in every text region of every PAGE in the input file group and adds the resulting text annotation in the output PAGE.
 ```sh
 ocrd-cis-ocropy-recognize \
   --input-file-grp OCR-D-SEG-LINE-DEW \
@@ -232,18 +236,19 @@ place them into: /usr/share/tesseract-ocr/4.00/tessdata
 
 A decent pipeline might look like this:
 
+0. page-level binarization
 1. page-level cropping
-2. page-level binarization
+2. (page-level binarization)
 3. page-level deskewing
-4. page-level dewarping
+4. (page-level dewarping)
 5. region segmentation
 6. region-level clipping
-7. region-level deskewing
+7. (region-level deskewing)
 8. line segmentation
-9. line-level clipping or resegmentation
+9. (line-level clipping or resegmentation)
 10. line-level dewarping
 11. line-level recognition
-12. line-level alignment
+12. (line-level alignment and post-correction)
 
 If GT is used, steps 1, 5 and 8 can be omitted. Else if a segmentation is used in 5 and 8 which does not produce overlapping sections, steps 6 and 9 can be omitted.
 

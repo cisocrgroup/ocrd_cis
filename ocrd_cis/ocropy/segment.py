@@ -37,6 +37,7 @@ from .ocrolib import sl
 from .common import (
     pil2array,
     # binarize,
+    check_page, check_region,
     compute_segmentation,
     lines2regions
 )
@@ -66,6 +67,8 @@ def masks2polygons(bg_labels, fg_bin, name):
         bg_mask = np.array(bg_labels == label, np.uint8)
         if not np.count_nonzero(bg_mask * fg_bin):
             # ignore if missing foreground
+            LOG.debug('skipping label %d in %s due to empty fg',
+                      label, name)
             continue
         # find outer contour (parts):
         contours, _ = cv2.findContours(bg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -103,20 +106,20 @@ class OcropySegment(Processor):
 
     def process(self):
         """Segment pages into text regions or text regions into text lines.
-
+        
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the requested level.
-
+        
         Next, get each element image according to the layout annotation (from
         the alternative image of the page/region, or by cropping via coordinates
-        into the higher-level image), binarize it (without deskewing), and
-        compute a new line segmentation for that (as a label mask).
-
-        If ``level-of-operation`` is ``page``, aggregate text lines to text regions
-        heuristically, and also detect all horizontal and up to ``maxseps`` vertical
+        into the higher-level image) in binarized form, and compute a text line
+        segmentation for that (as a label mask).
+        
+        If ``level-of-operation`` is ``page``, then afterwards aggregate text lines
+        to text regions, and also detect all horizontal and up to ``maxseps`` vertical
         rulers (foreground separators), as well as up to ``maxcolseps`` column
         dividers (background separators).
-
+        
         Then for each resulting segment label, convert its background mask into
         polygon outlines by finding the outer contours consistent with the element's
         polygon outline. Annotate the result by adding it as a new TextLine/TextRegion:
@@ -124,12 +127,26 @@ class OcropySegment(Processor):
         remove any existing TextLine elements, and append the new lines to the region.
         If however it is ``page``, then (unless ``overwrite_regions`` is False)
         remove any existing TextRegion elements, and append the new regions to the page.
-
+        
+        During line segmentation, suppress the foreground of all previously annotated
+        regions (of any kind) and lines, except if just removed due to ``overwrite``.
+        During region aggregation however, combine the existing separators with the
+        newfound separators to guide the column search.
+        
+        If ``level-of-operation`` is ``page``, then afterwards iterate through all
+        previously annotated (and suppressed) table regions, skipping those which
+        already contain text regions (i.e. cells), but recursively entering
+        page segmentation on the others (by retrieving their cropped binarized
+        image etc and suppressing everything but that respective table etc).
+        
+        If ``level-of-operation`` is ``region``, then afterwards iterate over all
+        text regions of each table region (i.e. cells) likewise. If a table does
+        not contain text regions, then add a single text region covering the whole
+        table and proceed.
+        
         Produce a new output file by serialising the resulting hierarchy.
         """
         # FIXME: attempt detecting or allow passing reading order / textline order
-        # FIXME: lines2regions has very coarse rules, needs bbox clustering
-        # FIXME: also annotate lines already computed when level=page
         overwrite_lines = self.parameter['overwrite_lines']
         overwrite_regions = self.parameter['overwrite_regions']
         oplevel = self.parameter['level-of-operation']
@@ -155,7 +172,7 @@ class OcropySegment(Processor):
                                             for name in self.parameter.keys()])]))
             
             # TODO: also allow grayscale_normalized (try/except?)
-            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+            page_image, page_coords, page_image_info = self.workspace.image_from_page(
                 page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
                 zoom = 300.0/self.parameter['dpi']
@@ -168,6 +185,22 @@ class OcropySegment(Processor):
             else:
                 zoom = 1
 
+            # aggregate existing regions so their foreground can be ignored
+            # FIXME This cries for a generic iterator in core
+            ignore = (page.get_ImageRegion() +
+                      page.get_LineDrawingRegion() +
+                      page.get_GraphicRegion() +
+                      page.get_TableRegion() +
+                      page.get_ChartRegion() +
+                      page.get_MapRegion() +
+                      page.get_SeparatorRegion() +
+                      page.get_MathsRegion() +
+                      page.get_ChemRegion() +
+                      page.get_MusicRegion() +
+                      page.get_AdvertRegion() +
+                      page.get_NoiseRegion() +
+                      page.get_UnknownRegion() +
+                      page.get_CustomRegion())
             regions = list(page.get_TextRegion())
             if oplevel == 'page':
                 if regions:
@@ -177,23 +210,40 @@ class OcropySegment(Processor):
                         # but this is more flexible (for workflows with
                         # specialized separator/image/table detectors):
                         page.set_TextRegion([])
-                        # TODO: only remove the existing text regions from RO
                         page.set_ReadingOrder(None)
                     else:
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
+                        ignore.extend(regions)
                 # go get TextRegions with TextLines (and SeparatorRegions):
-                self._process_element(page, page_image, page_xywh, page_id, zoom)
+                self._process_element(page, ignore, page_image, page_coords, page_id, zoom)
+                # besides top-level text regions,
+                # page-segment pre-existing tables
+                for region in page.get_TableRegion():
+                    subregions = region.get_TextRegion()
+                    if subregions:
+                        # table is already cell-segmented
+                        continue
+                    # TODO: also allow grayscale_normalized (try/except?)
+                    region_image, region_coords = self.workspace.image_from_segment(
+                        region, page_image, page_coords, feature_selector='binarized')
+                    subignore = regions + ignore
+                    subignore.remove(region)
+                    # go get TextRegions with TextLines (and SeparatorRegions)
+                    self._process_element(region, subignore, region_image, region_coords, region.id, zoom)
             else:
-                for table in page.get_TableRegion():
-                    subregions = table.get_TextRegion()
+                # besides top-level text regions, line-segment any table cells,
+                # and for tables without any cells, add a pseudo-cell
+                for region in page.get_TableRegion():
+                    ignore.remove(region)
+                    subregions = region.get_TextRegion()
                     if subregions:
                         regions.extend(subregions)
                     else:
-                        subregion = TextRegionType(id=table.id + '_text',
-                                                   Coords=table.get_Coords(),
+                        subregion = TextRegionType(id=region.id + '_text',
+                                                   Coords=region.get_Coords(),
                                                    # as if generated from parser:
-                                                   parent_object_=table)
-                        table.add_TextRegion(subregion)
+                                                   parent_object_=region)
+                        region.add_TextRegion(subregion)
                         regions.append(subregion)
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
@@ -204,11 +254,12 @@ class OcropySegment(Processor):
                             region.set_TextLine([])
                         else:
                             LOG.warning('keeping existing TextLines in page "%s" region "%s"', page_id, region.id)
+                            ignore.extend(region.get_TextLine())
                     # TODO: also allow grayscale_normalized (try/except?)
-                    region_image, region_xywh = self.workspace.image_from_segment(
-                        region, page_image, page_xywh, feature_selector='binarized')
+                    region_image, region_coords = self.workspace.image_from_segment(
+                        region, page_image, page_coords, feature_selector='binarized')
                     # go get TextLines
-                    self._process_element(region, region_image, region_xywh, region.id, zoom)
+                    self._process_element(region, ignore, region_image, region_coords, region.id, zoom)
 
             # update METS (add the PAGE file):
             file_id = input_file.ID.replace(self.input_file_grp,
@@ -227,33 +278,66 @@ class OcropySegment(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def _process_element(self, element, image, xywh, element_id, zoom):
+    def _process_element(self, element, ignore, image, coords, element_id, zoom):
         """Add PAGE layout elements by segmenting an image.
 
-        Given a PageType or TextRegionType ``element``, and a corresponding
-        PIL.Image object ``image`` with its bounding box ``xywh``, run
-        line segmentation with Ocropy.
-        If operating on the full page (or table), aggregate lines to regions,
-        and also detect horizontal and vertical separators.
+        Given a PageType, TableRegionType or TextRegionType ``element``, and
+        a corresponding binarized PIL.Image object ``image`` with coordinate
+        metadata ``coords``, run line segmentation with Ocropy.
+        
+        If operating on the full page (or table), then also detect horizontal
+        and vertical separators, and aggregate the lines into text regions
+        afterwards.
+        
         Add the resulting sub-segments to the parent ``element``.
+        
+        If ``ignore`` is not empty, then first suppress all foreground components
+        in any of those segments' coordinates during segmentation, and if also
+        in full page/table mode, then combine all separators among them with the
+        newly detected separators to guide region segmentation.
         """
         element_array = pil2array(image)
         #element_array, _ = common.binarize(element_array, maxskew=0) # just in case still raw
         element_bin = np.array(element_array <= midrange(element_array), np.bool)
-        try:
-            fullpage = isinstance(element, PageType) or (
+        sep_bin = np.zeros_like(element_bin, np.bool)
+        for segment in ignore:
+            LOG.debug('suppressing foreground of segment "%s" for "%s"', segment.id, element_id)
+            # suppress these segments' foreground (e.g. separator regions)
+            # (for workflows where they have been detected already)
+            segment_polygon = coordinates_of_segment(segment, image, coords)
+            # If segment_polygon lies outside of element (causing
+            # negative/above-max indices), either fully or partially,
+            # then this will silently ignore them. The caller does
+            # not need to concern herself with this.
+            element_bin[draw.polygon(segment_polygon[:, 1],
+                                     segment_polygon[:, 0],
+                                     element_bin.shape)] = False
+            if isinstance(segment, SeparatorRegionType):
+                sep_bin[draw.polygon(segment_polygon[:, 1],
+                                     segment_polygon[:, 0],
+                                     sep_bin.shape)] = True
+        if isinstance(element, PageType):
+            element_name = 'page'
+            fullpage = True
+            report = check_page(element_bin, zoom)
+        elif isinstance(element, TableRegionType) or (
                 # sole/congruent text region of a table region?
                 element.id.endswith('_text') and
-                isinstance(element.parent_object_, TableRegionType))
-            LOG.debug('computing line segmentation for "%s" as %s',
-                      element_id, 'page with columns' if fullpage else 'region')
-            # TODO: we should downscale if DPI is large enough to save time
-            # TODO: we should pass in existing separator masks
-            # (for workflows where they have been detected/removed already)
+                isinstance(element.parent_object_, TableRegionType)):
+            element_name = 'table'
+            fullpage = True
+            report = check_region(element_bin, zoom)
+        else:
+            element_name = 'region'
+            fullpage = False
+            report = check_region(element_bin, zoom)
+        LOG.info('computing line segmentation for %s "%s"', element_name, element_id)
+        # TODO: we should downscale if DPI is large enough to save time
+        try:
+            if report:
+                raise Exception(report)
             line_labels, hlines, vlines, colseps, scale = compute_segmentation(
-                element_array,
-                zoom=zoom,
-                fullpage=fullpage,
+                element_bin, seps=sep_bin, zoom=zoom, fullpage=fullpage,
                 spread_dist=round(self.parameter['spread']/zoom*300/72), # in pt
                 maxcolseps=self.parameter['maxcolseps'],
                 maxseps=self.parameter['maxseps'],
@@ -265,21 +349,29 @@ class OcropySegment(Processor):
                 # as a fallback, add a single text line comprising the whole region:
                 element.add_TextLine(TextLineType(id=element_id + "_line", Coords=element.get_Coords()))
             else:
-                LOG.error('Cannot line-segment page "%s": %s', element_id, err)
+                LOG.error('Cannot line-segment %s "%s": %s', element_name, element_id, err)
             return
-        if isinstance(element, PageType):
+
+        # post-process line labels
+        if isinstance(element, (PageType, TableRegionType)):
             # aggregate text lines to text regions:
             try:
-                region_labels = lines2regions(element_bin, line_labels, hlines, vlines, colseps)
+                region_labels = lines2regions(element_bin, line_labels, hlines, vlines,
+                                              np.maximum(colseps, sep_bin))
+                LOG.info('Found %d text lines in %d text regions for %s "%s"',
+                         len(np.unique(line_labels)) - 1,
+                         len(np.unique(region_labels)) - 1,
+                         element_name, element_id)
             except Exception as err:
-                LOG.warning('Cannot region-segment page "%s": %s', element_id, err)
+                LOG.warning('Cannot region-segment %s "%s": %s', element_name, element_id, err)
                 region_labels = np.array(line_labels > 0, np.uint8)
             # find contours around region labels (can be non-contiguous):
-            region_polygons = masks2polygons(region_labels, element_bin, 'page "%s"' % element_id)
+            region_polygons = masks2polygons(region_labels, element_bin,
+                                             '%s "%s"' % (element_name, element_id))
             for region_no, (region_label, polygon) in enumerate(region_polygons):
                 region_id = element_id + "_region%04d" % region_no
                 # convert back to absolute (page) coordinates:
-                region_polygon = coordinates_for_segment(polygon, image, xywh)
+                region_polygon = coordinates_for_segment(polygon, image, coords)
                 # annotate result:
                 region = TextRegionType(id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon)))
@@ -287,43 +379,51 @@ class OcropySegment(Processor):
                 # filter text lines within this text region:
                 region_line_labels = line_labels * (region_labels == region_label)
                 # find contours around labels (can be non-contiguous):
-                line_polygons = masks2polygons(region_line_labels, element_bin, 'region "%s"' % element_id)
+                line_polygons = masks2polygons(region_line_labels, element_bin,
+                                               'region "%s"' % element_id)
                 for line_no, (_, polygon) in enumerate(line_polygons):
                     line_id = region_id + "_line%04d" % line_no
                     # convert back to absolute (page) coordinates:
-                    line_polygon = coordinates_for_segment(polygon, image, xywh)
+                    line_polygon = coordinates_for_segment(polygon, image, coords)
                     # annotate result:
                     line = TextLineType(id=line_id, Coords=CoordsType(
                         points=points_from_polygon(line_polygon)))
                     region.add_TextLine(line)
             # split rulers into separator regions:
-            hline_labels, _ = morph.label(hlines)
-            vline_labels, _ = morph.label(vlines)
+            hline_labels, num_hlines = morph.label(hlines)
+            vline_labels, num_vlines = morph.label(vlines)
+            LOG.info('Found %d/%d h/v-lines for %s "%s"',
+                     num_hlines, num_vlines, element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            hline_polygons = masks2polygons(hline_labels, element_bin, 'page "%s"' % element_id)
-            vline_polygons = masks2polygons(vline_labels, element_bin, 'page "%s"' % element_id)
+            hline_polygons = masks2polygons(hline_labels, element_bin,
+                                            '%s "%s"' % (element_name, element_id))
+            vline_polygons = masks2polygons(vline_labels, element_bin,
+                                            '%s "%s"' % (element_name, element_id))
             for region_no, (_, polygon) in enumerate(hline_polygons + vline_polygons):
                 region_id = element_id + "_sep%04d" % region_no
                 # convert back to absolute (page) coordinates:
-                region_polygon = coordinates_for_segment(polygon, image, xywh)
+                region_polygon = coordinates_for_segment(polygon, image, coords)
                 # annotate result:
                 element.add_SeparatorRegion(SeparatorRegionType(id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
         else:
+            LOG.info('Found %d text lines for region "%s"',
+                     len(np.unique(line_labels)) - 1, element_id)
             # get mask from region polygon:
-            region_polygon = coordinates_of_segment(element, image, xywh)
-            region_mask = np.zeros_like(element_array)
+            region_polygon = coordinates_of_segment(element, image, coords)
+            region_mask = np.zeros_like(element_bin, np.bool)
             region_mask[draw.polygon(region_polygon[:, 1],
                                      region_polygon[:, 0],
-                                     region_mask.shape)] = 1
+                                     region_mask.shape)] = True
             # ensure the new line labels do not extrude from the region:
             line_labels = line_labels * region_mask
             # find contours around labels (can be non-contiguous):
-            line_polygons = masks2polygons(line_labels, element_bin, 'region "%s"' % element_id)
+            line_polygons = masks2polygons(line_labels, element_bin,
+                                           'region "%s"' % element_id)
             for line_no, (_, polygon) in enumerate(line_polygons):
                 line_id = element_id + "_line%04d" % line_no
                 # convert back to absolute (page) coordinates:
-                line_polygon = coordinates_for_segment(polygon, image, xywh)
+                line_polygon = coordinates_for_segment(polygon, image, coords)
                 # annotate result:
                 element.add_TextLine(TextLineType(id=line_id, Coords=CoordsType(
                     points=points_from_polygon(line_polygon))))
