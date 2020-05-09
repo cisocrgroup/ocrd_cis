@@ -310,7 +310,7 @@
 				"dpi": {
 					"type": "number",
 					"format": "float",
-					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative; when disabled and no meta-data is found, 300 is assumed",
 					"default": -1
 				},
 				"level-of-operation": {
@@ -323,46 +323,64 @@
 					"type": "number",
 					"format": "integer",
 					"default": 20,
-					"description": "number of white/background column separators to try, counted piece-wise (when operating on the page level)"
+					"description": "(when operating on the page/table level) maximum number of white/background column separators to detect, counted piece-wise"
 				},
 				"maxseps": {
 					"type": "number",
 					"format": "integer",
 					"default": 20,
-					"description": "number of black/foreground column separators to try, counted piece-wise (when operating on the page level)"
+					"description": "(when operating on the page/table level) number of black/foreground column separators to detect (and suppress), counted piece-wise"
+				},
+				"maximages": {
+					"type": "number",
+					"format": "integer",
+					"default": 10,
+					"description": "(when operating on the page level) maximum number of black/foreground very large components to detect (and suppress), counted piece-wise"
 				},
 				"csminheight": {
 					"type": "number",
 					"format": "integer",
 					"default": 4,
-					"description": "minimum height of white/background or black/foreground column separators in multiples of scale/capheight, counted piece-wise (when operating on the page level)"
+					"description": "(when operating on the page/table level) minimum height of white/background or black/foreground column separators in multiples of scale/capheight, counted piece-wise"
 				},
 				"hlminwidth": {
 					"type": "number",
 					"format": "integer",
 					"default": 10,
-					"description": "minimum width of black/foreground horizontal separators in multiples of scale/capheight, counted piece-wise (when operating on the page level)"
+					"description": "(when operating on the page/table level) minimum width of black/foreground horizontal separators in multiples of scale/capheight, counted piece-wise"
+				},
+				"gap_height": {
+					"type": "number",
+					"format": "float",
+					"default": 0.01,
+					"description": "(when operating on the page/table level) largest minimum pixel average in the horizontal or vertical profiles (across the binarized image) to still be regarded as a gap during recursive X-Y cut from lines to regions; needs to be larger when more foreground noise is present, reduce to avoid mistaking text for noise"
+				},
+				"gap_width": {
+					"type": "number",
+					"format": "float",
+					"default": 1.5,
+					"description": "(when operating on the page/table level) smallest width in multiples of scale/capheight of a valley in the horizontal or vertical profiles (across the binarized image) to still be regarded as a gap during recursive X-Y cut from lines to regions; needs to be smaller when more foreground noise is present, increase to avoid mistaking inter-line as paragraph gaps and inter-word as inter-column gaps"
 				},
 				"overwrite_separators": {
 					"type": "boolean",
 					"default": true,
-					"description": "remove any existing SeparatorRegion elements (when operating on the page level)"
+					"description": "(when operating on the page/table level) remove any existing SeparatorRegion elements; otherwise append"
 				},
 				"overwrite_regions": {
 					"type": "boolean",
 					"default": true,
-					"description": "remove any existing TextRegion elements (when operating on the page level)"
+					"description": "(when operating on the page/table level) remove any existing TextRegion elements; otherwise append"
 				},
 				"overwrite_lines": {
 					"type": "boolean",
 					"default": true,
-					"description": "remove any existing TextLine elements (when operating on the region level)"
+					"description": "(when operating on the region level) remove any existing TextLine elements; otherwise append"
 				},
 				"spread": {
 					"type": "number",
 					"format": "float",
 					"default": 2.4,
-					"description": "distance in points (pt) from the foreground to project text line (or text region) labels into the background; if zero, project half a scale (approx xheight)"
+					"description": "distance in points (pt) from the foreground to project text line (or text region) labels into the background for polygonal contours; if zero, project half a scale/capheight"
 				}
 			}
 		},

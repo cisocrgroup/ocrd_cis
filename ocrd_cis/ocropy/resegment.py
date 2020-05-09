@@ -220,7 +220,7 @@ class OcropyResegment(Processor):
                 try:
                     if report:
                         raise Exception(report)
-                    region_labels, _, _, _, _ = compute_segmentation(region_bin, zoom=zoom)
+                    region_labels, _, _, _, _, _ = compute_segmentation(region_bin, zoom=zoom)
                 except Exception as err:
                     LOG.warning('Cannot line-segment page "%s" region "%s": %s',
                                 page_id, region.id, err)
