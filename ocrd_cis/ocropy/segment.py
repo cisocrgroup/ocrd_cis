@@ -17,7 +17,14 @@ from ocrd_models.ocrd_page import (
     PageType
 )
 from ocrd_models.ocrd_page_generateds import (
-    TableRegionType
+    TableRegionType,
+    RegionRefType,
+    RegionRefIndexedType,
+    OrderedGroupType,
+    OrderedGroupIndexedType,
+    UnorderedGroupType,
+    UnorderedGroupIndexedType,
+    ReadingOrderType
 )
 from ocrd import Processor
 from ocrd_utils import (
@@ -214,8 +221,22 @@ class OcropySegment(Processor):
                     else:
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
                         ignore.extend(regions)
+                # prepare reading order
+                reading_order = dict()
+                ro = page.get_ReadingOrder()
+                if not ro:
+                    ro = ReadingOrderType()
+                    page.set_ReadingOrder(ro)
+                rogroup = ro.get_OrderedGroup() or ro.get_UnorderedGroup()
+                if rogroup:
+                    page_get_reading_order(reading_order, rogroup)
+                else:
+                    # new top-level group
+                    rogroup = OrderedGroupType(id="reading-order")
+                    ro.set_OrderedGroup(rogroup)
                 # go get TextRegions with TextLines (and SeparatorRegions):
-                self._process_element(page, ignore, page_image, page_coords, page_id, zoom)
+                self._process_element(page, ignore, page_image, page_coords, page_id, zoom,
+                                      rogroup=rogroup)
                 # besides top-level text regions,
                 # page-segment pre-existing tables
                 for region in page.get_TableRegion():
@@ -228,8 +249,38 @@ class OcropySegment(Processor):
                         region, page_image, page_coords, feature_selector='binarized')
                     subignore = regions + ignore
                     subignore.remove(region)
+                    # prepare reading order
+                    roelem = reading_order.get(region.id)
+                    if not roelem:
+                        LOG.warning("Page '%s' table region '%s' is not referenced in reading order (%s)",
+                                    page_id, region.id, "no target to add cells to")
+                    elif isinstance(roelem, (OrderedGroupType, OrderedGroupIndexedType)):
+                        LOG.warning("Page '%s' table region '%s' already has an ordered group (%s)",
+                                    page_id, region.id, "cells will be appended")
+                    elif isinstance(roelem, (UnorderedGroupType, UnorderedGroupIndexedType)):
+                        LOG.warning("Page '%s' table region '%s' already has an unordered group (%s)",
+                                    page_id, region.id, "cells will not be appended")
+                        roelem = None
+                    elif isinstance(roelem, RegionRefIndexedType):
+                        # replace regionref by group with same index and ref
+                        # (which can then take the cells as subregions)
+                        roelem2 = OrderedGroupIndexedType(id=region.id + '_order',
+                                                          index=roelem.index,
+                                                          regionRef=roelem.regionRef)
+                        roelem.parent_object_.add_OrderedGroupIndexed(roelem2)
+                        roelem.parent_object_.get_RegionRefIndexed().remove(roelem)
+                        roelem = roelem2
+                    elif isinstance(roelem, RegionRefType):
+                        # replace regionref by group with same ref
+                        # (which can then take the cells as subregions)
+                        roelem2 = OrderedGroupType(id=region.id + '_order',
+                                                   regionRef=roelem.regionRef)
+                        roelem.parent_object_.add_OrderedGroup(roelem2)
+                        roelem.parent_object_.get_RegionRef().remove(roelem)
+                        roelem = roelem2
                     # go get TextRegions with TextLines (and SeparatorRegions)
-                    self._process_element(region, subignore, region_image, region_coords, region.id, zoom)
+                    self._process_element(region, subignore, region_image, region_coords, region.id, zoom,
+                                          rogroup=roelem)
             else:
                 # besides top-level text regions, line-segment any table cells,
                 # and for tables without any cells, add a pseudo-cell
@@ -278,7 +329,7 @@ class OcropySegment(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def _process_element(self, element, ignore, image, coords, element_id, zoom):
+    def _process_element(self, element, ignore, image, coords, element_id, zoom=1.0, rogroup=None):
         """Add PAGE layout elements by segmenting an image.
 
         Given a PageType, TableRegionType or TextRegionType ``element``, and
@@ -301,7 +352,8 @@ class OcropySegment(Processor):
         element_bin = np.array(element_array <= midrange(element_array), np.bool)
         sep_bin = np.zeros_like(element_bin, np.bool)
         for segment in ignore:
-            LOG.debug('suppressing foreground of segment "%s" for "%s"', segment.id, element_id)
+            LOG.debug('suppressing foreground of %s "%s" for "%s"',
+                      type(segment).__name__[:-4].lower(), segment.id, element_id)
             # suppress these segments' foreground (e.g. separator regions)
             # (for workflows where they have been detected already)
             segment_polygon = coordinates_of_segment(segment, image, coords)
@@ -363,13 +415,15 @@ class OcropySegment(Processor):
                          len(np.unique(region_labels)) - 1,
                          element_name, element_id)
             except Exception as err:
-                LOG.warning('Cannot region-segment %s "%s": %s', element_name, element_id, err)
+                LOG.warning('Cannot region-segment %s "%s": %s',
+                            element_name, element_id, err)
                 region_labels = np.array(line_labels > 0, np.uint8)
             # find contours around region labels (can be non-contiguous):
             region_polygons = masks2polygons(region_labels, element_bin,
                                              '%s "%s"' % (element_name, element_id))
             for region_no, (region_label, polygon) in enumerate(region_polygons):
                 region_id = element_id + "_region%04d" % region_no
+                LOG.debug('Region label %d becomes ID "%s"', region_label, region_id)
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
                 # annotate result:
@@ -380,15 +434,33 @@ class OcropySegment(Processor):
                 region_line_labels = line_labels * (region_labels == region_label)
                 # find contours around labels (can be non-contiguous):
                 line_polygons = masks2polygons(region_line_labels, element_bin,
-                                               'region "%s"' % element_id)
-                for line_no, (_, polygon) in enumerate(line_polygons):
+                                               'region "%s"' % region_id)
+                for line_no, (line_label, polygon) in enumerate(line_polygons):
                     line_id = region_id + "_line%04d" % line_no
+                    LOG.debug('Line label %d becomes ID "%s"', line_label, line_id)
                     # convert back to absolute (page) coordinates:
                     line_polygon = coordinates_for_segment(polygon, image, coords)
                     # annotate result:
                     line = TextLineType(id=line_id, Coords=CoordsType(
                         points=points_from_polygon(line_polygon)))
                     region.add_TextLine(line)
+                LOG.info('Added region "%s" with %d lines for %s "%s"',
+                         region_id, len(line_polygons), element_name, element_id)
+                # add to reading order
+                if rogroup:
+                    if isinstance(rogroup, (OrderedGroupType, OrderedGroupIndexedType)):
+                        index = 0
+                        # start counting from largest existing index
+                        for elem in (rogroup.get_RegionRefIndexed() +
+                                     rogroup.get_OrderedGroupIndexed() +
+                                     rogroup.get_UnorderedGroupIndexed()):
+                            if elem.index >= index:
+                                index = elem.index + 1
+                        rogroup.add_RegionRefIndexed(RegionRefIndexedType(
+                            regionRef=region.id, index=index))
+                    else:
+                        rogroup.add_RegionRef(RegionRefType(
+                            regionRef=region.id))
             # split rulers into separator regions:
             hline_labels, num_hlines = morph.label(hlines)
             vline_labels, num_vlines = morph.label(vlines)
@@ -427,3 +499,23 @@ class OcropySegment(Processor):
                 # annotate result:
                 element.add_TextLine(TextLineType(id=line_id, Coords=CoordsType(
                     points=points_from_polygon(line_polygon))))
+
+def page_get_reading_order(ro, rogroup):
+    """Add all elements from the given reading order group to the given dictionary.
+    
+    Given a dict ``ro`` from layout element IDs to ReadingOrder element objects,
+    and an object ``rogroup`` with additional ReadingOrder element objects,
+    add all references to the dict, traversing the group recursively.
+    """
+    if isinstance(rogroup, (OrderedGroupType, OrderedGroupIndexedType)):
+        regionrefs = (rogroup.get_RegionRefIndexed() +
+                      rogroup.get_OrderedGroupIndexed() +
+                      rogroup.get_UnorderedGroupIndexed())
+    if isinstance(rogroup, (UnorderedGroupType, UnorderedGroupIndexedType)):
+        regionrefs = (rogroup.get_RegionRef() +
+                      rogroup.get_OrderedGroup() +
+                      rogroup.get_UnorderedGroup())
+    for elem in regionrefs:
+        ro[elem.get_regionRef()] = elem
+        if not isinstance(elem, (RegionRefType, RegionRefIndexedType)):
+            page_get_reading_order(ro, elem)
