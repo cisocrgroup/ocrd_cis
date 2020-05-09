@@ -667,6 +667,7 @@ def compute_line_labels(array, fullpage=False, zoom=1.0, maxcolseps=2, maxseps=0
 
     sepmask = morph.r_dilation(np.maximum(colseps, np.maximum(hlines, vlines)),
                                (scale//2, scale//2))
+    #DSAVE("sepmask", sepmask + 0.6*binary)
     seeds = compute_line_seeds(binary, bottom, top, sepmask, scale)
     #DSAVE("seeds", seeds + 0.6*binary)
     if not fullpage:
