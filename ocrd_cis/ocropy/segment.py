@@ -16,6 +16,9 @@ from ocrd_models.ocrd_page import (
     SeparatorRegionType,
     PageType
 )
+from ocrd_models.ocrd_page_generateds import (
+    TableRegionType
+)
 from ocrd import Processor
 from ocrd_utils import (
     getLogger,
@@ -163,17 +166,33 @@ class OcropySegment(Processor):
             else:
                 zoom = 1
 
-            regions = page.get_TextRegion()
+            regions = list(page.get_TextRegion())
             if oplevel == 'page':
                 if regions:
                     if overwrite_regions:
                         LOG.info('removing existing TextRegions in page "%s"', page_id)
+                        # we could remove all other region types as well,
+                        # but this is more flexible (for workflows with
+                        # specialized separator/image/table detectors):
                         page.set_TextRegion([])
+                        # TODO: only remove the existing text regions from RO
                         page.set_ReadingOrder(None)
                     else:
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
+                # go get TextRegions with TextLines (and SeparatorRegions):
                 self._process_element(page, page_image, page_xywh, page_id, zoom)
             else:
+                for table in page.get_TableRegion():
+                    subregions = table.get_TextRegion()
+                    if subregions:
+                        regions.extend(subregions)
+                    else:
+                        subregion = TextRegionType(id=table.id + '_text',
+                                                   Coords=table.get_Coords(),
+                                                   # as if generated from parser:
+                                                   parent_object_=table)
+                        table.add_TextRegion(subregion)
+                        regions.append(subregion)
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
@@ -186,6 +205,7 @@ class OcropySegment(Processor):
                     # TODO: also allow grayscale_normalized (try/except?)
                     region_image, region_xywh = self.workspace.image_from_segment(
                         region, page_image, page_xywh, feature_selector='binarized')
+                    # go get TextLines
                     self._process_element(region, region_image, region_xywh, region.id, zoom)
 
             # update METS (add the PAGE file):
@@ -219,10 +239,16 @@ class OcropySegment(Processor):
         #element_array, _ = common.binarize(element_array, maxskew=0) # just in case still raw
         element_bin = np.array(element_array <= midrange(element_array), np.uint8)
         try:
+            fullpage = isinstance(element, PageType) or (
+                # sole/congruent text region of a table region?
+                element.id.endswith('_text') and
+                isinstance(element.parent_object_, TableRegionType))
+            LOG.debug('computing line segmentation for "%s" as %s',
+                      element.id, 'page with columns' if fullpage else 'region')
             line_labels, hlines, vlines, colseps = compute_line_labels(
                 element_array,
                 zoom=zoom,
-                fullpage=isinstance(element, PageType),
+                fullpage=fullpage,
                 spread_dist=round(self.parameter['spread']/zoom*300/72), # in pt
                 maxcolseps=self.parameter['maxcolseps'],
                 maxseps=self.parameter['maxseps'])
@@ -295,6 +321,7 @@ class OcropySegment(Processor):
         - first, aggregate pairs that flush left _and_ right
         - second, add remainders that are indented left or rugged right
         """
+        # FIXME This is a mess!
         objects = [None] + morph.find_objects(line_labels)
         scale = int(np.median(np.array([sl.height(obj) for obj in objects if obj])))
         num_labels = np.max(line_labels)+1
