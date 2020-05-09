@@ -727,11 +727,6 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
     seeds = seeds*(1-colseps)
     DSAVE("lineseeds-colseps", seeds+0.6*binary)
     seeds, nlabels = morph.label(seeds)
-    for i in range(nlabels):
-        ys, xs = np.nonzero(seeds == i+1)
-        height = np.amax(ys) - np.amin(ys)
-        if height > 1.5 * vrange:
-            LOG.warning('line %d has extreme height (%d) w.r.t. scale (%d)', i+1, height, scale)
     DSAVE("lineseeds_labelled", seeds+0.6*binary)
     return seeds
 
@@ -920,9 +915,17 @@ def compute_segmentation(binary,
     llabels = morph.propagate_labels_majority(binary, seeds)
     llabels2 = morph.propagate_labels(binary, seeds, conflict=0)
     conflicts = llabels > llabels2
-    spread = morph.spread_labels(np.where(conflicts, seeds, llabels), maxdist=spread_dist or scale/2)
+    llabels = np.where(conflicts, seeds, llabels)
+    # (protect sepmask as a temporary label)
+    seplabel = np.max(seeds)+1
+    llabels[sepmask>0] = seplabel
+    spread = morph.spread_labels(llabels, maxdist=spread_dist or scale/2)
+    DSAVE('spread', spread + 0.6*binary)
     llabels2 = morph.propagate_labels_majority(binary, spread)
-    llabels = morph.spread_labels(np.where(seeds, seeds, llabels2), maxdist=spread_dist or scale/2)
+    llabels = np.where(seeds, seeds, llabels2)
+    llabels[sepmask>0] = seplabel
+    llabels = morph.spread_labels(llabels, maxdist=spread_dist or scale/2)
+    llabels[llabels==seplabel] = 0
     DSAVE('llabels', llabels + 0.6*binary)
     #segmentation = llabels*binary
     #return segmentation
