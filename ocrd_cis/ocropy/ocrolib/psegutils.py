@@ -28,8 +28,13 @@ def estimate_scale(binary, zoom=1.0):
     for o in bysize:
         if np.amax(scalemap[o])>0: continue
         scalemap[o] = sl.area(o)**0.5
-    scale = np.median(scalemap[(scalemap>3/zoom)&(scalemap<100/zoom)])
-    return scale
+    scalemap = scalemap[(scalemap>3/zoom)&(scalemap<100/zoom)]
+    if np.any(scalemap):
+        return int(np.median(scalemap))
+    else:
+        # empty page (only large h/v-lines or small noise)
+        # guess! (average 10 pt font: 42 px at 300 DPI)
+        return int(42/zoom)
 
 @checks(ABINARY2,NUMBER)
 def compute_boxmap(binary,scale,threshold=(.5,4),dtype='i'):
