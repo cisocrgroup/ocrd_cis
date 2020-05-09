@@ -247,7 +247,7 @@ class OcropyClip(Processor):
         for neighbour, neighbour_mask in neighbours:
             # find connected components that (only) belong to the neighbour:
             intruders = segment_mask * morph.keep_marked(parent_bin, neighbour_mask > 0) # overlaps neighbour
-            intruders -= morph.keep_marked(intruders, segment_mask - neighbour_mask > 0) # but exclusively
+            intruders = morph.remove_marked(intruders, segment_mask > neighbour_mask) # but exclusively
             num_intruders = np.count_nonzero(intruders)
             num_foreground = np.count_nonzero(segment_mask * parent_bin)
             if not num_intruders:

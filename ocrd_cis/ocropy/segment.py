@@ -37,36 +37,38 @@ from .ocrolib import sl
 from .common import (
     pil2array,
     # binarize,
-    compute_line_labels
+    compute_segmentation,
+    lines2regions
 )
 
 TOOL = 'ocrd-cis-ocropy-segment'
 LOG = getLogger('processor.OcropySegment')
 
-def segment(line_labels, region_bin, region_id):
+def masks2polygons(bg_labels, fg_bin, name):
     """Convert label masks into polygon coordinates.
 
-    Given a Numpy array of background labels ``line_labels``,
-    and a Numpy array of the foreground ``region_bin``,
+    Given a Numpy array of background labels ``bg_labels``,
+    and a Numpy array of the foreground ``fg_bin``,
     iterate through all labels (except zero and those labels
     which do not correspond to any foreground at all) to find
     their outer contours. Each contour part which is not too
     small and gives a (simplified) polygon of at least 4 points
-    becomes a polygon.
+    becomes a polygon. (Thus, labels can be split into multiple
+    polygons.)
 
-    Return a list of all such polygons concatenated.
+    Return these polygons as a list of label, polygon tuples.
     """
-    lines = []
-    for label in np.unique(line_labels):
+    results = list()
+    for label in np.unique(bg_labels):
         if not label:
             # ignore if background
             continue
-        line_mask = np.array(line_labels == label, np.uint8)
-        if not np.count_nonzero(line_mask * region_bin):
+        bg_mask = np.array(bg_labels == label, np.uint8)
+        if not np.count_nonzero(bg_mask * fg_bin):
             # ignore if missing foreground
             continue
         # find outer contour (parts):
-        contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(bg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # determine areas of parts:
         areas = [cv2.contourArea(contour) for contour in contours]
         total_area = sum(areas)
@@ -76,8 +78,8 @@ def segment(line_labels, region_bin, region_id):
         for i, contour in enumerate(contours):
             area = areas[i]
             if area / total_area < 0.1:
-                LOG.warning('Line label %d contour %d is too small (%d/%d) in region "%s"',
-                            label, i, area, total_area, region_id)
+                LOG.warning('Label %d contour %d is too small (%d/%d) in %s',
+                            label, i, area, total_area, name)
                 continue
             # simplify shape:
             # can produce invalid (self-intersecting) polygons:
@@ -85,11 +87,11 @@ def segment(line_labels, region_bin, region_id):
             polygon = contour[:, 0, ::] # already ordered x,y
             polygon = Polygon(polygon).simplify(2).exterior.coords
             if len(polygon) < 4:
-                LOG.warning('Line label %d contour %d has less than 4 points for region "%s"',
-                            label, i, region_id)
+                LOG.warning('Label %d contour %d has less than 4 points for %s',
+                            label, i, name)
                 continue
-            lines.append(polygon)
-    return lines
+            results.append((label, polygon))
+    return results
 
 class OcropySegment(Processor):
 
@@ -237,21 +239,26 @@ class OcropySegment(Processor):
         """
         element_array = pil2array(image)
         #element_array, _ = common.binarize(element_array, maxskew=0) # just in case still raw
-        element_bin = np.array(element_array <= midrange(element_array), np.uint8)
+        element_bin = np.array(element_array <= midrange(element_array), np.bool)
         try:
             fullpage = isinstance(element, PageType) or (
                 # sole/congruent text region of a table region?
                 element.id.endswith('_text') and
                 isinstance(element.parent_object_, TableRegionType))
             LOG.debug('computing line segmentation for "%s" as %s',
-                      element.id, 'page with columns' if fullpage else 'region')
-            line_labels, hlines, vlines, colseps = compute_line_labels(
+                      element_id, 'page with columns' if fullpage else 'region')
+            # TODO: we should downscale if DPI is large enough to save time
+            # TODO: we should pass in existing separator masks
+            # (for workflows where they have been detected/removed already)
+            line_labels, hlines, vlines, colseps, scale = compute_segmentation(
                 element_array,
                 zoom=zoom,
                 fullpage=fullpage,
                 spread_dist=round(self.parameter['spread']/zoom*300/72), # in pt
                 maxcolseps=self.parameter['maxcolseps'],
-                maxseps=self.parameter['maxseps'])
+                maxseps=self.parameter['maxseps'],
+                csminheight=self.parameter['csminheight'],
+                hlminwidth=self.parameter['hlminwidth'])
         except Exception as err:
             if isinstance(element, TextRegionType):
                 LOG.warning('Cannot line-segment region "%s": %s', element_id, err)
@@ -260,26 +267,42 @@ class OcropySegment(Processor):
             else:
                 LOG.error('Cannot line-segment page "%s": %s', element_id, err)
             return
-        #DSAVE('line labels', line_labels)
         if isinstance(element, PageType):
             # aggregate text lines to text regions:
-            region_labels = self._lines2regions(line_labels, element_id)
+            try:
+                region_labels = lines2regions(element_bin, line_labels, hlines, vlines, colseps)
+            except Exception as err:
+                LOG.warning('Cannot region-segment page "%s": %s', element_id, err)
+                region_labels = np.array(line_labels > 0, np.uint8)
             # find contours around region labels (can be non-contiguous):
-            region_polygons = segment(region_labels, element_bin, element_id)
-            for region_no, polygon in enumerate(region_polygons):
+            region_polygons = masks2polygons(region_labels, element_bin, 'page "%s"' % element_id)
+            for region_no, (region_label, polygon) in enumerate(region_polygons):
                 region_id = element_id + "_region%04d" % region_no
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, xywh)
                 # annotate result:
-                element.add_TextRegion(TextRegionType(id=region_id, Coords=CoordsType(
-                    points=points_from_polygon(region_polygon))))
+                region = TextRegionType(id=region_id, Coords=CoordsType(
+                    points=points_from_polygon(region_polygon)))
+                element.add_TextRegion(region)
+                # filter text lines within this text region:
+                region_line_labels = line_labels * (region_labels == region_label)
+                # find contours around labels (can be non-contiguous):
+                line_polygons = masks2polygons(region_line_labels, element_bin, 'region "%s"' % element_id)
+                for line_no, (_, polygon) in enumerate(line_polygons):
+                    line_id = region_id + "_line%04d" % line_no
+                    # convert back to absolute (page) coordinates:
+                    line_polygon = coordinates_for_segment(polygon, image, xywh)
+                    # annotate result:
+                    line = TextLineType(id=line_id, Coords=CoordsType(
+                        points=points_from_polygon(line_polygon)))
+                    region.add_TextLine(line)
             # split rulers into separator regions:
             hline_labels, _ = morph.label(hlines)
             vline_labels, _ = morph.label(vlines)
             # find contours around region labels (can be non-contiguous):
-            hline_polygons = segment(hline_labels, element_bin, element_id)
-            vline_polygons = segment(vline_labels, element_bin, element_id)
-            for region_no, polygon in enumerate(hline_polygons + vline_polygons):
+            hline_polygons = masks2polygons(hline_labels, element_bin, 'page "%s"' % element_id)
+            vline_polygons = masks2polygons(vline_labels, element_bin, 'page "%s"' % element_id)
+            for region_no, (_, polygon) in enumerate(hline_polygons + vline_polygons):
                 region_id = element_id + "_sep%04d" % region_no
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, xywh)
@@ -296,122 +319,11 @@ class OcropySegment(Processor):
             # ensure the new line labels do not extrude from the region:
             line_labels = line_labels * region_mask
             # find contours around labels (can be non-contiguous):
-            line_polygons = segment(line_labels, element_bin, element_id)
-            for line_no, polygon in enumerate(line_polygons):
+            line_polygons = masks2polygons(line_labels, element_bin, 'region "%s"' % element_id)
+            for line_no, (_, polygon) in enumerate(line_polygons):
                 line_id = element_id + "_line%04d" % line_no
                 # convert back to absolute (page) coordinates:
                 line_polygon = coordinates_for_segment(polygon, image, xywh)
                 # annotate result:
                 element.add_TextLine(TextLineType(id=line_id, Coords=CoordsType(
                     points=points_from_polygon(line_polygon))))
-
-    def _lines2regions(self, line_labels, page_id):
-        """Aggregate text lines to text regions.
-
-        Given a Numpy array of text lines ``line_labels``, find
-        direct neighbours that match in height and are consistent
-        in horizontal position. Merge these into larger region
-        labels. Then morphologically close them to fill the
-        background between lines. Merge regions that now contain
-        each other.
-
-        Return a Numpy array of text region labels.
-
-        Horizontal consistency rules (in 2 passes):
-        - first, aggregate pairs that flush left _and_ right
-        - second, add remainders that are indented left or rugged right
-        """
-        # FIXME This is a mess!
-        objects = [None] + morph.find_objects(line_labels)
-        scale = int(np.median(np.array([sl.height(obj) for obj in objects if obj])))
-        num_labels = np.max(line_labels)+1
-        relabel = np.arange(num_labels)
-        # first determine which label pairs are adjacent:
-        neighbours = np.zeros((num_labels,num_labels), np.uint8)
-        for x in range(line_labels.shape[1]):
-            labels = line_labels[:,x] # one column
-            labels = labels[labels>0] # no background
-            _, lind = np.unique(labels, return_index=True)
-            labels = labels[lind] # without repetition
-            neighbours[labels[:-1], labels[1:]] += 1 # successors
-            neighbours[labels, labels] += 1 # identities
-        # remove transitive pairs (jumping over 2 other pairs):
-        for y, x in zip(*neighbours.nonzero()):
-            if y == x:
-                continue
-            if np.any(neighbours[y, y+1:x]) and np.any(neighbours[y+1:x, x]):
-                neighbours[y, x] = 0
-        # now merge lines if possible (in 2 passes:
-        # - first, aggregate pairs that flush left and right
-        # - second, add remainders that are indented left or rugged right):
-        for pass_ in ['pairs', 'remainders']:
-            for label1 in range(1, num_labels - 1):
-                if not neighbours[label1, label1]:
-                    continue # not a label
-                for label2 in range(label1 + 1, num_labels):
-                    if not neighbours[label1, label2]:
-                        continue # not neighbours (or transitive)
-                    if relabel[label1] == relabel[label2]:
-                        continue # already merged (in previous pass)
-                    object1 = objects[label1]
-                    object2 = objects[label2]
-                    LOG.debug('page "%s" candidate lines %d (%s) vs %d (%s)',
-                              page_id,
-                              label1, str(sl.raster(object1)),
-                              label2, str(sl.raster(object2)))
-                    height = max(sl.height(object1), sl.height(object2))
-                    #width = max(sl.width(object1), sl.width(object2))
-                    width = line_labels.shape[1]
-                    if not (
-                            # similar height (e.g. discount headings from paragraph):
-                            abs(sl.height(object1) - sl.height(object2)) < height * 0.2 and
-                            # vertically not too far away:
-                            (object2[0].start - object1[0].stop) < height * 1.0 and
-                            # horizontally consistent:
-                            (   # flush with each other on the left:
-                                abs(object1[1].start - object2[1].start) < width * 0.1 or
-                                # object1 = line indented left, object2 = block
-                                (pass_ == 'remainders' and
-                                 np.count_nonzero(relabel == label1) == 1 and
-                                 - width * 0.1 < object1[1].start - object2[1].start < width * 0.8)
-                            ) and
-                            (   # flush with each other on the right:
-                                abs(object1[1].stop - object2[1].stop) < width * 0.1
-                                or
-                                # object1 = block, object2 = line ragged right
-                                (pass_ == 'pairs' and
-                                 np.count_nonzero(relabel == label2) == 1 and
-                                 - width * 0.1 < object1[1].stop - object2[1].stop < width * 0.8)
-                            )):
-                        continue
-                    LOG.debug('page "%s" joining lines %d and %d', page_id, label1, label2)
-                    label1 = relabel[label1]
-                    label2 = relabel[label2]
-                    relabel[label2] = label1
-                    relabel[relabel == label2] = label1
-        region_labels = relabel[line_labels]
-        #DSAVE('region labels', region_labels)
-        # finally, close regions:
-        labels = np.unique(region_labels)
-        labels = labels[labels > 0]
-        for label in labels:
-            region = np.array(region_labels == label)
-            region_count = np.count_nonzero(region)
-            if not region_count:
-                continue
-            LOG.debug('label %d: %d pixels', label, region_count)
-            # close region between lines:
-            region = morph.r_closing(region, (scale, 1))
-            # extend region to background:
-            region_labels = np.where(region_labels > 0, region_labels, region*label)
-            # extend region to other labels that are contained in it:
-            for label2 in labels[labels != label]:
-                region2 = region_labels == label2
-                region2_count = np.count_nonzero(region2)
-                #if np.all(region2 <= region):
-                # or be even more tolerant to avoid strange contours?
-                if np.count_nonzero(region2 > region) < region2_count * 0.1:
-                    LOG.debug('%d contains %d', label, label2)
-                    region_labels[region2] = label
-        #DSAVE('region labels closed', region_labels)
-        return region_labels

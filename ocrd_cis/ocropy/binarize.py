@@ -194,9 +194,9 @@ class OcropyBinarize(Processor):
             if angle:
                 features += ',deskewed'
             page_xywh['angle'] = angle
-        bin_image = remove_noise(bin_image,
-                                 maxsize=self.parameter['noise_maxsize'])
         if self.parameter['noise_maxsize']:
+            bin_image = remove_noise(
+                bin_image, maxsize=self.parameter['noise_maxsize'])
             features += ',despeckled'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
