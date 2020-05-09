@@ -4,6 +4,7 @@ import os.path
 import numpy as np
 from skimage import draw
 import cv2
+from shapely.geometry import Polygon
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -76,7 +77,10 @@ def segment(line_labels, region_bin, region_id):
                             label, i, area, total_area, region_id)
                 continue
             # simplify shape:
-            polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
+            # can produce invalid (self-intersecting) polygons:
+            #polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
+            polygon = contour[:, 0, ::] # already ordered x,y
+            polygon = Polygon(polygon).simplify(2).exterior.coords
             if len(polygon) < 4:
                 LOG.warning('Line label %d contour %d has less than 4 points for region "%s"',
                             label, i, region_id)

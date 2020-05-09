@@ -4,6 +4,7 @@ import os.path
 import numpy as np
 from skimage import draw
 import cv2
+from shapely.geometry import Polygon
 from scipy.ndimage import filters
 
 from ocrd_modelfactory import page_from_file
@@ -103,11 +104,14 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
         return None
     contour = contours[max_contour]
     # simplify shape:
-    line_polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
-    if len(line_polygon) < 4:
+    # can produce invalid (self-intersecting) polygons:
+    #polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
+    polygon = contour[:, 0, ::] # already ordered x,y
+    polygon = Polygon(polygon).simplify(2).exterior.coords
+    if len(polygon) < 4:
         LOG.warning('found no contour of >=4 points for line "%s"', line_id)
         return None
-    return line_polygon
+    return polygon
 
 class OcropyResegment(Processor):
 
