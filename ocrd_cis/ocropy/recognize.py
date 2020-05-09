@@ -236,7 +236,7 @@ class OcropyRecognize(Processor):
             # process ocropy:
             try:
                 linepred, clist, rlist, confidlist = recognize(
-                    final_img, pad, self.network, check=True)
+                    final_img, self.pad, self.network, check=True)
             except Exception as err:
                 LOG.debug('ERROR: error processing line "%s": %s', line.id, err)
                 continue
