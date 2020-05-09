@@ -388,7 +388,7 @@ class RegionExtractor:
         b = self.objects[index]
         # print("@@@mask", index, b)
         m = self.labels[b]
-        m[m!=index] = 0
+        m[m!=index] = 0 # FIXME: This is destructive for labels!
         if margin>0: m = pad_by(m,margin)
         return array(m!=0,'B')
     def extract(self,image,index,margin=0):
