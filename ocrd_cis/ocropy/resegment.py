@@ -132,8 +132,8 @@ class OcropyResegment(Processor):
 
         Next, get each region image according to the layout annotation (from
         the alternative image of the region, or by cropping via coordinates
-        into the higher-level image), binarize it (without deskewing), and
-        compute a new line segmentation from that (as a label mask).
+        into the higher-level image), and compute a new line segmentation
+        from that (as a label mask).
 
         Then for each line within the region, find the label with the largest
         foreground area in the binarized image within the annotated polygon
@@ -148,13 +148,14 @@ class OcropyResegment(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
-        # This makes best sense for bad/coarse segmentation, like current GT.
-        # Most notably, it can convert rectangles to polygons. It depends on
-        # a decent line segmentation from ocropy though. So it _should_ ideally
-        # be run after deskewing (on the page or region level), and preferably
-        # after binarization (on page or region level), because segmentation of
-        # both a skewed image or of implicit binarization could be suboptimal,
-        # and the explicit binarization after resegmentation could be, too.
+        # This makes best sense for bad/coarse line segmentation, like current GT
+        # or as postprocessing for bbox-only steps.
+        # Most notably, it can convert rectangles to polygons (polygonalization).
+        # It depends on a decent line segmentation from ocropy though. So it
+        # _should_ ideally be run after deskewing (on the page or region level),
+        # _must_ be run after binarization (on page or region level). Also, the
+        # method's accuracy crucially depends on a good estimate of the images'
+        # pixel density (at least if source input is not 300 DPI).
         threshold = self.parameter['min_fraction']
         margin = self.parameter['extend_margins']
 
@@ -182,7 +183,7 @@ class OcropyResegment(Processor):
                                             for name in self.parameter.keys()])]))
             
             page_image, page_xywh, page_image_info = self.workspace.image_from_page(
-                page, page_id)
+                page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
                 zoom = 300.0/self.parameter['dpi']
             elif page_image_info.resolution != 1:
@@ -206,10 +207,9 @@ class OcropyResegment(Processor):
                     LOG.warning('Page "%s" region "%s" contains only one line', page_id, region.id)
                     continue
                 region_image, region_xywh = self.workspace.image_from_segment(
-                    region, page_image, page_xywh)
-                # ad-hoc binarization:
+                    region, page_image, page_xywh, feature_selector='binarized')
                 region_array = pil2array(region_image)
-                region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
+                #region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
                 region_bin = np.array(region_array <= midrange(region_array), np.uint8)
                 try:
                     region_labels, _, _, _ = compute_line_labels(region_array, zoom=zoom)
@@ -232,7 +232,7 @@ class OcropyResegment(Processor):
                     if line.get_AlternativeImage():
                         # get cropped line image:
                         line_image, line_xywh = self.workspace.image_from_segment(
-                            line, region_image, region_xywh)
+                            line, region_image, region_xywh, feature_selector='binarized')
                         LOG.debug("Using AlternativeImage (%s) for line '%s'",
                                   line_xywh['features'], line.id)
                         # crop region arrays accordingly:
@@ -263,7 +263,7 @@ class OcropyResegment(Processor):
                     line.get_Coords().points = points_from_polygon(line_polygon)
                     # create new image:
                     line_image, line_xywh = self.workspace.image_from_segment(
-                        line, region_image, region_xywh)
+                        line, region_image, region_xywh, feature_selector='binarized')
                     # update METS (add the image file):
                     file_path = self.workspace.save_image_file(
                         line_image,
