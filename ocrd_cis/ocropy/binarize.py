@@ -33,20 +33,22 @@ TOOL = 'ocrd-cis-ocropy-binarize'
 LOG = getLogger('processor.OcropyBinarize')
 FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-BIN'
 
-def binarize(pil_image, method='ocropy', maxskew=2, nrm=False):
+def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False):
     LOG.debug('binarizing %dx%d image with method=%s', pil_image.width, pil_image.height, method)
     if method == 'none':
+        # useful if the images are already binary,
+        # but lack image attribute `binarized`
         return pil_image, 0
     elif method == 'ocropy':
         # parameter defaults from ocropy-nlbin:
         array = pil2array(pil_image)
-        bin, angle = common.binarize(array, maxskew=maxskew, nrm=nrm)
+        bin, angle = common.binarize(array, maxskew=maxskew, threshold=threshold, nrm=nrm)
         return array2pil(bin), angle
     # equivalent to ocropy, but without deskewing:
     # elif method == 'kraken':
     #     image = kraken.binarization.nlbin(pil_image)
     #     return image, 0
-    # FIXME: add 'sauvola'
+    # FIXME: add 'sauvola' from OLD/ocropus-sauvola
     else:
         # Convert RGB to OpenCV
         #img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
@@ -54,7 +56,7 @@ def binarize(pil_image, method='ocropy', maxskew=2, nrm=False):
 
         if method == 'global':
             # global thresholding
-            _, th = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
+            _, th = cv2.threshold(img,threshold*255,255,cv2.THRESH_BINARY)
         elif method == 'otsu':
             # Otsu's thresholding
             _, th = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
@@ -182,18 +184,17 @@ class OcropyBinarize(Processor):
         if 'angle' in page_xywh and page_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
             # so skip deskewing here:
-            bin_image, _ = binarize(page_image,
-                                    method=self.parameter['method'],
-                                    maxskew=0,
-                                    nrm=self.parameter['grayscale'])
+            maxskew = 0
         else:
-            bin_image, angle = binarize(page_image,
-                                        method=self.parameter['method'],
-                                        maxskew=self.parameter['maxskew'],
-                                        nrm=self.parameter['grayscale'])
-            if angle:
-                features += ',deskewed'
-            page_xywh['angle'] = angle
+            maxskew = self.parameter['maxskew']
+        bin_image, angle = binarize(page_image,
+                                    method=self.parameter['method'],
+                                    maxskew=maxskew,
+                                    threshold=self.parameter['threshold'],
+                                    nrm=self.parameter['grayscale'])
+        if angle:
+            features += ',deskewed'
+        page_xywh['angle'] = angle
         if self.parameter['noise_maxsize']:
             bin_image = remove_noise(
                 bin_image, maxsize=self.parameter['noise_maxsize'])

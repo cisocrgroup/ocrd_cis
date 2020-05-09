@@ -27,21 +27,29 @@
 				"method": {
 					"type": "string",
 					"enum": ["none", "global", "otsu", "gauss-otsu", "ocropy"],
-					"description": "binarization method to use (only ocropy will include deskewing)",
+					"description": "binarization method to use (only 'ocropy' will include deskewing and denoising)",
 					"default": "ocropy"
+				},
+				"threshold": {
+					"type": "number",
+					"format": "float",
+					"description": "for the 'ocropy' and ' global' method, black/white threshold to apply on the whitelevel normalized image (the larger the more/heavier foreground)",
+					"default": 0.5
 				},
 				"grayscale": {
 					"type": "boolean",
-					"description": "for the ocropy method, produce grayscale-normalized instead of thresholded image",
+					"description": "for the 'ocropy' method, produce grayscale-normalized instead of thresholded image",
 					"default": false
 				},
 				"maxskew": {
 					"type": "number",
-					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
+					"format": "float",
+					"description": "modulus of maximum skewing angle (in degrees) to detect (larger will be slower, 0 will deactivate deskewing)",
 					"default": 0.0
 				},
 				"noise_maxsize": {
 					"type": "number",
+					"format": "int",
 					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
 					"default": 0
 				},
