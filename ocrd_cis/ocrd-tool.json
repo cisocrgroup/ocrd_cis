@@ -1,6 +1,6 @@
 {
 	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"tools": {
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
@@ -297,7 +297,7 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Segment pages into regions or regions into lines with ocropy",
+			"description": "Segment pages into regions and lines, or regions into lines with ocropy",
 			"parameters": {
 				"dpi": {
 					"type": "number",
@@ -314,14 +314,26 @@
 				"maxcolseps": {
 					"type": "number",
 					"format": "integer",
-					"default": 2,
-					"description": "number of white/background column separators to try (when operating on the page level)"
+					"default": 20,
+					"description": "number of white/background column separators to try, counted piece-wise (when operating on the page level)"
 				},
 				"maxseps": {
 					"type": "number",
 					"format": "integer",
-					"default": 5,
-					"description": "number of black/foreground column separators to try, counted individually as lines (when operating on the page level)"
+					"default": 20,
+					"description": "number of black/foreground column separators to try, counted piece-wise (when operating on the page level)"
+				},
+				"csminheight": {
+					"type": "number",
+					"format": "integer",
+					"default": 4,
+					"description": "minimum height of white/background or black/foreground column separators in multiples of scale/capheight, counted piece-wise (when operating on the page level)"
+				},
+				"hlminwidth": {
+					"type": "number",
+					"format": "integer",
+					"default": 10,
+					"description": "minimum width of black/foreground horizontal separators in multiples of scale/capheight, counted piece-wise (when operating on the page level)"
 				},
 				"overwrite_regions": {
 					"type": "boolean",
@@ -337,7 +349,7 @@
 					"type": "number",
 					"format": "float",
 					"default": 2.4,
-					"description": "distance in points (pt) from the foreground to project text line (or text region) labels into the background"
+					"description": "distance in points (pt) from the foreground to project text line (or text region) labels into the background; if zero, project half a scale (approx xheight)"
 				}
 			}
 		},
