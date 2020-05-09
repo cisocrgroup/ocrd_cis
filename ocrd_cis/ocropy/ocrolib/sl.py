@@ -70,6 +70,14 @@ def intersect(u,v):
     if u is None: return v
     if v is None: return u
     return tuple([slice(max(u[i].start,v[i].start),min(u[i].stop,v[i].stop)) for i in range(len(u))])
+def compose(u,v):
+    """Compute the composition of the two slice lists.
+    
+    (``v`` addresses the subspace created by ``u``)
+    """
+    if u is None: return v
+    if v is None: return u
+    return tuple([slice(u[i].start+v[i].start,min(u[i].stop,u[i].start+v[i].stop)) for i in range(len(u))])
 
 def xoverlap(u,v):
     return max(0,min(u[1].stop,v[1].stop)-max(u[1].start,v[1].start))
@@ -96,13 +104,26 @@ def ycenter(s):
 def center(s):
     return (ycenter(s),xcenter(s))
 def center_in(u,v):
-    y,x = ycenter(u),xcenter(u)
-    return y>=v[0].start and y<=v[0].stop and x>=v[1].start and x<=v[1].stop
+    return xcenter_in(u,v) and ycenter_in(u,v)
+def xcenter_in(u,v):
+    x = xcenter(u)
+    return x>=v[1].start and x<=v[1].stop
+def ycenter_in(u,v):
+    y = ycenter(u)
+    return y>=v[0].start and y<=v[0].stop
 
 def width(s):
     return s[1].stop-s[1].start
 def height(s):
     return s[0].stop-s[0].start
+def top(s):
+    return s[0].start
+def bottom(s):
+    return s[0].stop
+def left(s):
+    return s[1].start
+def right(s):
+    return s[1].stop
 
 ### Functions with mathematical coordinate conventions
 
