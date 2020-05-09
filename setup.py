@@ -42,6 +42,8 @@ setup(
         'numpy>=1.17.0',
         'pillow>=6.2.0',
         'shapely',
+        'scikit-image',
+        'opencv-python-headless',
         'matplotlib>3.0.0',
         'python-Levenshtein',
         'calamari_ocr == 0.3.5'

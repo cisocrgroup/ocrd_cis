@@ -5,7 +5,8 @@ import logging
 
 import numpy as np
 from scipy.ndimage import measurements, filters, interpolation, morphology
-from scipy import stats
+from scipy import stats, signal
+from skimage.morphology import convex_hull_image
 from PIL import Image
 
 from . import ocrolib
@@ -947,7 +948,8 @@ def compute_segmentation(binary,
                          csminheight=4,
                          hlminwidth=10,
                          spread_dist=None,
-                         check=True):
+                         rl=False,
+                         bt=False):
     """Find text line segmentation within a region or page.
 
     Given a binarized (and inverted) image as Numpy array ``image``, compute
@@ -971,6 +973,10 @@ def compute_segmentation(binary,
     Labels will be projected ("spread") from the foreground to the
     surrounding background within ``spread_dist`` distance (or half
     the estimated scale).
+    
+    Respect the given reading order:
+    - ``rl``, whether to sort text lines in reverse order (from right to left),
+    - ``bt``, whether to sort text lines in reverse order (from bottom to top).
 
     Return a tuple of:
     - Numpy array of the textline background labels
@@ -1061,7 +1067,12 @@ def compute_segmentation(binary,
     llabels[sepmask>0] = seplabel
     llabels = morph.spread_labels(llabels, maxdist=spread_dist or scale/2)
     llabels[llabels==seplabel] = 0
-    DSAVE('llabels', llabels + 0.6*binary)
+    DSAVE('llabels', [llabels,binary])
+    
+    LOG.debug('sorting labels by reading order')
+    llabels = morph.reading_order(llabels,rl,bt)[llabels]
+    DSAVE('llabels_ordered', llabels)
+    
     #segmentation = llabels*binary
     #return segmentation
     return llabels, hlines, vlines, images, colseps, scale
@@ -1089,52 +1100,480 @@ def remove_noise(pil_image, maxsize=8):
     return array2pil(array)
 
 @checks(ABINARY2,SEGMENTATION)
-def lines2regions(binary, line_labels,
-                  hlines=None, vlines=None,
-                  colseps=None, scale=None,
-                  zoom=1.0):
-    """Aggregate text lines to text regions.
-
+def lines2regions(binary, llabels,
+                  sepmask=None,
+                  prefer_vertical=None,
+                  rl=False, bt=False,
+                  min_line=4.0,
+                  gap_height=0.01,
+                  gap_width=1.5,
+                  scale=None, zoom=1.0):
+    """Aggregate text lines to text regions by running hybrid recursive X-Y cut.
+    
     Parameters:
     - ``binary``, a bool or int array of the page image, with 1=black
-    - ``line_labels``, a segmentation of the page into adjacent textlines
-    - (optionally) ``hlines``, a mask array of horizontal line fg seps
-    - (optionally) ``vlines``, a mask array of vertical line fg seps
-    - (optionally) ``colseps``, a mask array of vertical bg seps
-    - (optionally) ``scale``, square root of the average bbox area of characters
-
-    Combine (vertically) adjacent lines by morphologically
-    closing them (vertically) based on average line height.
-
+      (including text lines, separators, images etc)
+    - ``llabels``, a segmentation of the page into adjacent textlines
+      (including locally correct reading order)
+    - (optionally) ``sepmask``, a mask array of fg or bg separators;
+      it is applied before, but also during recursive X-Y cut:
+      In each iteration's box, if sepmask creates enough partitions
+      (not empty in fg and not significantly crossing line labels),
+      and horizontal or vertical cuts are not very prominent already,
+      or don't offer as many valid slices as there would be partitions,
+      then use those partitions instead, passing down a mask to apply
+      for each partition; partitions can also be re-partitioned, just
+      not on the very next level of recursion
+    - (optionally) ``prefer_vertical``, whether to prefer
+      vertical cuts (into columns) over horizontal cuts (into rows)
+      when the choice is not straightforward; set this to
+      - True, when the page can be expected to be dominated by columns
+      - False, when the page has table semantics
+      - None, when geometry alone should decide each time
+       (i.e. direction with widest and lowest gaps)
+    - ``rl``, whether to sort vertical cuts/partitions in reverse order
+      (from right to left),
+    - ``bt``, whether to sort horizontal cuts/partitions in reverse order
+      (from bottom to top),
+    - ``min_line``, minimum number of fg pixels (in multiples
+      of ``scale``) for a line label to be regarded as significant
+      w.r.t. block segmentation (i.e. to not split across regions)
+    - ``gap_height``, largest minimum pixel average in
+       the horizontal or vertical profiles to still be regarded as
+       a gap (needs to be larger when foreground noise is present;
+       reduce to avoid mistaking text for noise)
+    - ``gap_width``, smallest width (in multiples of scale)
+       of a valley in the horizontal or vertical profiles
+       to still be regarded as a gap (needs to be smaller
+       when foreground noise is present; increase to avoid
+       mistaking inter-line as paragraph gaps and
+       inter-word as inter-column gaps)
+    - ``scale``, square root of the average bbox area of characters
+      (as determined during line segmentation)
+    
+    Split the image recursively into horizontal or vertical slices.
+    For each slice (at some stack depth), find gaps running completely
+    across the binary (foreground) of that slice, either vertically or
+    horizontally. Gaps must have a certain minimum width (dependent on
+    the scale) and height (dependent on the level of noise), but also
+    a certain distance between each other (also dependent on the
+    scale, corresponding to the number of lines).  However, gaps must
+    not cut (significant parts of) any single line label.
+    
+    Usually, gaps in one direction are much more prominent than in the
+    other, and certain gaps within one direction more so than others.
+    Therefore, always choosing the most prominent gap(s) is already
+    sufficient to guarantee some alternation between horizontal and
+    vertical direction. But for cases where the difference is rather
+    small, ``prefer_vertical`` may be set (True for multiple columns, or
+    False for multiple rows) to swing the decision (otherwise the better
+    direction wins).
+    
+    Then recursively enter each slice between the chosen cuts.
+    Iterate the slices top-down (unless ``bt``) and left-right (unless
+    ``rl``).
+    
+    Alternatively, find a partitioning using ``sepmask`` instead of
+    gaps. If the separators split the current slice into multiple
+    independent parts, each of which has a number of line labels (in a
+    significant foreground share), and which does not cut any single
+    line label, then instead of slicing, sort the partitions by
+    reading order, and recursively enter each partition with the
+    respective others masked away in the foreground.
+    
+    Thus, there will be an alternation between horizontal and vertical
+    cuts, as well as non-rectangular partitioning from h/v-lines and
+    column separators.
+    
+    Each slice which cannot be cut/partitioned further gets a new
+    region label (in the order of the call chain, which is controlled
+    by ``rl`` and ``bt``), covering all the line labels inside it.
+    
+    Afterwards, for each region label, combine line labels by using
+    their convex hull polygon.
+    
     Return a Numpy array of text region labels.
     """
-    # FIXME Needs some top-down knowledge (X-Y cut?)
-    if not scale:
-        #scale = psegutils.estimate_scale(binary, zoom)
-        objects = morph.find_objects(line_labels)
-        heights = np.array(list(map(sl.height, filter(None, objects))))
-        scale = int(np.median(heights)/4)
+    lbinary = binary * llabels
+    # suppress separators (weak integration)
+    if isinstance(sepmask, np.ndarray):
+        lbinary *= sepmask == 0
+        # prepare sepmask partitioning (see below):
+        # where sepmask partitions would be empty,
+        # add them to sepmask (to avoid adding fake partitions)
+        sepmask = 1-morph.keep_marked(1-sepmask, lbinary>0)
+        DSAVE('sepmask', [sepmask,binary])
+    relabel = np.zeros(np.amax(llabels)+1, np.int)
+    objects = [None] + morph.find_objects(llabels)
+    #centers = measurements.center_of_mass(binary, llabels)
+    if scale is None:
+        scale = psegutils.estimate_scale(binary, zoom)
+    bincounts = np.bincount(lbinary.flatten())
+    
     LOG.debug('combining lines to regions')
-    label_mask = np.array(line_labels > 0, dtype=np.bool)
-    label_mask = np.pad(label_mask, scale) # protect edges
-    label_mask = morph.rb_closing(label_mask, (scale, 1))
-    label_mask = label_mask[scale:-scale, scale:-scale] # unprotect
-    DSAVE('regions1_v-closed', label_mask)
-    label_mask = morph.rb_opening(label_mask, (1, scale/2))
-    DSAVE('regions2_h-opened', label_mask)
-    # we need some form of component-wise closing here
-    # extend margins (to ensure simplified hull polygon is outside children)
-    label_mask = morph.r_dilation(label_mask, (3,3)) # 1px in each direction
-    DSAVE('regions3_enlarged1px', label_mask)
-    # split at boundaries/separators
-    if not hlines is None:
-        label_mask = label_mask * (hlines==0)
-    if not vlines is None:
-        label_mask = label_mask * (vlines==0)
-    if not colseps is None:
-        label_mask = label_mask * (colseps==0)
-    DSAVE('regions4_split', label_mask)
-    # identify
-    region_labels, _ = morph.label(label_mask.astype(np.bool))
-    DSAVE('regions5_labelled', region_labels)
-    return region_labels
+    num_regions = 0
+    def recursive_x_y_cut(box, mask=None, is_partition=False, debug=False):
+        """Split lbinary at horizontal or vertical gaps recursively.
+        
+        - ``box`` current slice
+        - ``mask`` (optional) binary mask for current box to focus
+          line labels on (passed+sliced down recursively)
+        - ``is_partition`` whether ``mask`` was created by partitioning
+          immediately before (without any intermediate cuts), and thus
+          must not be repeated in the current iteration
+        
+        Modifies ``relabel`` and ``num_regions``.
+        """
+        lbin = sl.cut(lbinary, box)
+        if isinstance(mask, np.ndarray):
+            lbin = np.where(mask, lbin, 0)
+        def finalize():
+            """Assign current line labels into new region, and re-order them inside."""
+            nonlocal num_regions
+            nonlocal relabel
+            linelabels = np.setdiff1d(np.unique(lbin), [0])
+            if debug: LOG.debug('checking line labels %s for conflicts', str(linelabels))
+            # when there is a conflict for a line label, assign (or keep) the more frequent region label
+            linelabels = [label
+                          for label in linelabels
+                          if (not relabel[label] or
+                              np.count_nonzero(lbin == label) > 0.5 * bincounts[label])]
+            if not linelabels:
+                return
+            num_regions += 1
+            if debug: LOG.debug('new region {} for lines {}'.format(num_regions, linelabels))
+            else:
+                LOG.debug('new region %d for %d lines', num_regions, len(linelabels))
+            relabel[linelabels] = num_regions
+        
+        _, lcounts = np.unique(lbin, return_counts=True)
+        if (len(lcounts) <= 2 or
+            sum(1 for count in lcounts if count > scale) <= 2):
+            # only one label plus background left
+            finalize()
+            return
+        
+        # try cuts via annotated separators (strong integration)
+        # i.e. does current slice of sepmask contain true partitions?
+        # (at least 2 partitions which contain at least 1 significant line label each)
+        partitions, npartitions = None, 0
+        if (isinstance(sepmask, np.ndarray) and
+            np.count_nonzero(sepmask)):
+            sepm = sl.cut(sepmask, box)
+            if isinstance(mask, np.ndarray):
+                sepm = np.where(mask, sepm, 1)
+            if is_partition:
+                # sepmask already applied in current X-Y branch:
+                # don't try again, but provide `partitions` for next step
+                partitions, npartitions = 1-sepm, 1
+            else:
+                # sepmask already applied in higher X-Y branch:
+                # apply again in this cut like another separator
+                partitions, npartitions = morph.label(1-sepm)
+                if npartitions > 1:
+                    # delete partitions that have no significant line labels
+                    lpartitions = [None]
+                    for label in range(1, npartitions+1):
+                        linelabels = np.bincount(lbin[partitions==label], minlength=len(objects))
+                        linelabels[0] = 0 # without bg
+                        # get significant line labels for this partition
+                        # (but keep insignificant non-empty labels when complete)
+                        linelabels = np.nonzero(linelabels >= np.minimum(
+                            np.maximum(bincounts, 1), min_line * scale))[0]
+                        if np.any(linelabels):
+                            lpartitions.append(linelabels)
+                            if debug: LOG.debug('  sepmask partition %d: %s', label, str(linelabels))
+                        else:
+                            lpartitions.append(None)
+                            partitions[partitions==label] = 0
+                    # merge partitions that share any significant line labels
+                    for label1 in range(1, npartitions+1):
+                        if lpartitions[label1] is None:
+                            continue
+                        for label2 in range(label1+1, npartitions+1):
+                            if lpartitions[label2] is None:
+                                continue
+                            if np.any(np.intersect1d(lpartitions[label1],
+                                                     lpartitions[label2])):
+                                partitions[partitions==label2] = label1
+                                lpartitions[label1] = np.union1d(lpartitions[label1],
+                                                                 lpartitions[label2])
+                                lpartitions[label2] = [0]
+                    # re-label and re-order surviving partitions
+                    lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
+                    npartitions = len(lpartitions)
+                    if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
+                    if npartitions > 1:
+                        # sort partitions in reading order
+                        order = morph.reading_order(partitions,rl,bt)
+                        partitions = order[partitions]
+                        lpartitions = order[lpartitions]
+        
+        # try cuts via h/v projection profiles
+        y = np.mean(lbin>0, axis=1)
+        x = np.mean(lbin>0, axis=0)
+        # smoothed to avoid splitting valleys into gorges due to noise
+        y = filters.gaussian_filter(y, scale/4)
+        x = filters.gaussian_filter(x, scale/4)
+        if debug:
+            # show current cut/box inside full image
+            llab = relabel[llabels]
+            llab = np.where(llab, llab, llabels)
+            if isinstance(mask, np.ndarray):
+                llab[box] = np.where(mask, lbinary[box], 0)
+            else:
+                llab[box] = lbinary[box]
+            # show projection at the sides
+            for i in range(int(scale/2)):
+                llab[box[0],box[1].start+i] = -10*np.log(y+1e-9)
+                llab[box[0],box[1].stop-1-i] = -10*np.log(y+1e-9)
+                llab[box[0].start+i,box[1]] = -10*np.log(x+1e-9)
+                llab[box[0].stop-1-i,box[1]] = -10*np.log(x+1e-9)
+            DSAVE('recursive_x_y_cut' + ('_masked' if is_partition else ''), llab)
+        gap_weights = list()
+        for is_horizontal, profile in enumerate([y, x]):
+            # find gaps in projection profiles
+            # (measured as product of height and width,
+            #  because we want robustness against noise)
+            gaps, props = signal.find_peaks(
+                # negative because we want minima
+                -profile,
+                # tolerate minimal noise
+                height=-gap_height,
+                # at least 2 average lines (or equivalently,
+                # 1 large heading) in between: only best peaks
+                distance=4*scale, # (but SciPy seems to have bug in peak discounting)
+                # width should be derived from training on GT,
+                # cf. Sylwester&Seth (1998): A trainable, single-pass algorithm for column segmentation
+                width=gap_width*scale,
+                # 'width' begins/ends at this share of height over base
+                # (the smaller it becomes, the harder it is to meet the width threshold)
+                rel_height=0.20)
+            weights = props['widths']
+            if gap_height:
+                # when non-zero valleys are allowed, multiply width by penalty
+                # e.g. log height (a height of 0.015 would become factor 0.20)
+                #weights = weights * np.log(1e-9 - props['peak_heights'])/np.log(1e-9)
+                # e.g. normalized linear (marginal gap_height would become 0.5)
+                weights = weights * (1 + 0.5 * props['peak_heights']/gap_height)
+            gap_weights.append((gaps, weights))
+            if debug:
+                LOG.debug('  {} gaps {} {} weights {}'.format(
+                    'horizontal' if is_horizontal else 'vertical',
+                    gaps, props, weights))
+                if not gaps.shape[0]:
+                    continue
+                for start, stop, height in sorted(zip(
+                        props['left_ips'].astype(np.int),
+                        props['right_ips'].astype(np.int),
+                        props['peak_heights']), key=lambda x: x[2]):
+                    if is_horizontal:
+                        llab[box[0].start+int(scale/2):box[0].stop-int(scale/2),box[1].start+start:box[1].start+stop] = -10*np.log(-height+1e-9)
+                    else:
+                        llab[box[0].start+start:box[0].start+stop,box[1].start+int(scale/2):box[1].stop-int(scale/2)] = -10*np.log(-height+1e-9)
+                DSAVE('recursive_x_y_cut_gaps_' + ('h' if is_horizontal else 'v'), llab)
+        # heuristic (not strict) decision on x or y cut,
+        # factors to consider:
+        # - number of minima [not used]
+        # - width of minima
+        # - height of minima
+        # - (if sepmask is given:) number of partitions created
+        # principles to uphold (when uncertain):
+        # - for tables, prefer horizontal cuts - for "cell" like
+        #   reading order (applied via ``prefer_vertical=False``
+        #   when segmenting table regions)
+        # - for text, prefer vertical cuts - for "paragraph" like
+        #   reading order (applied via ``prefer_vertical=True``
+        #   when segmenting full pages)
+        # - generally, prefer most prominent direction, which
+        #   will implicitly alternate between h and v cuts --
+        #   when largest gap weight in less prominent direction
+        #   becomes much larger than second-largest in prominent
+        #   direction after cutting at largest gap there
+        # - within each direction, only the largest and/or
+        #   most partitioning gaps win (the others will have to
+        #   wait re-appearing in a lower-level cut)
+        # - cuts which would split line labels significantly
+        #   are not allowed
+        y_gaps, y_weights = gap_weights[0][0], gap_weights[0][1]
+        x_gaps, x_weights = gap_weights[1][0], gap_weights[1][1]
+        if debug: LOG.debug('   all y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        # suppress cuts that significantly split any line labels
+        y_allowed = [not(np.any(np.intersect1d(
+            # significant line labels above
+            np.nonzero(np.bincount(lbin[:gap,:].flatten(),
+                                   minlength=len(objects))[1:] > min_line * scale)[0],
+            # significant line labels below
+            np.nonzero(np.bincount(lbin[gap:,:].flatten(),
+                                   minlength=len(objects))[1:] > min_line * scale)[0],
+            assume_unique=True)))
+                        for gap in y_gaps]
+        x_allowed = [not(np.any(np.intersect1d(
+            # significant line labels left
+            np.nonzero(np.bincount(lbin[:,:gap].flatten(),
+                                   minlength=len(objects))[1:] > min_line * scale)[0],
+            # significant line labels right
+            np.nonzero(np.bincount(lbin[:,gap:].flatten(),
+                                   minlength=len(objects))[1:] > min_line * scale)[0],
+            assume_unique=True)))
+                        for gap in x_gaps]
+        y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
+        x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
+        if debug: LOG.debug('   allowed y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        y_prominence = np.amax(y_weights, initial=0)
+        x_prominence = np.amax(x_weights, initial=0)
+        if debug: LOG.debug('   y_prominence {} x_prominence {}'.format(y_prominence, x_prominence))
+        # suppress less prominent peaks (another heuristic...)
+        # they must compete with the other direction next time
+        # (when already new cuts or partitions will become visible)
+        y_allowed = y_weights > 0.8 * y_prominence
+        x_allowed = x_weights > 0.8 * x_prominence
+        y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
+        x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
+        if debug: LOG.debug('   prominent y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        if (isinstance(sepmask, np.ndarray) and
+            np.count_nonzero(sepmask)):
+            # TODO this can be avoided when backtracking below
+            # suppress peaks creating fewer partitions than others --
+            # how large in our preferred direction will the new partitions
+            # of sepmask in both slices created by each cut candidate
+            # add up?
+            y_partitionscores = [sum(map(sl.height if prefer_vertical else sl.width,
+                                         morph.find_objects(morph.label(
+                                             partitions[:gap,:]>0)[0]) +
+                                         morph.find_objects(morph.label(
+                                             partitions[gap:,:]>0)[0])))
+                                 for gap in y_gaps]
+            x_partitionscores = [sum(map(sl.height if prefer_vertical else sl.width,
+                                         morph.find_objects(morph.label(
+                                             partitions[:,:gap]>0)[0]) +
+                                         morph.find_objects(morph.label(
+                                             partitions[:,gap:]>0)[0])))
+                                 for gap in x_gaps]
+            if debug: LOG.debug('   y_partitionscores {} x_partitionscores {}'.format(
+                    y_partitionscores, x_partitionscores))
+            # Now identify those gaps with the largest overall score
+            y_allowed = y_partitionscores == np.max(y_partitionscores, initial=0)
+            x_allowed = x_partitionscores == np.max(x_partitionscores, initial=0)
+            y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
+            x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
+            if debug: LOG.debug('   most partitioning y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        # suppress less prominent peaks again, this time stricter
+        y_prominence = np.amax(y_weights, initial=0)
+        x_prominence = np.amax(x_weights, initial=0)
+        y_allowed = y_weights > 0.9 * y_prominence
+        x_allowed = x_weights > 0.9 * x_prominence
+        y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
+        x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
+        if debug: LOG.debug('   prominent y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        
+        # decide which direction, x or y
+        # TODO: this most likely needs a backtracking mechanism
+        # (not just h vs v, but also all cuts at once or just some)
+        # But:
+        # - How to avoid combinatorial explosion?
+        # - How to measure quality of different results?
+        #   (e.g. log-sum of all cuts to favour longer h or longer v cuts)
+        if prefer_vertical is None:
+            choose_vertical = y_prominence < x_prominence
+        elif prefer_vertical:
+            # for text, column gaps may be arbitrarily narrow;
+            # choose horizontal cut iff vertical/y profile has
+            # much higher/wider gaps (or other has none)
+            choose_vertical = y_prominence < 5 * x_prominence
+        else:
+            # for tables, column gaps may be arbitrarily wide;
+            # choose vertical cut iff horizontal/x profile has
+            # much higher/wider gaps (or other has none)
+            choose_vertical = y_prominence * 10 < x_prominence
+        if choose_vertical:
+            # do vertical cuts (multiple columns)
+            gaps = x_gaps
+            prominence = x_prominence
+            partitionscores = x_partitionscores
+            lim = len(x)
+        else:
+            # do horizontal cuts (multiple rows)
+            gaps = y_gaps
+            prominence = y_prominence
+            partitionscores = y_partitionscores
+            lim = len(y)
+
+        # now that we have a decision on direction (x/y)
+        # as well as scores for its gaps, decide whether
+        # to prefer cuts at annotated separators (partitions) instead
+        prominent = 2*gap_width*scale # another heuristic...
+        if (npartitions > 1 and (
+                # gaps are not prominent
+                prominence < prominent or
+                # fewer good gaps survived than partitions
+                npartitions > len(gaps)+1 or
+                # partitions without the cut still score better than after
+                sum(map(sl.height if prefer_vertical else sl.width,
+                        (morph.find_objects(partitions)))) > np.max(
+                            partitionscores, initial=0))):
+            # continue on each partition by suppressing the others
+            LOG.debug('cutting by %d partitions on %s', npartitions, box)
+            if debug:
+                # show current cut/box inside full image
+                llab2 = relabel[llabels]
+                llab2 = np.where(llab2, llab2, llabels)
+                if isinstance(mask, np.ndarray):
+                    llab2[box] = np.where(mask, partitions, 0)
+                else:
+                    llab2[box] = partitions
+                DSAVE('recursive_x_y_cut_partitions', llab2)
+            for label in range(1, npartitions+1):
+                LOG.debug('next partition %d on %s', label, box)
+                recursive_x_y_cut(box, mask=partitions==label, is_partition=True)
+            return
+        
+        if not np.any(gaps):
+            # no gaps left
+            finalize()
+            return
+        # otherwise: cut on gaps
+        LOG.debug('cutting %s on %s into %s', 'vertically'
+                  if choose_vertical else 'horizontally',
+                  box, gaps)
+        cuts = list(zip(np.insert(gaps, 0, 0), np.append(gaps, lim)))
+        if choose_vertical:
+            if rl:
+                cuts = reversed(cuts)
+        else:
+            if bt:
+                cuts = reversed(cuts)
+        for start, stop in cuts:
+            #box[1*choose_vertical] ... dim to cut in
+            #box[1-choose_vertical] ... dim to range over
+            if choose_vertical:
+                sub = sl.box(0, len(y), start, stop)
+            else:
+                sub = sl.box(start, stop, 0, len(x))
+            LOG.debug('next %s block on %s is %s', 'vertical'
+                      if choose_vertical else 'horizontal',
+                      box, sub)
+            recursive_x_y_cut(sl.compose(box,sub),
+                              mask=sl.cut(mask,sub) if isinstance(mask, np.ndarray)
+                              else None)
+    
+    # start algorithm
+    recursive_x_y_cut(sl.bounds(llabels))
+    
+    # apply re-assignments:
+    rlabels = relabel[llabels]
+    DSAVE('rlabels', rlabels)
+    LOG.debug('closing %d regions component-wise', np.amax(relabel))
+    # close regions (label by label)
+    for region in np.unique(relabel):
+        if not region:
+            continue # ignore bg
+        # lines = np.setdiff1d(np.nonzero(relabel==region)[0], [0])
+        # if len(lines) < 2:
+        #     LOG.debug('region %d has only 1 line', region)
+        #     continue
+        # faster than morphological closing:
+        region_hull = convex_hull_image(rlabels==region)
+        rlabels[region_hull] = region
+    DSAVE('rlabels_closed', rlabels)
+    return rlabels
