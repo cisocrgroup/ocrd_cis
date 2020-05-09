@@ -305,7 +305,7 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Segment pages into regions and lines, or regions into lines with ocropy",
+			"description": "Segment pages into regions and lines, tables into cells and lines, or regions into lines with ocropy",
 			"parameters": {
 				"dpi": {
 					"type": "number",
@@ -315,8 +315,8 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "region"],
-					"description": "PAGE XML hierarchy level to read images from",
+					"enum": ["page", "table", "region"],
+					"description": "PAGE XML hierarchy level to read images from and add elements to",
 					"default": "region"
 				},
 				"maxcolseps": {
@@ -342,6 +342,11 @@
 					"format": "integer",
 					"default": 10,
 					"description": "minimum width of black/foreground horizontal separators in multiples of scale/capheight, counted piece-wise (when operating on the page level)"
+				},
+				"overwrite_separators": {
+					"type": "boolean",
+					"default": true,
+					"description": "remove any existing SeparatorRegion elements (when operating on the page level)"
 				},
 				"overwrite_regions": {
 					"type": "boolean",
