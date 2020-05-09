@@ -11,6 +11,7 @@ from scipy.ndimage import morphology,measurements,filters
 from scipy.ndimage.morphology import *
 from scipy.ndimage.interpolation import shift
 from .toplevel import *
+from . import sl
 
 @checks(ABINARY2)
 def label(image,**kw):
@@ -51,52 +52,51 @@ def check_binary(image):
 @checks(ABINARY2,uintpair)
 def r_dilation(image,size,origin=0):
     """Dilation with rectangular structuring element using maximum_filter"""
-    return filters.maximum_filter(image,size,origin=origin)
+    return filters.maximum_filter(image,size,origin=(size[0]%2-1,size[1]%2-1))
 
 @checks(ABINARY2,uintpair)
-def r_erosion(image,size,origin=0):
+def r_erosion(image,size,origin=-1):
     """Erosion with rectangular structuring element using maximum_filter"""
-    return filters.minimum_filter(image,size,origin=origin, mode='constant', cval=1)
+    return filters.minimum_filter(image,size,origin=0, mode='constant', cval=1)
 
 @checks(ABINARY2,uintpair)
 def r_opening(image,size,origin=0):
     """Opening with rectangular structuring element using maximum/minimum filter"""
-    check_binary(image)
-    image = r_erosion(image,size,origin=origin)
-    return r_dilation(image,size,origin=origin)
+    image = r_erosion(image,size,origin=0)
+    return r_dilation(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def r_closing(image,size,origin=0):
     """Closing with rectangular structuring element using maximum/minimum filter"""
-    check_binary(image)
     image = r_dilation(image,size,origin=0)
-    return r_erosion(image,size,origin=0)
+    return r_erosion(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def rb_dilation(image,size,origin=0):
     """Binary dilation using linear filters."""
     output = zeros(image.shape,'f')
-    filters.uniform_filter(image,size,output=output,origin=origin)
-    return array(output>0,'i')
+    filters.uniform_filter(image,size,output=output,origin=(size[0]%2-1,size[1]%2-1))
+    # 0 creates rounding artifacts
+    return array(output>1e-7,'i')
 
 @checks(ABINARY2,uintpair)
-def rb_erosion(image,size,origin=0):
+def rb_erosion(image,size,origin=-1):
     """Binary erosion using linear filters."""
     output = zeros(image.shape,'f')
-    filters.uniform_filter(image,size,output=output,origin=origin, mode='constant', cval=1)
+    filters.uniform_filter(image,size,output=output,origin=0, mode='constant', cval=1)
     return array(output==1,'i')
 
 @checks(ABINARY2,uintpair)
 def rb_opening(image,size,origin=0):
     """Binary opening using linear filters."""
-    image = rb_erosion(image,size,origin=origin)
-    return rb_dilation(image,size,origin=origin)
+    image = rb_erosion(image,size,origin=0)
+    return rb_dilation(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def rb_closing(image,size,origin=0):
     """Binary closing using linear filters."""
-    image = rb_dilation(image,size,origin=origin)
-    return rb_erosion(image,size,origin=origin)
+    image = rb_dilation(image,size,origin=0)
+    return rb_erosion(image,size,origin=-1)
 
 @checks(GRAYSCALE,uintpair)
 def rg_dilation(image,size,origin=0):
@@ -118,7 +118,7 @@ def rg_opening(image,size,origin=0):
 def rg_closing(image,size,origin=0):
     """Grayscale closing with maximum/minimum filters."""
     image = r_dilation(image,size,origin=0)
-    return r_erosion(image,size,origin=0)
+    return r_erosion(image,size,origin=-1)
 
 @checks(SEGMENTATION)
 def showlabels(x,n=7):
