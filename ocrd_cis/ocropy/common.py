@@ -308,14 +308,16 @@ def check_line(binary, zoom=1.0):
 
     Returns an error report, or None if valid.
     """
-    if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
+    if np.prod(binary.shape)==0: return "image dimensions are zero"
+    if len(binary.shape)==3: return "image is not monochrome %s"%(binary.shape,)
+    if np.amax(binary)==np.amin(binary): return "image is blank"
     if np.mean(binary)<np.median(binary): return "image may be inverted"
     h,w = binary.shape
     if h<20/zoom: return "image not tall enough for a text line %s"%(binary.shape,)
     if h>200/zoom: return "image too tall for a text line %s"%(binary.shape,)
     ##if w<1.5*h: return "line too short %s"%(binary.shape,)
-    if w<1.5*h and w<32/zoom: return "line too short %s"%(binary.shape,)
-    if w>4000/zoom: return "line too long %s"%(binary.shape,)
+    if w<1.5*h and w<32/zoom: return "image too short for a line image %s"%(binary.shape,)
+    if w>4000/zoom: return "image too long for a line image %s"%(binary.shape,)
     ratio = w*1.0/h
     _, ncomps = measurements.label(binary)
     lo = int(0.5*ratio+0.5)
@@ -336,13 +338,15 @@ def check_region(binary, zoom=1.0):
 
     Returns an error report, or None if valid.
     """
-    if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
+    if np.prod(binary.shape)==0: return "image dimensions are zero"
+    if len(binary.shape)==3: return "image is not monochrome %s"%(binary.shape,)
+    if np.amax(binary)==np.amin(binary): return "image is blank"
     if np.mean(binary)<np.median(binary): return "image may be inverted"
     h,w = binary.shape
     if h<60/zoom: return "image not tall enough for a region image %s"%(binary.shape,)
     if h>5000/zoom: return "image too tall for a region image %s"%(binary.shape,)
     if w<100/zoom: return "image too narrow for a region image %s"%(binary.shape,)
-    if w>5000/zoom: return "line too wide for a region image %s"%(binary.shape,)
+    if w>5000/zoom: return "image too wide for a region image %s"%(binary.shape,)
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
@@ -361,13 +365,15 @@ def check_page(binary, zoom=1.0):
 
     Returns an error report, or None if valid.
     """
-    if len(binary.shape)==3: return "input image is color image %s"%(binary.shape,)
+    if np.prod(binary.shape)==0: return "image dimensions are zero"
+    if len(binary.shape)==3: return "image not monochrome %s"%(binary.shape,)
+    if np.amax(binary)==np.amin(binary): return "image is blank"
     if np.mean(binary)<np.median(binary): return "image may be inverted"
     h,w = binary.shape
     if h<600/zoom: return "image not tall enough for a page image %s"%(binary.shape,)
     if h>10000/zoom: return "image too tall for a page image %s"%(binary.shape,)
     if w<600/zoom: return "image too narrow for a page image %s"%(binary.shape,)
-    if w>10000/zoom: return "line too wide for a page image %s"%(binary.shape,)
+    if w>10000/zoom: return "image too wide for a page image %s"%(binary.shape,)
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
@@ -647,7 +653,7 @@ def compute_gradmaps(binary, scale,
 #   and avoid bleeding into next line with horizontal dilation
 # - respect colseps early (during bottom/top marking)
 # - default vscale=2 to better handle broken fonts
-@checks(ABINARY2,AFLOAT2,AFLOAT2,SEGMENTATION,NUMBER)
+@checks(ABINARY2,AFLOAT2,AFLOAT2,ABINARY2,NUMBER)
 def compute_line_seeds(binary,bottom,top,colseps,scale,
                        threshold=0.2,
                        # use larger scale so broken/blackletter fonts with their large capitals
@@ -819,10 +825,11 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
 #   (which must be split anyway)
 # - with tighter polygonal spread around foreground
 # - return bg line and sep labels intead of just fg line labels
-#@checks(GRAYSCALE1)
-def compute_segmentation(image,
+@checks(ABINARY2)
+def compute_segmentation(binary,
                          zoom=1.0,
                          fullpage=False,
+                         seps=None,
                          maxcolseps=2,
                          maxseps=0,
                          csminheight=4,
@@ -831,7 +838,7 @@ def compute_segmentation(image,
                          check=True):
     """Find text line segmentation within a region or page.
 
-    Given a grayscale-normalized image as Numpy array ``image``, compute
+    Given a binarized (and inverted) image as Numpy array ``image``, compute
     a complete segmentation of it into text lines as a label array.
 
     If ``fullpage`` is false, then avoid single-line horizontal splits.
@@ -846,6 +853,7 @@ def compute_segmentation(image,
       ``csminheight`` multiples of ``scale``, and
     - for any number of horizontal lines of at least
       ``hlminwidth`` multiples of ``scale``,
+    - for anything in ``seps`` if given,
     then suppress these separator components and return them separately.
     
     Labels will be projected ("spread") from the foreground to the
@@ -861,25 +869,13 @@ def compute_segmentation(image,
     - the estimated scale (i.e. median sqrt bbox area of glyph components).
     """
     # FIXME generalize to multi-scale (with `scale` as group array instead of float)
-    if np.prod(image.shape) == 0:
-        raise Exception('image dimensions are zero')
-    if np.amax(image) == np.amin(image):
-        raise Exception('image is blank')
-    binary = np.array(image <= ocrolib.midrange(image), np.bool)
     DSAVE("input_binary",binary)
-    if check:
-        if fullpage:
-            report = check_page(binary, zoom)
-        else:
-            report = check_region(binary, zoom)
-        if report:
-            raise Exception(report)
     LOG.debug('estimating glyph scale')
     scale = psegutils.estimate_scale(binary, zoom)
     LOG.debug('height: %d, zoom: %.2f, scale: %d', binary.shape[0], zoom, scale)
 
     if fullpage:
-        LOG.debug('computing horizontal/vertical lines')
+        LOG.debug('computing horizontal/vertical line separators')
         hlines = compute_hlines(binary, scale, hlminwidth=hlminwidth)
         binary = np.minimum(binary,1-hlines)
         vlines = compute_separators_morph(binary, scale, csminheight=csminheight, maxseps=maxseps)
@@ -899,14 +895,18 @@ def compute_segmentation(image,
                                        maxcolseps=maxcolseps,
                                        csminheight=csminheight)
         DSAVE("colseps",0.7*colseps+0.3*binary)
+        sepmask = np.maximum(hlines, vlines)
+        sepmask = np.maximum(sepmask, colseps)
+        # suppress both (bg) boundary and (fg) line seps for textline segmentation:
+        if seps is not None:
+            DSAVE("seps",0.7*seps+0.3*binary)
+            sepmask = np.maximum(sepmask, seps)
+        sepmask = morph.r_closing(sepmask, (scale, scale))
+        DSAVE("sepmask",0.7*sepmask+0.3*binary)
     else:
         colseps = np.zeros(binary.shape, np.uint8)
+        sepmask = np.zeros(binary.shape, np.uint8)
 
-    # suppress both (bg) boundary and (fg) line seps for textline segmentation:
-    sepmask = morph.r_closing(np.maximum(colseps, np.maximum(hlines, vlines)),
-                              (scale, scale))
-    DSAVE("sepmask",0.7*sepmask+0.3*binary)
-    # prevent dilation from polluting true foreground:
     LOG.debug('computing line seeds')
     seeds = compute_line_seeds(binary, bottom, top, sepmask, scale)
     DSAVE("seeds", seeds + 0.6*binary)
@@ -976,6 +976,7 @@ def lines2regions(binary, line_labels,
         objects = morph.find_objects(line_labels)
         heights = np.array(list(map(sl.height, filter(None, objects))))
         scale = int(np.median(heights)/4)
+    LOG.debug('combining lines to regions')
     label_mask = np.array(line_labels > 0, dtype=np.bool)
     label_mask = np.pad(label_mask, scale) # protect edges
     label_mask = morph.rb_closing(label_mask, (scale, 1))

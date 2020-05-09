@@ -30,6 +30,7 @@ from .ocrolib import midrange
 from .common import (
     pil2array,
     # binarize,
+    check_region,
     compute_segmentation
     #borderclean_bin
 )
@@ -215,8 +216,11 @@ class OcropyResegment(Processor):
                 region_array = pil2array(region_image)
                 #region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
                 region_bin = np.array(region_array <= midrange(region_array), np.bool)
+                report = check_region(region_bin, zoom)
                 try:
-                    region_labels, _, _, _, _ = compute_segmentation(region_array, zoom=zoom)
+                    if report:
+                        raise Exception(report)
+                    region_labels, _, _, _, _ = compute_segmentation(region_bin, zoom=zoom)
                 except Exception as err:
                     LOG.warning('Cannot line-segment page "%s" region "%s": %s',
                                 page_id, region.id, err)
