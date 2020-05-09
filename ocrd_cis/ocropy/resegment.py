@@ -30,7 +30,7 @@ from .ocrolib import midrange
 from .common import (
     pil2array,
     # binarize,
-    compute_line_labels
+    compute_segmentation
     #borderclean_bin
 )
 
@@ -95,13 +95,13 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     max_contour = np.argmax(contour_areas)
     max_area = contour_areas[max_contour]
     total_area = cv2.contourArea(np.expand_dims(line_polygon, 1))
-    if max_area / total_area < 0.5 * threshold_relative:
-        # using a different, more conservative threshold here:
-        # avoid being overly strict with cropping background,
-        # just ensure the contours are not a split of the mask
-        LOG.info('Largest label (%d) largest contour (%d) is too small (%d/%d) in line "%s"',
-                 max_label, max_contour, max_area, total_area, line_id)
-        return None
+    # if max_area / total_area < 0.5 * threshold_relative:
+    #     # using a different, more conservative threshold here:
+    #     # avoid being overly strict with cropping background,
+    #     # just ensure the contours are not a split of the mask
+    #     LOG.info('Largest label (%d) largest contour (%d) is too small (%d/%d) in line "%s"',
+    #              max_label, max_contour, max_area, total_area, line_id)
+    #     return None
     contour = contours[max_contour]
     # simplify shape:
     # can produce invalid (self-intersecting) polygons:
@@ -214,9 +214,9 @@ class OcropyResegment(Processor):
                     region, page_image, page_xywh, feature_selector='binarized')
                 region_array = pil2array(region_image)
                 #region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
-                region_bin = np.array(region_array <= midrange(region_array), np.uint8)
+                region_bin = np.array(region_array <= midrange(region_array), np.bool)
                 try:
-                    region_labels, _, _, _ = compute_line_labels(region_array, zoom=zoom)
+                    region_labels, _, _, _, _ = compute_segmentation(region_array, zoom=zoom)
                 except Exception as err:
                     LOG.warning('Cannot line-segment page "%s" region "%s": %s',
                                 page_id, region.id, err)
