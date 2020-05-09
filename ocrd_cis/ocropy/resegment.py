@@ -108,7 +108,7 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     # can produce invalid (self-intersecting) polygons:
     #polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
     polygon = contour[:, 0, ::] # already ordered x,y
-    polygon = Polygon(polygon).simplify(2).exterior.coords
+    polygon = Polygon(polygon).simplify(2).exterior.coords[:-1] # keep open
     if len(polygon) < 4:
         LOG.warning('found no contour of >=4 points for line "%s"', line_id)
         return None
