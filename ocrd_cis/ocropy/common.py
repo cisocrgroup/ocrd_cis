@@ -88,14 +88,22 @@ def estimate_skew_angle(image, angles, min_factor=1.5):
     estimates = np.zeros_like(angles)
     varmax = 0
     for i, a in enumerate(angles):
-        v = np.mean(interpolation.rotate(image, a, order=0, mode='constant'), axis=1)
+        #rotated = interpolation.rotate(image, a, order=0, mode='constant')
+        # *much* faster (by an order of magnitude):
+        rotated = np.array(Image.fromarray(image).rotate(
+            # (BILINEAR would be equivalent to above, but only 4x as fast)
+            a, expand=True, resample=Image.NEAREST))
+        v = np.mean(rotated, axis=1)
         v = np.var(v)
         estimates[i] = v
         if v > varmax:
             varmax = v
-    # only return the angle of the largest entropy,
-    # if it is considerably larger than the average:
-    if varmax and varmax / np.mean(estimates) > min_factor:
+    # only return the angle of the largest entropy
+    # if it is considerably larger than the average
+    varavg = np.mean(estimates)
+    LOG.debug('estimate skew angle: min(angle)=%.1f° max(angle)=%.1f° max(var)=%.2g avg(var)=%.2g',
+              np.min(angles), np.max(angles), varmax, varavg)
+    if varmax and varmax / varavg > min_factor:
         return angles[np.argmax(estimates)]
     else:
         return 0
@@ -105,6 +113,7 @@ def estimate_skew(flat, bignore=0.1, maxskew=2, skewsteps=8):
     '''estimate skew angle and rotate'''
     d0, d1 = flat.shape
     o0, o1 = int(bignore * d0), int(bignore * d1) # border ignore
+    # invert
     flat = np.amax(flat) - flat
     #flat -= np.amin(flat)
     est = flat[o0:d0 - o0, o1:d1 - o1]
@@ -119,7 +128,11 @@ def estimate_skew(flat, bignore=0.1, maxskew=2, skewsteps=8):
     # (but this also means that consumers of the AlternativeImage must
     #  offset coordinates by half the increased width/height besides
     #  correcting for rotation in the coordinates):
-    flat = interpolation.rotate(flat, angle, mode='constant', reshape=True)
+    #flat = interpolation.rotate(flat, angle, mode='constant', reshape=True)
+    # *much* faster:
+    flat = np.array(Image.fromarray(flat).rotate(
+            angle, expand=True, resample=Image.BICUBIC)) / 255.0
+    # invert back
     flat = np.amax(flat) - flat
     return flat, angle
 
