@@ -144,9 +144,10 @@ class OcropySegment(Processor):
                                      Label=[LabelType(type_=name,
                                                       value=self.parameter[name])
                                             for name in self.parameter.keys()])]))
-                
+            
+            # TODO: also allow grayscale_normalized (try/except?)
             page_image, page_xywh, page_image_info = self.workspace.image_from_page(
-                page, page_id)
+                page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
                 zoom = 300.0/self.parameter['dpi']
             elif page_image_info.resolution != 1:
@@ -178,8 +179,9 @@ class OcropySegment(Processor):
                             region.set_TextLine([])
                         else:
                             LOG.warning('keeping existing TextLines in page "%s" region "%s"', page_id, region.id)
+                    # TODO: also allow grayscale_normalized (try/except?)
                     region_image, region_xywh = self.workspace.image_from_segment(
-                        region, page_image, page_xywh)
+                        region, page_image, page_xywh, feature_selector='binarized')
                     self._process_element(region, region_image, region_xywh, region.id, zoom)
 
             # update METS (add the PAGE file):
@@ -204,14 +206,13 @@ class OcropySegment(Processor):
 
         Given a PageType or TextRegionType ``element``, and a corresponding
         PIL.Image object ``image`` with its bounding box ``xywh``, run
-        ad-hoc binarization with Ocropy on the image (in case it was still
-        raw), then a line segmentation with Ocropy. If operating on the
-        full page, aggregate lines to regions. Add the resulting sub-segments
-        to the parent ``element``.
+        line segmentation with Ocropy.
+        If operating on the full page (or table), aggregate lines to regions,
+        and also detect horizontal and vertical separators.
+        Add the resulting sub-segments to the parent ``element``.
         """
-        # ad-hoc binarization:
         element_array = pil2array(image)
-        element_array, _ = common.binarize(element_array, maxskew=0) # just in case still raw
+        #element_array, _ = common.binarize(element_array, maxskew=0) # just in case still raw
         element_bin = np.array(element_array <= midrange(element_array), np.uint8)
         try:
             line_labels, hlines, vlines, colseps = compute_line_labels(
