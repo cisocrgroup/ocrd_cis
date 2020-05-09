@@ -20,14 +20,15 @@ def binary_objects(binary):
     objects = morph.find_objects(labels)
     return objects
 
-def estimate_scale(binary):
+@checks(ABINARY2)
+def estimate_scale(binary, zoom=1.0):
     objects = binary_objects(binary)
     bysize = sorted(objects,key=sl.area)
     scalemap = np.zeros(binary.shape)
     for o in bysize:
         if np.amax(scalemap[o])>0: continue
         scalemap[o] = sl.area(o)**0.5
-    scale = np.median(scalemap[(scalemap>3)&(scalemap<100)])
+    scale = np.median(scalemap[(scalemap>3/zoom)&(scalemap<100/zoom)])
     return scale
 
 def compute_boxmap(binary,scale,threshold=(.5,4),dtype='i'):
