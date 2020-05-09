@@ -31,13 +31,18 @@ def estimate_scale(binary, zoom=1.0):
     scale = np.median(scalemap[(scalemap>3/zoom)&(scalemap<100/zoom)])
     return scale
 
+@checks(ABINARY2,NUMBER)
 def compute_boxmap(binary,scale,threshold=(.5,4),dtype='i'):
     objects = binary_objects(binary)
     bysize = sorted(objects,key=sl.area)
     boxmap = np.zeros(binary.shape,dtype)
-    for o in bysize:
-        if sl.area(o)**.5<threshold[0]*scale: continue
-        if sl.area(o)**.5>threshold[1]*scale: continue
+    for o in reversed(bysize):
+        if sl.area(o)**.5<threshold[0]*scale:
+            # only too small boxes (noise) from here on
+            break
+        if sl.area(o)**.5>threshold[1]*scale:
+            # ignore too large box
+            continue
         boxmap[o] = 1
     return boxmap
 

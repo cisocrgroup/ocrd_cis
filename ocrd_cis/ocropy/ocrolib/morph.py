@@ -9,6 +9,7 @@ import pylab
 from pylab import *
 from scipy.ndimage import morphology,measurements,filters
 from scipy.ndimage.morphology import *
+from scipy.ndimage.interpolation import shift
 from .toplevel import *
 
 @checks(ABINARY2)
@@ -228,19 +229,20 @@ def select_regions(binary,f,min=0,nbest=100000):
     return keep[labels]
 
 @checks(SEGMENTATION)
-def all_neighbors(image):
+def all_neighbors(image, dist=1, bg=NaN):
     """Given an image with labels, find all pairs of labels
-    that are directly neighboring each other."""
+    that are directly (up to ``dist``) neighboring each other, ignoring the label ``bg``."""
     q = 100000
     assert amax(image)<q
     assert amin(image)>=0
-    u = unique(q*image+roll(image,1,0))
-    d = unique(q*image+roll(image,-1,0))
-    l = unique(q*image+roll(image,1,1))
-    r = unique(q*image+roll(image,-1,1))
+    u = unique(q*image+shift(image,(dist,0),order=0,cval=bg))
+    d = unique(q*image+shift(image,(-dist,0),order=0,cval=bg))
+    l = unique(q*image+shift(image,(dist,dist),order=0,cval=bg))
+    r = unique(q*image+shift(image,(-dist,dist),order=0,cval=bg))
     all = unique(r_[u,d,l,r])
+    all = all[all!=bg]
     all = c_[all//q,all%q]
-    all = unique(array([sorted(x) for x in all]))
+    all = unique(array([sorted(x) for x in all]), axis=0)
     return all
 
 ################################################################
@@ -249,8 +251,8 @@ def all_neighbors(image):
 
 @checks(SEGMENTATION)
 def renumber_labels_ordered(a,correspondence=0):
-    """Renumber the labels of the input array in numerical order so
-    that they are arranged from 1...N"""
+    """Renumber the labels of the input array contiguously so
+    that they range from 1...N"""
     assert amin(a)>=0
     assert amax(a)<=2**25
     labels = sorted(unique(ravel(a)))
