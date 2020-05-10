@@ -6,9 +6,8 @@
 
 from numpy import *
 import pylab
-from pylab import *
-from scipy.ndimage import morphology,measurements,filters
-from scipy.ndimage.morphology import *
+#from scipy.ndimage import morphology,measurements,filters
+from scipy.ndimage import measurements
 from scipy.ndimage.interpolation import shift
 import cv2
 from .toplevel import *

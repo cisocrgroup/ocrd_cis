@@ -276,12 +276,7 @@ class OcropySegment(Processor):
                     else:
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
                         ignore.extend(regions)
-                if not ro:
-                    ro = ReadingOrderType()
-                    page.set_ReadingOrder(ro)
                 # create reading order if necessary
-                reading_order = dict()
-                ro = page.get_ReadingOrder()
                 if not ro:
                     ro = ReadingOrderType()
                     page.set_ReadingOrder(ro)
@@ -563,22 +558,22 @@ class OcropySegment(Processor):
                                                    min_area=640/zoom/zoom)
                     # create new lines in new regions
                     line_polys = [Polygon(polygon) for _, polygon in line_polygons]
-                    for region_no, (_, polygon) in enumerate(region_polygons, region_no+1):
-                        region_poly = prep(Polygon(polygon))
+                    for region_no, (_, region_polygon) in enumerate(region_polygons, region_no+1):
+                        region_poly = prep(Polygon(region_polygon))
                         # convert back to absolute (page) coordinates:
-                        region_polygon = coordinates_for_segment(polygon, image, coords)
+                        region_polygon = coordinates_for_segment(region_polygon, image, coords)
                         # annotate result:
                         region_id = element_id + "_region%04d" % region_no
                         LOG.debug('Region label %d becomes ID "%s"', region_label, region_id)
                         region = TextRegionType(id=region_id, Coords=CoordsType(
                             points=points_from_polygon(region_polygon)))
                         # find out which line (contours) belong to which region (contours)
-                        for line_no, (line_label, polygon) in enumerate(line_polygons):
+                        for line_no, (line_label, line_polygon) in enumerate(line_polygons):
                             line_poly = line_polys[line_no]
                             if not region_poly.intersects(line_poly): # contains
                                 continue
                             # convert back to absolute (page) coordinates:
-                            line_polygon = coordinates_for_segment(polygon, image, coords)
+                            line_polygon = coordinates_for_segment(line_polygon, image, coords)
                             # annotate result:
                             line_id = region_id + "_line%04d" % line_no
                             LOG.debug('Line label %d becomes ID "%s"', line_label, line_id)

@@ -456,9 +456,9 @@ def compute_images(binary, scale, maximages=5):
     
     Returns a same-size bool array as a mask image.
     """
-    d0 = odd(max(2,scale/5))
-    d1 = odd(max(2,scale/8))
     images = binary
+    # d0 = odd(max(2,scale/5))
+    # d1 = odd(max(2,scale/8))
     # 1- close a little to reconnect components that have been
     #   noisily binarized
     #images = morph.rb_closing(images, (d0,d1))
@@ -1300,14 +1300,14 @@ def lines2regions(binary, llabels,
                                                                  lpartitions[label2])
                                 lpartitions[label2] = [0]
                     # re-label and re-order surviving partitions
-                    lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
+                    #lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
                     npartitions = len(lpartitions)
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
                     if npartitions > 1:
                         # sort partitions in reading order
                         order = morph.reading_order(partitions,rl,bt)
                         partitions = order[partitions]
-                        lpartitions = order[lpartitions]
+                        #lpartitions = order[lpartitions]
         
         # try cuts via h/v projection profiles
         y = np.mean(lbin>0, axis=1)

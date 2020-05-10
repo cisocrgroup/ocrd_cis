@@ -25,7 +25,6 @@ from ocrd_utils import (
 )
 
 from .. import get_ocrd_tool
-from . import common
 from .ocrolib import midrange
 from .common import (
     pil2array,
@@ -96,13 +95,12 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     max_contour = np.argmax(contour_areas)
     max_area = contour_areas[max_contour]
     total_area = cv2.contourArea(np.expand_dims(line_polygon, 1))
-    # if max_area / total_area < 0.5 * threshold_relative:
-    #     # using a different, more conservative threshold here:
-    #     # avoid being overly strict with cropping background,
-    #     # just ensure the contours are not a split of the mask
-    #     LOG.info('Largest label (%d) largest contour (%d) is too small (%d/%d) in line "%s"',
-    #              max_label, max_contour, max_area, total_area, line_id)
-    #     return None
+    if max_area / total_area < 0.5 * threshold_relative:
+        # using a different, more conservative threshold here:
+        # avoid being overly strict with cropping background,
+        # just ensure the contours are not a split of the mask
+        LOG.warning('Largest label (%d) largest contour (%d) is small (%d/%d) in line "%s"',
+                    max_label, max_contour, max_area, total_area, line_id)
     contour = contours[max_contour]
     # simplify shape:
     # can produce invalid (self-intersecting) polygons:
