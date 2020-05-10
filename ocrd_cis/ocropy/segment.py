@@ -523,7 +523,8 @@ class OcropySegment(Processor):
                         if line_label <= len(ignore):
                             # existing region from `ignore` merely to be ordered
                             # (no new region, no actual text line)
-                            index = page_add_to_reading_order(rogroup, ignore[line_label-1].id, index)
+                            if rogroup:
+                                index = page_add_to_reading_order(rogroup, ignore[line_label-1].id, index)
                             LOG.debug('Region label %d line label %d is for ignored region "%s"',
                                       region_label, line_label, ignore[line_label-1].id)
                         else:
@@ -545,7 +546,8 @@ class OcropySegment(Processor):
                                 element.add_TextRegion(region)
                                 LOG.info('Added region "%s" with 1 line for %s "%s"',
                                          region_id, element_name, element_id)
-                                index = page_add_to_reading_order(rogroup, region.id, index)
+                                if rogroup:
+                                    index = page_add_to_reading_order(rogroup, region.id, index)
                 else:
                     # normal case: new lines inside new regions
                     # find contours for region (can be non-contiguous)
@@ -584,7 +586,8 @@ class OcropySegment(Processor):
                             element.add_TextRegion(region)
                             LOG.info('Added region "%s" with %d lines for %s "%s"',
                                      region_id, len(line_polygons), element_name, element_id)
-                            index = page_add_to_reading_order(rogroup, region.id, index)
+                            if rogroup:
+                                index = page_add_to_reading_order(rogroup, region.id, index)
             # add additional image/non-text regions from compute_segmentation
             # (e.g. drop-capitals or images) ...
             image_labels, num_images = morph.label(images)
