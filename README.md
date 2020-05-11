@@ -57,6 +57,20 @@ Arguments:
  * `--log-level` set log level
  * `--mets` path to METS file in workspace
 
+As mentioned above in order to use the postcorrection with input from
+multiple OCR's, some preprocessing steps are needed: firstly the
+additional OCR recognition has to be done and secondly the multiple
+OCR's have to be aligned (you can also take a look to the function
+`ocrd_cis_align` in the [tests](tests/test_lib.bash)).  Assuming an
+original recognition as file group `OCR1` on the segmented document of
+file group `SEG`, the folloing commands can be used:
+
+```sh
+ocrd-ocropus-recognize -I SEG -O OCR2 ... # additional OCR
+ocrd-cis-align -I OCR1,OCR2 -O ALGN ... # align OCR1 and OCR2
+ocrd-cis-postcorrect -I ALGN -O PC ... # post correction
+```
+
 ### ocrd-cis-align
 Aligns tokens of multiple input file groups to one output file group.
 This tool is used to align the master OCR with any additional support
