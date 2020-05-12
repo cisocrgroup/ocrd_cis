@@ -1,5 +1,5 @@
 FROM ocrd/core:latest AS base
-ENV VERSION="Mi 9. Okt 13:26:16 CEST 2019"
+ENV VERSION="Di 12. Mai 13:26:35 CEST 2020"
 ENV GITURL="https://github.com/cisocrgroup"
 ENV DOWNLOAD_URL="http://cis.lmu.de/~finkf"
 
@@ -19,9 +19,9 @@ RUN apt-get update \
 	&& git clone ${GITURL}/Profiler --branch devel --single-branch /build \
 	&& cd /build \
 	&& cmake -DCMAKE_BUILD_TYPE=release . \
-	&& make compileFBDic trainFrequencyList profiler \
+	&& make compileFBDic trainFrequencyList runDictSearch profiler \
 	&& mkdir /apps \
-	&& cp bin/compileFBDic bin/trainFrequencyList bin/profiler /apps/ \
+	&& cp bin/compileFBDic bin/trainFrequencyList bin/profiler bin/runDictSearch /apps/ \
 	&& cd / \
     && rm -rf /build
 
@@ -29,13 +29,14 @@ FROM profiler AS languagemodel
 # install the profiler's language backend
 COPY --from=profiler /apps/compileFBDic /apps/
 COPY --from=profiler /apps/trainFrequencyList /apps/
+COPY --from=profiler /apps/runDictSearch /apps/
 RUN apt-get update \
 	&& apt-get -y install --no-install-recommends icu-devtools \
 	&& git clone ${GITURL}/Resources --branch master --single-branch /build \
 	&& cd /build/lexica \
-	&& make FBDIC=/apps/compileFBDic TRAIN=/apps/trainFrequencyList \
-	&& mkdir -p /etc/profiler/languages \
-	&& cp -r german german.ini latin latin.ini greek greek.ini /etc/profiler/languages \
+	&& PATH=$PATH:/apps make \
+	&& PATH=$PATH:/apps make test \
+	&& PATH=$PATH:/apps make install \
 	&& cd / \
 	&& rm -rf /build
 
