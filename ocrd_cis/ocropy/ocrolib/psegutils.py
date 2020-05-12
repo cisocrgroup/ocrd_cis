@@ -20,23 +20,34 @@ def binary_objects(binary):
     objects = morph.find_objects(labels)
     return objects
 
-def estimate_scale(binary):
+@checks(ABINARY2)
+def estimate_scale(binary, zoom=1.0):
     objects = binary_objects(binary)
     bysize = sorted(objects,key=sl.area)
     scalemap = np.zeros(binary.shape)
     for o in bysize:
         if np.amax(scalemap[o])>0: continue
         scalemap[o] = sl.area(o)**0.5
-    scale = np.median(scalemap[(scalemap>3)&(scalemap<100)])
-    return scale
+    scalemap = scalemap[(scalemap>3/zoom)&(scalemap<100/zoom)]
+    if np.any(scalemap):
+        return int(np.median(scalemap))
+    else:
+        # empty page (only large h/v-lines or small noise)
+        # guess! (average 10 pt font: 42 px at 300 DPI)
+        return int(42/zoom)
 
+@checks(ABINARY2,NUMBER)
 def compute_boxmap(binary,scale,threshold=(.5,4),dtype='i'):
     objects = binary_objects(binary)
     bysize = sorted(objects,key=sl.area)
     boxmap = np.zeros(binary.shape,dtype)
-    for o in bysize:
-        if sl.area(o)**.5<threshold[0]*scale: continue
-        if sl.area(o)**.5>threshold[1]*scale: continue
+    for o in reversed(bysize):
+        if sl.area(o)**.5<threshold[0]*scale:
+            # only too small boxes (noise) from here on
+            break
+        if sl.area(o)**.5>threshold[1]*scale:
+            # ignore too large box
+            continue
         boxmap[o] = 1
     return boxmap
 
@@ -118,6 +129,7 @@ def reading_order(lines,highlight=None,debug=0):
         if w[0].stop<min(u[0].start,v[0].start): return 0
         if w[0].start>max(u[0].stop,v[0].stop): return 0
         if w[1].start<u[1].stop and w[1].stop>v[1].start: return 1
+        return 0
     if highlight is not None:
         plt.clf()
         plt.title("highlight")
@@ -213,4 +225,3 @@ def rgbshow(r,g,b=None,gn=1,cn=0,ab=0,**kw):
         combo = np.abs(combo)
     if np.amin(combo)<0: print("warning: values less than zero")
     plt.imshow(np.clip(combo,0,1),**kw)
-

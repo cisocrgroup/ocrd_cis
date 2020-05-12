@@ -34,12 +34,14 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.0.0',
+        'ocrd>=2.4.0',
         'click',
         'scipy',
         'numpy>=1.17.0',
         'pillow>=6.2.0',
         'shapely',
+        'scikit-image',
+        'opencv-python-headless',
         'matplotlib>3.0.0',
         'python-Levenshtein',
         'calamari_ocr == 0.3.5'

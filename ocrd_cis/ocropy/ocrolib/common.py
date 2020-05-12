@@ -388,7 +388,7 @@ class RegionExtractor:
         b = self.objects[index]
         # print("@@@mask", index, b)
         m = self.labels[b]
-        m[m!=index] = 0
+        m[m!=index] = 0 # FIXME: This is destructive for labels!
         if margin>0: m = pad_by(m,margin)
         return array(m!=0,'B')
     def extract(self,image,index,margin=0):
@@ -454,7 +454,7 @@ def load_object(fname,zip=0,nofind=0,verbose=0):
             return pickle.load(stream, encoding='latin1')
     else:
         with open(fname,"rb") as stream:
-            unpickler = pickle.Unpickler(stream)
+            unpickler = pickle.Unpickler(stream, encoding='latin1')
             #unpickler.find_global = unpickle_find_global
             return unpickler.load()
 
