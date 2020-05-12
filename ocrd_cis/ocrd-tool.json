@@ -1,6 +1,6 @@
 {
 	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
-	"version": "0.0.7",
+	"version": "0.0.8",
 	"tools": {
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
@@ -281,6 +281,10 @@
 			"steps": [
 				"recognition/text-recognition"
 			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
+			],
 			"description": "Recognize text snippets",
 			"parameters": {
 				"model": {
@@ -387,15 +391,20 @@
 		"ocrd-cis-ocropy-train": {
 			"executable": "ocrd-cis-ocropy-train",
 			"categories": [
-				"lstm ocropy model training"
+				"Text recognition and optimization"
 			],
 			"steps": [
-				"training"
+				"recognition/text-recognition"
+			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
 			],
 			"description": "train model with ground truth from mets data",
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
+					"description": "PAGE XML hierarchy level granularity",
 					"enum": ["line", "word", "glyph"],
 					"default": "line"
 				},
@@ -404,7 +413,8 @@
 					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
 				},
 				"ntrain": {
-					"type": "integer",
+					"type": "number",
+					"format": "integer",
 					"description": "lines to train before stopping",
 					"default": 1000000
 				},
