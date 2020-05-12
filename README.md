@@ -32,6 +32,22 @@ It is possible to install `ocrd_cis` in a custom directory using
  deactivate
 ```
 
+## Profiler
+The post correction is dependent on the language
+[profiler](https://github.com/cisocrgroup/Profiler) and its laguage
+configurations to generate corrections for suspicious words.  In order
+to use the post correction a profiler with according language
+configruations have to be present on the system.  You can refer to our
+[manuals](https://github.com/cisocrgroup/Resources/tree/master/manuals)
+and our [lexical
+resources](https://github.com/cisocrgroup/Resources/tree/master/lexica)
+for more information.
+
+If you use docker you can use the preinstalled profiler from within
+the docker-container.  The profiler is installed to `/apps/profiler`
+and the language configurations lie in `/etc/profiler/languages` in
+the container image.
+
 ## Usage
 Most tools follow the [OCR-D cli
 conventions](https://ocr-d.github.io/cli).  They accept the
