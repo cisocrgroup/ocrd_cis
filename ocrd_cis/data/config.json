@@ -1,0 +1,216 @@
+{
+	"runLE": true,
+	"runDM": true,
+	"profiler": {
+		"path": "/path/to/profiler",
+		"config": "/path/to/language.ini"
+	},
+	"nOCR": 2,
+	"maxCandidates": 10,
+	"dir": "/path/to/train.dir",
+	"trigrams": "/path/to/trigrams.csv",
+	"ocropusOCRExtensions": [],
+	"ocropusImageExtension": "",
+	"filterClasses": ["deactivate"],
+	"leFeatures": [
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.TokenLengthClassFeature",
+			"name": "TokenLengthClass",
+			"short": 3,
+			"medium": 8,
+			"long": 13
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.TokenCaseClassFeature",
+			"name": "TokenCaseClass"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.TokenLengthFeature",
+			"name": "TokenLength"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MaxOCRCharacterConfidenceFeature",
+			"name": "MaxOCRConfidence"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MatchingOCRTokensFeature",
+			"name": "MatchingOCRTokens"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.LineOverlapWithMasterOCRFeature",
+			"name": "LineOverlap"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.LinePositionFeature",
+			"name": "LinePosition"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.OCRWordConfidenceFeature",
+			"name": "WordConfidence"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.HighestRankedCandidateMatchesOCRFeature",
+			"name": "HighestRankedCandidateMatches"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.HighestRankedCandidateHistoricalPatternsDistanceFeature",
+			"name": "HighestRankedCandidateHistPatternsDistance"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.HighestRankedCandidateOCRPatternsDistanceFeature",
+			"name": "HighestRankedCandidateOCRPatternsDistance"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.HighestRankedCandidateDistanceToNextFeature",
+			"name": "HighestRankedCandidateDistanceToNext"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.HighestRankedCandidateVoteWeightFeature",
+			"name": "HighestRankedCandidateVoteWeight"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.UnigramFeature",
+			"name": "UnigramOCRRelativeFrequency"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.LevenshteinDistanceFeature",
+			"name": "LevenshteinDistance",
+			"maxThreshold": 5
+		}
+	],
+	"rrFeatures": [
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.TokenLengthClassFeature",
+			"name": "TokenLengthClass",
+			"short": 3,
+			"medium": 7,
+			"long": 13
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.TokenCaseClassFeature",
+			"name": "Tokenshape",
+			"class": "Tokenshape"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.TokenLengthFeature",
+			"name": "TokenLength"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MaxCharNGramsFeature",
+			"name": "MaxCharTrigram"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MinCharNGramsFeature",
+			"name": "MinCharTrigram"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MaxOCRCharacterConfidenceFeature",
+			"name": "MaxOCRConfidence"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MatchingOCRTokensFeature",
+			"name": "MatchingOCRTokens"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.LineOverlapWithMasterOCRFeature",
+			"name": "LineOverlap"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.LinePositionFeature",
+			"name": "LinePosition"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.OCRWordConfidenceFeature",
+			"name": "WordConfidence"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateCaseClassFeature",
+			"name": "CandidateCaseClass"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateHistoricalPatternsDistanceFeature",
+			"name": "CandidateHistoricalPatternsDistance"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateLengthClassFeature",
+			"name": "CandidateLengthClass",
+			"short": 3,
+			"medium": 8,
+			"long": 13
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateLengthFeature",
+			"name": "CandidateLength"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateMatchesOCRTokenFeature",
+			"name": "CandidateMatchesOCR"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateMatchingOCRsFeature",
+			"name": "CandidateMatchingOCRs"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateMaxCharNGramsFeature",
+			"name": "CandidateMaxCharNGram"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateMinCharNGramsFeature",
+			"name": "CandidateMinCharNGram"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateMaxHistoricalPatternConfidenceFeature",
+			"name": "CandidateMaxHistoricalPatternConfidence"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateMinHistoricalPatternConfidenceFeature",
+			"name": "CandidateMinHistoricalPatternConfidence"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateVoteWeightFeature",
+			"name": "CandidateVoteWeight"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateUnigramFeature",
+			"name": "CandidateUnigram"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.UnigramFeature",
+			"name": "UnigramOCRRelativeFrequency"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateOCRPatternConfidenceFeature",
+			"name": "CandidateOCRPatternConfidenceFeature",
+			"classes": ["deactivate"]
+		}
+	],
+	"dmFeatures": [
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.DMBestRankFeature",
+			"name": "BestRank"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.DMDifferenceToNextRankFeature",
+			"name": "BestRankDifferenceToNext"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateVoteWeightFeature",
+			"name": "CandidateVoteWeight"
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.CandidateOCRPatternConfidenceFeature",
+			"name": "OCRPatternConfidenceFeature",
+			"classes": ["deactivate"]
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.MinOCRCharacterConfidenceFeature",
+			"name": "MinOCRCharacterConfidence",
+			"classes": ["deactivate"]
+		},
+		{
+			"type": "de.lmu.cis.ocrd.ml.features.AverageOCRCharacterConfidenceFeature",
+			"name": "AverageOCRCharacterConfidence",
+			"classes": ["deactivate"]
+		}
+	]
+}

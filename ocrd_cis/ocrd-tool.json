@@ -1,6 +1,6 @@
 {
 	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
-	"version": "0.0.7",
+	"version": "0.0.8",
 	"tools": {
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
@@ -281,6 +281,10 @@
 			"steps": [
 				"recognition/text-recognition"
 			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
+			],
 			"description": "Recognize text snippets",
 			"parameters": {
 				"model": {
@@ -387,15 +391,20 @@
 		"ocrd-cis-ocropy-train": {
 			"executable": "ocrd-cis-ocropy-train",
 			"categories": [
-				"lstm ocropy model training"
+				"Text recognition and optimization"
 			],
 			"steps": [
-				"training"
+				"recognition/text-recognition"
+			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
 			],
 			"description": "train model with ground truth from mets data",
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
+					"description": "PAGE XML hierarchy level granularity",
 					"enum": ["line", "word", "glyph"],
 					"default": "line"
 				},
@@ -404,7 +413,8 @@
 					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
 				},
 				"ntrain": {
-					"type": "integer",
+					"type": "number",
+					"format": "integer",
 					"description": "lines to train before stopping",
 					"default": 1000000
 				},
@@ -420,316 +430,65 @@
 				"Text recognition and optimization"
 			],
 			"steps": [
-				"postprocessing/alignment"
+				"recognition/post-correction"
+			],
+			"input_file_grp": [
+				"OCR-D-OCR-1",
+				"OCR-D-OCR-2",
+				"OCR-D-OCR-N"
+			],
+			"output_file_grp": [
+				"OCR-D-ALIGNED"
 			],
 			"description": "Align multiple OCRs and/or GTs"
 		},
-		"ocrd-cis-wer": {
-			"executable": "ocrd-cis-wer",
-			"categories": [
-				"evaluation"
-			],
-			"steps": [
-				"evaluation"
-			],
-			"description": "calculate the word error rate for aligned page xml files",
-			"parameters": {
-				"testIndex": {
-					"description": "text equiv index for the test/ocr tokens",
-					"type": "integer",
-					"default": 0
-				},
-				"gtIndex": {
-					"type": "integer",
-					"description": "text equiv index for the gt tokens",
-					"default": -1
-				}
-			}
-		},
-		"ocrd-cis-jar": {
-			"executable": "ocrd-cis-jar",
+		"ocrd-cis-postcorrect": {
+			"executable": "ocrd-cis-postcorrect",
 			"categories": [
 				"Text recognition and optimization"
 			],
 			"steps": [
-				"postprocessing/alignment"
-			],
-			"description": "Output path to the ocrd-cis.jar file"
-		},
-		"ocrd-cis-profile": {
-			"executable": "ocrd-cis-profile",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"postprocessing/alignment"
-			],
-			"description": "Add a correction suggestions and suspicious tokens (profile)",
-			"parameters": {
-				"executable": {
-					"type": "string",
-					"required": true
-				},
-				"backend": {
-					"type": "string",
-					"required": true
-				},
-				"language": {
-				    "type": "string",
-					"required": false,
-					"default": "german"
-				},
-				"additionalLexicon": {
-					"type": "string",
-					"required": false,
-					"default": ""
-				}
-			}
-		},
-		"ocrd-cis-train": {
-			"executable": "ocrd-cis-train.sh",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"postprocessing/alignment"
-			],
-			"description": "Train post correction model",
-			"parameters": {
-				"gtArchives": {
-					"description": "List of ground truth archives",
-					"type": "array",
-					"required": true,
-					"items": {
-						"description": "Path (or URL) to a ground truth archive",
-						"type": "string"
-					}
-				},
-				"imagePreprocessingSteps": {
-					"description": "List of image preprocessing steps",
-					"type": "array",
-					"required": true,
-					"items": {
-						"description": "Image preprocessing command that is evaled using the bash eval command (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $IMG_OUTPUT_FILE_GRP, $IMG_INPUT_FILE_GRP, $PARAMETER)",
-						"type": "string"
-					}
-				},
-				"ocrSteps": {
-					"description": "List of ocr steps",
-					"type": "array",
-					"required": true,
-					"items": {
-						"description": "OCR command that is evaled using the bash eval command (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $PARAMETER)",
-						"type": "string"
-					}
-				},
-				"training": {
-					"description": "Configuration of training command",
-					"type": "object",
-					"required": [
-						"trigrams",
-						"maxCandidate",
-						"profiler",
-						"leFeatures",
-						"rrFeatures",
-						"dmFeatures"
-					],
-					"properties": {
-						"trigrams": {
-							"description": "Path to character trigrams csv file (format: n,trigram)",
-							"type": "string",
-							"required": true
-						},
-						"maxCandidate": {
-							"description": "Maximum number of considered profiler candidates per token",
-							"type": "integer",
-							"required": true
-						},
-						"filterClasses": {
-							"description": "List of filtered feature classes",
-							"required": false,
-							"type": "array",
-							"items": {
-								"description": "Class name of feature class to filter",
-								"type": "string"
-							}
-						},
-						"profiler": {
-							"description": "Profiler configuration",
-							"type": "object",
-							"required": [
-								"path",
-								"config"
-							],
-							"properties": {
-								"path": {
-									"description": "Path to the profiler executable",
-									"required": true,
-									"type": "string"
-								},
-								"config": {
-									"description": "Path to the profiler language config file",
-									"required": true,
-									"type": "string"
-								}
-							}
-						},
-						"leFeatures": {
-							"description": "List of the lexicon extension features",
-							"required": true,
-							"type": "array",
-							"items": {
-								"description": "Feature configuration",
-								"type": "object",
-								"required": [
-									"type",
-									"name"
-								],
-								"properties": {
-									"name": {
-										"description": "Name of the feature",
-										"type": "string"
-									},
-									"type": {
-										"description": "Fully qualified java class name of the feature",
-										"type": "string"
-									},
-									"class": {
-										"description": "Class name of the feature",
-										"type": "string"
-									}
-								}
-							}
-						},
-						"rrFeatures": {
-							"description": "List of the reranker features",
-							"required": true,
-							"type": "array",
-							"items": {
-								"description": "Feature configuration",
-								"type": "object",
-								"required": [
-									"type",
-									"name"
-								],
-								"properties": {
-									"name": {
-										"description": "Name of the feature",
-										"type": "string"
-									},
-									"type": {
-										"description": "Fully qualified java class name of the feature",
-										"type": "string"
-									},
-									"class": {
-										"description": "Class name of the feature",
-										"type": "string"
-									}
-								}
-							}
-						},
-						"dmFeatures": {
-							"description": "List of the desicion maker features",
-							"required": true,
-							"type": "array",
-							"items": {
-								"description": "Feature configuration",
-								"type": "object",
-								"required": [
-									"type",
-									"name"
-								],
-								"properties": {
-									"name": {
-										"description": "Name of the feature",
-										"type": "string"
-									},
-									"type": {
-										"description": "Fully qualified java class name of the feature",
-										"type": "string"
-									},
-									"class": {
-										"description": "Class name of the feature",
-										"type": "string"
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		},
-		"ocrd-cis-post-correct": {
-			"executable": "ocrd-cis-post-correct.sh",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"postprocessing/alignment"
+				"recognition/post-correction"
 			],
 			"description": "Post correct OCR results",
+			"input_file_grp": [
+				"OCR-D-LINE-ALIGNED"
+			],
+			"output_file_grp": [
+				"OCR-D-POST-CORRECTED"
+			],
 			"parameters": {
-				"ocrSteps": {
-					"description": "List of additional ocr steps",
-					"type": "array",
-					"required": true,
-					"items": {
-						"description": "OCR command that is evaled using the bash eval command (available parameters: $METS, $LOG_LEVEL, $XML_INPUT_FILE_GRP, $XML_OUTPUT_FILE_GRP, $PARAMETER)",
-						"type": "string"
-					}
+				"maxCandidates": {
+					"description": "Maximum number of considered correction candidates per suspicious token",
+					"type": "number",
+					"format": "integer",
+					"default": 10
 				},
-				"postCorrection": {
-					"description": "Configuration of post correction command",
-					"type": "object",
-					"required": [
-						"maxCandidate",
-						"profiler",
-						"model",
-						"runLE",
-						"runDM"
-					],
-					"properties": {
-						"maxCandidate": {
-							"description": "Maximum number of considered profiler candidates per token",
-							"type": "integer",
-							"required": true
-						},
-						"profiler": {
-							"description": "Profiler configuration",
-							"type": "object",
-							"required": [
-								"path",
-								"config"
-							],
-							"properties": {
-								"path": {
-									"description": "Path to the profiler executable",
-									"required": true,
-									"type": "string"
-								},
-								"config": {
-									"description": "Path to the profiler language config file",
-									"required": true,
-									"type": "string"
-								}
-							}
-						},
-						"model": {
-							"description": "Path to the post correction model file",
-							"type": "string",
-							"required": true
-						},
-						"runLE": {
-							"description": "Do run the lexicon extension step for the post correction",
-							"required": true,
-							"type": "boolean"
-						},
-						"runDM": {
-							"description": "Do run the ranking and the decision step for the post correction",
-							"required": true,
-							"type": "boolean"
-						}
-					}
+				"profilerPath": {
+					"description": "Path to the profiler executable",
+					"required": true,
+					"type": "string"
+				},
+				"profilerConfig": {
+					"description": "Path to the profiler's language config file",
+					"required": true,
+					"type": "string"
+				},
+				"model": {
+					"description": "Path to the post correction model file",
+					"type": "string",
+					"required": true
+				},
+				"nOCR": {
+					"description": "Number of parallel OCR's to use for the post correction",
+					"type": "number",
+					"format": "integer",
+					"default": 1
+				},
+				"runLE": {
+					"description": "Do run the lexicon extension step for the post correction",
+  					"type": "boolean",
+					"default": false
 				}
 			}
 		}

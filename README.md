@@ -32,23 +32,39 @@ It is possible to install `ocrd_cis` in a custom directory using
  deactivate
 ```
 
+## Profiler
+The post correction is dependent on the language
+[profiler](https://github.com/cisocrgroup/Profiler) and its laguage
+configurations to generate corrections for suspicious words.  In order
+to use the post correction a profiler with according language
+configruations have to be present on the system.  You can refer to our
+[manuals](https://github.com/cisocrgroup/Resources/tree/master/manuals)
+and our [lexical
+resources](https://github.com/cisocrgroup/Resources/tree/master/lexica)
+for more information.
+
+If you use docker you can use the preinstalled profiler from within
+the docker-container.  The profiler is installed to `/apps/profiler`
+and the language configurations lie in `/etc/profiler/languages` in
+the container image.
+
 ## Usage
 Most tools follow the [OCR-D cli
 conventions](https://ocr-d.github.io/cli).  They accept the
 `--input-file-grp`, `--output-file-grp`, `--parameter`, `--mets`,
-`--log-level` command line arguments (short and long).  For some tools
-(most notably the alignment tool) expect a comma seperated list of
-multiple input file groups.
+`--log-level` command line arguments (short and long).  Some of the
+tools (most notably the alignment tool) expect a comma seperated list
+of multiple input file groups.
 
 The [ocrd-tool.json](ocrd_cis/ocrd-tool.json) contains a schema
 description of the parameter config file for the different tools that
 accept the `--parameter` argument.
 
-### ocrd-cis-post-correct.sh
-This bash script runs the post correction using a pre-trained
-[model](http://cis.lmu.de/~finkf/model.zip).  If additional support
-OCRs should be used, models for these OCR steps are required and must
-be configured in an according configuration file (see ocrd-tool.json).
+### ocrd-cis-postcorrect
+This command runs the post correction using a pre-trained model.  If
+additional support OCRs should be used, models for these OCR steps are
+required and must be executed and aligned beforehand (see [the test
+script](tests/run_postcorrection_test.bash) for an example).
 
 Arguments:
  * `--parameter` path to configuration file
@@ -56,6 +72,20 @@ Arguments:
  * `--output-file-grp` name of the post-correction file group
  * `--log-level` set log level
  * `--mets` path to METS file in workspace
+
+As mentioned above in order to use the postcorrection with input from
+multiple OCR's, some preprocessing steps are needed: firstly the
+additional OCR recognition has to be done and secondly the multiple
+OCR's have to be aligned (you can also take a look to the function
+`ocrd_cis_align` in the [tests](tests/test_lib.bash)).  Assuming an
+original recognition as file group `OCR1` on the segmented document of
+file group `SEG`, the folloing commands can be used:
+
+```sh
+ocrd-ocropus-recognize -I SEG -O OCR2 ... # additional OCR
+ocrd-cis-align -I OCR1,OCR2 -O ALGN ... # align OCR1 and OCR2
+ocrd-cis-postcorrect -I ALGN -O PC ... # post correction
+```
 
 ### ocrd-cis-align
 Aligns tokens of multiple input file groups to one output file group.
@@ -66,41 +96,26 @@ it aligns in order.
 Arguments:
  * `--parameter` path to configuration file
  * `--input-file-grp` comma seperated list of the input file groups;
-   first input file group is the master OCR
+   first input file group is the master OCR; if there is a ground
+   truth (for evaluation) it must be the last file group in the list
  * `--output-file-grp` name of the file group for the aligned result
  * `--log-level` set log level
  * `--mets` path to METS file in workspace
 
-### ocrd-cis-train.sh
-Script to train a model from a list of ground-truth archives (see
-ocrd-tool.json) for the post correction.  The tool somewhat mimics the
-behaviour of other ocrd tools:
- * `--mets` for the workspace
- * `--log-level` is passed to other tools
- * `--parameter` is used as configuration
- * `--output-file-grp` defines the output file group for the model
-
 ### ocrd-cis-data
 Helper tool to get the path of the installed data files. Usage:
-`ocrd-cis-data [-jar|-3gs]` to get the path of the jar library or the
-path to th default 3-grams language model file.
+`ocrd-cis-data [-h|-jar|-3gs|-model|-config]` to get the path of the
+jar library, the pre-trained post correction model, the path to the
+default 3-grams language model file or the default training
+configuration file.  This tool does not follow the OCR-D conventions.
 
-### ocrd-cis-wer
-Helper tool to calculate the word error rate aligned ocr files.  It
-writes a simple JSON-formated stats file to the given output file group.
-
-Arguments:
- * `--input-file-grp` input file group of aligned ocr results with
-   their respective ground truth.
- * `--output-file-grp` name of the file group for the stats file
- * `--log-level` set log level
- * `--mets` path to METS file in workspace
-
-### ocrd-cis-profile
-Run the profiler over the given files of the according the given input
-file grp and adds a gzipped JSON-formatted profile to the output file
-group of the workspace.  This tools requires an installed [language
-profiler](https://github.com/cisocrgroup/Profiler).
+### Trainining
+There is no dedicated training script provided. Models are trained
+using the java implementation directly (check out the [training test
+script](tests/run_training_test.bash) for an example).  Training a
+model requires a workspace containing one or more file groups
+consisting of aligned OCR and ground-truth documents (the last file
+group has to be the ground truth).
 
 Arguments:
  * `--parameter` path to configuration file
@@ -114,11 +129,14 @@ Arguments:
 The `ocropy-train` tool can be used to train LSTM models.
 It takes ground truth from the workspace and saves (image+text) snippets from the corresponding pages.
 Then a model is trained on all snippets for 1 million (or the given number of) randomized iterations from the parameter file.
+
 ```sh
-ocrd-cis-ocropy-train \
-  --input-file-grp OCR-D-GT-SEG-LINE \
-  --mets mets.xml
-  --parameter file:///path/to/config.json
+java -jar $(ocrd-cis-data -jar) \
+	 -c train \
+	 --input-file-grp OCR1,OCR2,GT \
+     --log-level DEBUG \
+	 -m mets.xml \
+	 --parameter $(ocrd-cis-data -config)
 ```
 
 ### ocrd-cis-ocropy-clip
@@ -228,9 +246,8 @@ pip install .
 ```
 
 Download and move tesseract models from:
-https://github.com/tesseract-ocr/tesseract/wiki/Data-Files
-or use your own models and
-place them into: /usr/share/tesseract-ocr/4.00/tessdata
+https://github.com/tesseract-ocr/tesseract/wiki/Data-Files or use your
+own models and place them into: /usr/share/tesseract-ocr/4.00/tessdata
 
 ## Workflow configuration
 
@@ -256,6 +273,7 @@ If GT is used, steps 1, 5 and 8 can be omitted. Else if a segmentation is used i
 To run a few basic tests type `make test` (`ocrd_cis` has to be
 installed in order to run any tests).
 
+# Miscellaneous
 ## OCR-D workspace
 
 * Create a new (empty) workspace: `ocrd workspace init workspace-dir`
