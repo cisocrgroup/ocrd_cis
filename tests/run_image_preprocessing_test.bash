@@ -44,3 +44,8 @@ ocrd-cis-ocropy-dewarp --log-level DEBUG \
 					   --input-file-grp OCR-D-CIS-IMG-DES \
 					   --output-file-grp OCR-D-CIS-IMG-DEW \
 					   --mets "$tmpws/mets.xml"
+
+ocrd-cis-ocropy-segment --log-level DEBUG \
+						--input-file-grp OCR-D-CIS-IMG-DEW \
+						--output-file-grp OCR-D-CIS-IMG-SEG \
+						--mets "$tmpws/mets.xml"
