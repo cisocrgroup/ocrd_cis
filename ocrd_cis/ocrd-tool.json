@@ -438,7 +438,7 @@
 				"OCR-D-OCR-N"
 			],
 			"output_file_grp": [
-				"OCR-D-ALIGN"
+				"OCR-D-ALIGNED"
 			],
 			"description": "Align multiple OCRs and/or GTs"
 		},
@@ -452,7 +452,7 @@
 			],
 			"description": "Post correct OCR results",
 			"input_file_grp": [
-				"OCR-D-LINE-SEG"
+				"OCR-D-LINE-ALIGNED"
 			],
 			"output_file_grp": [
 				"OCR-D-POST-CORRECTED"
