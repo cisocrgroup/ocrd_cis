@@ -109,7 +109,13 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
             # can produce invalid (self-intersecting) polygons:
             #polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
             polygon = contour[:, 0, ::] # already ordered x,y
-            polygon = Polygon(polygon).simplify(2).exterior.coords[:-1] # keep open
+            # simplify and validate:
+            polygon = Polygon(polygon)
+            for tolerance in range(2, int(area)):
+                polygon = polygon.simplify(tolerance)
+                if polygon.is_valid:
+                    break
+            polygon = polygon.exterior.coords[:-1] # keep open
             if len(polygon) < 4:
                 LOG.warning('Label %d contour %d has less than 4 points for %s',
                             label, i, name)
