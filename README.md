@@ -66,6 +66,16 @@ additional support OCRs should be used, models for these OCR steps are
 required and must be executed and aligned beforehand (see [the test
 script](tests/run_postcorrection_test.bash) for an example).
 
+There is a basic model trained on the OCR-D ground truth.  It gets
+installed allongside this module.  You can get the model's install
+path using `ocrd-cis-data -model` (see below for a description of
+`ocrd-cis-data`).  To use this model (or any other model) the `model`
+parameter in the configuration file must be set to the path of the
+model to use.  Be aware that the models are trained with a specific
+maximal number of OCR's (usally 2) and that is not possible to use
+more OCR's than the number used for training (it is possible to use
+less, though).
+
 Arguments:
  * `--parameter` path to configuration file
  * `--input-file-grp` name of the master-OCR file group
