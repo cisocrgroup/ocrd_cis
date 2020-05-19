@@ -273,6 +273,7 @@ class OcropySegment(Processor):
                         # specialized separator/image/table detectors):
                         page.set_TextRegion([])
                         page.set_ReadingOrder(None)
+                        ro = None
                     else:
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
                         ignore.extend(regions)
