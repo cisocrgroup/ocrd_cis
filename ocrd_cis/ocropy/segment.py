@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import os.path
 import numpy as np
 from skimage import draw
+from skimage.morphology import convex_hull_image
 import cv2
 from shapely.geometry import Polygon
 from shapely.prepared import prep
@@ -54,7 +55,7 @@ TOOL = 'ocrd-cis-ocropy-segment'
 LOG = getLogger('processor.OcropySegment')
 FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-CLIP'
 
-def masks2polygons(bg_labels, fg_bin, name, min_area=None):
+def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
     """Convert label masks into polygon coordinates.
 
     Given a Numpy array of background labels ``bg_labels``,
@@ -79,6 +80,9 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None):
             LOG.debug('skipping label %d in %s due to empty fg',
                       label, name)
             continue
+        # simplify to convex hull
+        if simplify:
+            bg_mask = convex_hull_image(bg_mask).astype(np.uint8)
         # find outer contour (parts):
         contours, _ = cv2.findContours(bg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # determine areas of parts:
@@ -554,7 +558,7 @@ class OcropySegment(Processor):
                     # find contours for region (can be non-contiguous)
                     region_polygons = masks2polygons(region_labels == region_label, element_bin,
                                                      '%s "%s"' % (element_name, element_id),
-                                                     min_area=6000/zoom/zoom)
+                                                     min_area=6000/zoom/zoom, simplify=True)
                     # find contours for lines (can be non-contiguous)
                     line_polygons = masks2polygons(region_line_labels, element_bin,
                                                    'region "%s"' % element_id,
