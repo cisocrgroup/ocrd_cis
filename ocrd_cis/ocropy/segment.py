@@ -37,6 +37,7 @@ from ocrd_utils import (
     coordinates_of_segment,
     coordinates_for_segment,
     points_from_polygon,
+    polygon_from_points,
     MIMETYPE_PAGE
 )
 
@@ -541,6 +542,7 @@ class OcropySegment(Processor):
                                           region_label, line_label, region_id)
                                 # convert back to absolute (page) coordinates:
                                 region_polygon = coordinates_for_segment(polygon, image, coords)
+                                region_polygon = polygon_for_parent(region_polygon, element)
                                 # annotate result:
                                 region = TextRegionType(id=region_id, Coords=CoordsType(
                                     points=points_from_polygon(region_polygon)))
@@ -569,6 +571,7 @@ class OcropySegment(Processor):
                         region_poly = prep(Polygon(region_polygon))
                         # convert back to absolute (page) coordinates:
                         region_polygon = coordinates_for_segment(region_polygon, image, coords)
+                        region_polygon = polygon_for_parent(region_polygon, element)
                         # annotate result:
                         region_id = element_id + "_region%04d" % region_no
                         LOG.debug('Region label %d becomes ID "%s"', region_label, region_id)
@@ -581,6 +584,7 @@ class OcropySegment(Processor):
                                 continue
                             # convert back to absolute (page) coordinates:
                             line_polygon = coordinates_for_segment(line_polygon, image, coords)
+                            line_polygon = polygon_for_parent(line_polygon, region)
                             # annotate result:
                             line_id = region_id + "_line%04d" % line_no
                             LOG.debug('Line label %d becomes ID "%s"', line_label, line_id)
@@ -605,6 +609,7 @@ class OcropySegment(Processor):
                 region_id = element_id + "_image%04d" % region_no
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
+                region_polygon = polygon_for_parent(region_polygon, element)
                 # annotate result:
                 element.add_ImageRegion(ImageRegionType(id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
@@ -622,6 +627,7 @@ class OcropySegment(Processor):
                 region_id = element_id + "_sep%04d" % region_no
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
+                region_polygon = polygon_for_parent(region_polygon, element)
                 # annotate result:
                 element.add_SeparatorRegion(SeparatorRegionType(id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
@@ -652,9 +658,36 @@ class OcropySegment(Processor):
                 line_id = element_id + "_line%04d" % line_no
                 # convert back to absolute (page) coordinates:
                 line_polygon = coordinates_for_segment(polygon, image, coords)
+                line_polygon = polygon_for_parent(line_polygon, element)
                 # annotate result:
                 element.add_TextLine(TextLineType(id=line_id, Coords=CoordsType(
                     points=points_from_polygon(line_polygon))))
+
+
+def polygon_for_parent(polygon, parent):
+    """Clip polygon to parent polygon range.
+    
+    (Should be moved to ocrd_utils.coordinates_for_segment.)
+    """
+    childp = Polygon(polygon)
+    if isinstance(parent, PageType):
+        if parent.get_Border():
+            parentp = Polygon(polygon_from_points(parent.get_Border().get_Coords().points))
+        else:
+            parentp = Polygon([[0,0], [0,parent.get_imageHeight()],
+                               [parent.get_imageWidth(),parent.get_imageHeight()],
+                               [parent.get_imageWidth(),0]])
+    else:
+        parentp = Polygon(polygon_from_points(parent.get_Coords().points))
+    if childp.within(parentp):
+        return polygon
+    interp = childp.intersection(parentp)
+    if interp.is_empty:
+        # FIXME: we need a better strategy against this
+        raise Exception("intersection of would-be segment with parent is empty")
+    if interp.type == 'MultiPolygon':
+        interp = interp.convex_hull
+    return interp.exterior.coords[:-1] # keep open
 
 def page_get_reading_order(ro, rogroup):
     """Add all elements from the given reading order group to the given dictionary.
