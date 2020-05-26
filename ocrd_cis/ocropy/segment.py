@@ -522,53 +522,30 @@ class OcropySegment(Processor):
                     continue # no bg
                 # filter text lines within this text region:
                 region_line_labels = line_labels * (region_labels == region_label)
-                # does the region contain (ignored) existing regions?
-                if np.any(np.unique(region_line_labels * element_bin)[1:] <= len(ignore)):
+                # filter (ignored) existing regions within this region:
+                region_ignore_labels = np.minimum(region_line_labels, len(ignore)+1)
+                for line_label in np.argsort(morph.reading_order(region_ignore_labels)):
+                    if (not line_label or
+                        not np.any(element_bin * region_ignore_labels == line_label)):
+                        continue
                     # split into new regions and order-only
-                    region_line_polygons = masks2polygons(region_line_labels, element_bin,
-                                                          '%s "%s"' % (element_name, element_id),
-                                                          min_area=6000/zoom/zoom)
-                    for line_label in np.argsort(morph.reading_order(region_line_labels)):
-                        if (not line_label or
-                            not np.any(element_bin * region_line_labels == line_label)):
-                            continue
-                        if line_label <= len(ignore):
-                            # existing region from `ignore` merely to be ordered
-                            # (no new region, no actual text line)
-                            if rogroup:
-                                index = page_add_to_reading_order(rogroup, ignore[line_label-1].id, index)
-                            LOG.debug('Region label %d line label %d is for ignored region "%s"',
-                                      region_label, line_label, ignore[line_label-1].id)
-                        else:
-                            # text line grouped with ignored region must become text region
-                            for region_no, polygon in enumerate([rp for rl,rp in region_line_polygons
-                                                                 if rl == line_label], region_no+1):
-                                region_id = element_id + "_region%04d" % region_no
-                                LOG.debug('Region label %d line label %d becomes ID "%s"',
-                                          region_label, line_label, region_id)
-                                # convert back to absolute (page) coordinates:
-                                region_polygon = coordinates_for_segment(polygon, image, coords)
-                                region_polygon = polygon_for_parent(region_polygon, element)
-                                # annotate result:
-                                region = TextRegionType(id=region_id, Coords=CoordsType(
-                                    points=points_from_polygon(region_polygon)))
-                                line_id = region_id + "_line"
-                                line = TextLineType(id=line_id, Coords=CoordsType(
-                                    points=points_from_polygon(region_polygon)))
-                                region.add_TextLine(line)
-                                element.add_TextRegion(region)
-                                LOG.info('Added region "%s" with 1 line for %s "%s"',
-                                         region_id, element_name, element_id)
-                                if rogroup:
-                                    index = page_add_to_reading_order(rogroup, region.id, index)
-                else:
+                    if line_label <= len(ignore):
+                        # existing region from `ignore` merely to be ordered
+                        # (no new region, no actual text line)
+                        if rogroup:
+                            index = page_add_to_reading_order(rogroup, ignore[line_label-1].id, index)
+                        LOG.debug('Region label %d line label %d is for ignored region "%s"',
+                                  region_label, line_label, ignore[line_label-1].id)
+                        continue
                     # normal case: new lines inside new regions
                     # find contours for region (can be non-contiguous)
-                    region_polygons = masks2polygons(region_labels == region_label, element_bin,
+                    region_polygons = masks2polygons(((region_labels == region_label) *
+                                                      (line_labels > len(ignore))), element_bin,
                                                      '%s "%s"' % (element_name, element_id),
                                                      min_area=6000/zoom/zoom, simplify=True)
                     # find contours for lines (can be non-contiguous)
-                    line_polygons = masks2polygons(region_line_labels, element_bin,
+                    line_polygons = masks2polygons((region_line_labels *
+                                                    (line_labels > len(ignore))), element_bin,
                                                    'region "%s"' % element_id,
                                                    min_area=640/zoom/zoom)
                     # create new lines in new regions
