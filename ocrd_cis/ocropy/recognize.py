@@ -131,7 +131,7 @@ class OcropyRecognize(Processor):
         Produce a new output file by serialising the resulting hierarchy.
         """
         # from ocropus-rpred:
-        self.network = load_object(self.get_model(), verbose=1)
+        self.network = load_object(self.get_model(), zip=1, verbose=1)
         for x in self.network.walk():
             x.postLoad()
         for x in self.network.walk():
