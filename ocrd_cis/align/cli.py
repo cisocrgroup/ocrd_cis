@@ -19,7 +19,7 @@ LOG_LEVEL = 'INFO'
 @click.command()
 @ocrd_cli_options
 def ocrd_cis_align(*args, **kwargs):
-    if 'log_level' in kwargs:
+    if 'log_level' in kwargs and kwargs['log_level']:
         global LOG_LEVEL
         LOG_LEVEL = kwargs['log_level']
     return ocrd_cli_wrap_processor(Aligner, *args, **kwargs)
