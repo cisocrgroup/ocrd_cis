@@ -170,12 +170,12 @@ def find_contours(image):
     contours, _ = cv2.findContours(image.astype(uint8),
                                    cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     # convert to y,x tuples
-    return list(zip((contour[:,0,::-1], cv2.contourArea(contour))
-                    for contour in contours))
+    return [(contour[:,0,::-1], cv2.contourArea(contour))
+            for contour in contours]
 
 @checks(SEGMENTATION)
 def find_label_contours(labels):
-    contours = [[]]*amax(labels)+1
+    contours = [[]]*(amax(labels)+1)
     for label in unique(labels):
         if not label:
             continue

@@ -6,7 +6,7 @@ import logging
 import numpy as np
 from scipy.ndimage import measurements, filters, interpolation, morphology
 from scipy import stats, signal
-from skimage.morphology import convex_hull_image
+#from skimage.morphology import convex_hull_image
 from PIL import Image
 
 from . import ocrolib
@@ -344,7 +344,7 @@ def check_region(binary, zoom=1.0):
     if np.amax(binary)==np.amin(binary): return "image is blank"
     if np.mean(binary)<np.median(binary): return "image may be inverted"
     h,w = binary.shape
-    if h<60/zoom: return "image not tall enough for a region image %s"%(binary.shape,)
+    if h<45/zoom: return "image not tall enough for a region image %s"%(binary.shape,)
     if h>5000/zoom: return "image too tall for a region image %s"%(binary.shape,)
     if w<100/zoom: return "image too narrow for a region image %s"%(binary.shape,)
     if w>5000/zoom: return "image too wide for a region image %s"%(binary.shape,)
@@ -1189,7 +1189,7 @@ def lines2regions(binary, llabels,
     region label (in the order of the call chain, which is controlled
     by ``rl`` and ``bt``), covering all the line labels inside it.
     
-    Afterwards, for each region label, combine line labels by using
+    Afterwards, for each region label, simplify regions by using
     their convex hull polygon.
     
     Return a Numpy array of text region labels.
@@ -1563,17 +1563,15 @@ def lines2regions(binary, llabels,
     # apply re-assignments:
     rlabels = relabel[llabels]
     DSAVE('rlabels', rlabels)
-    LOG.debug('closing %d regions component-wise', np.amax(relabel))
-    # close regions (label by label)
-    for region in np.unique(relabel):
-        if not region:
-            continue # ignore bg
-        # lines = np.setdiff1d(np.nonzero(relabel==region)[0], [0])
-        # if len(lines) < 2:
-        #     LOG.debug('region %d has only 1 line', region)
-        #     continue
-        # faster than morphological closing:
-        region_hull = convex_hull_image(rlabels==region)
-        rlabels[region_hull] = region
-    DSAVE('rlabels_closed', rlabels)
+    # FIXME: hulls can overlap, we just need simplification
+    #        (but cv2.approxPolyDP is faulty and morphology costly)
+    # LOG.debug('closing %d regions component-wise', np.amax(relabel))
+    # # close regions (label by label)
+    # for region in np.unique(relabel):
+    #     if not region:
+    #         continue # ignore bg
+    #     # faster than morphological closing:
+    #     region_hull = convex_hull_image(rlabels==region)
+    #     rlabels[region_hull] = region
+    # DSAVE('rlabels_closed', rlabels)
     return rlabels
