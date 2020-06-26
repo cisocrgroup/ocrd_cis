@@ -365,6 +365,11 @@
 					"default": 1.5,
 					"description": "(when operating on the page/table level) smallest width in multiples of scale/capheight of a valley in the horizontal or vertical profiles (across the binarized image) to still be regarded as a gap during recursive X-Y cut from lines to regions; needs to be smaller when more foreground noise is present, increase to avoid mistaking inter-line as paragraph gaps and inter-word as inter-column gaps"
 				},
+				"overwrite_order": {
+					"type": "boolean",
+					"default": true,
+					"description": "(when operating on the page/table level) remove any references for existing TextRegion elements within the top (page/table) reading order; otherwise append"
+				},
 				"overwrite_separators": {
 					"type": "boolean",
 					"default": true,

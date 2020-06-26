@@ -1300,7 +1300,7 @@ def lines2regions(binary, llabels,
                                                                  lpartitions[label2])
                                 lpartitions[label2] = [0]
                     # re-label and re-order surviving partitions
-                    #lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
+                    lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
                     npartitions = len(lpartitions)
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
                     if npartitions > 1:
