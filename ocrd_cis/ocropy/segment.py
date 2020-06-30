@@ -144,14 +144,17 @@ class OcropySegment(Processor):
         then iterate over the element hierarchy down to the requested level.
         
         Depending on ``level-of-operation``, consider existing segments:
-        - if ``overwrite_separators=True`` on ``page`` level, then
-          delete any SeparatorRegions,
-        - if ``overwrite_regions=True`` on ``page`` level, then
-          delete any top-level TextRegions (along with ReadingOrder),
-        - if ``overwrite_regions=True`` on ``table`` level, then
-          delete any TextRegions in TableRegions (along with their OrderGroup),
-        - if ``overwrite_lines=True`` on ``region`` level, then
+        - If ``overwrite_separators=True`` on ``page`` level, then
+          delete any SeparatorRegions.
+        - If ``overwrite_regions=True`` on ``page`` level, then
+          delete any top-level TextRegions (along with ReadingOrder).
+        - If ``overwrite_regions=True`` on ``table`` level, then
+          delete any TextRegions in TableRegions (along with their OrderGroup).
+        - If ``overwrite_lines=True`` on ``region`` level, then
           delete any TextLines in TextRegions.
+        - If ``overwrite_order=True`` on ``page`` or ``table`` level, then
+          delete the reading order OrderedGroup entry corresponding
+          to the (page/table) segment.
         
         Next, get each element image according to the layout annotation (from
         the alternative image of the page/region, or by cropping via coordinates
@@ -206,6 +209,7 @@ class OcropySegment(Processor):
         overwrite_lines = self.parameter['overwrite_lines']
         overwrite_regions = self.parameter['overwrite_regions']
         overwrite_separators = self.parameter['overwrite_separators']
+        overwrite_order = self.parameter['overwrite_order']
         oplevel = self.parameter['level-of-operation']
 
         for (n, input_file) in enumerate(self.input_files):
@@ -289,7 +293,7 @@ class OcropySegment(Processor):
                         LOG.warning('keeping existing TextRegions in page "%s"', page_id)
                         ignore.extend(regions)
                 # create reading order if necessary
-                if not ro:
+                if not ro or overwrite_order:
                     ro = ReadingOrderType()
                     page.set_ReadingOrder(ro)
                 rogroup = ro.get_OrderedGroup() or ro.get_UnorderedGroup()
@@ -330,6 +334,11 @@ class OcropySegment(Processor):
                     if not roelem:
                         LOG.warning("Page '%s' table region '%s' is not referenced in reading order (%s)",
                                     page_id, region.id, "no target to add cells to")
+                    elif overwrite_order:
+                        # replace by empty ordered group with same (index and) ref
+                        # (which can then take the cells as subregions)
+                        roelem = page_subgroup_in_reading_order(roelem)
+                        reading_order[region.id] = roelem
                     elif isinstance(roelem, (OrderedGroupType, OrderedGroupIndexedType)):
                         LOG.warning("Page '%s' table region '%s' already has an ordered group (%s)",
                                     page_id, region.id, "cells will be appended")

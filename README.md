@@ -178,7 +178,7 @@ Arguments:
  * `--mets` path to METS file in the workspace
 
 ### ocrd-cis-ocropy-train
-The `ocropy-train` tool can be used to train LSTM models.
+The [ocropy-train](ocrd_cis/ocropy/train.py) tool can be used to train LSTM models.
 It takes ground truth from the workspace and saves (image+text) snippets from the corresponding pages.
 Then a model is trained on all snippets for 1 million (or the given number of) randomized iterations from the parameter file.
 
@@ -192,95 +192,238 @@ java -jar $(ocrd-cis-data -jar) \
 ```
 
 ### ocrd-cis-ocropy-clip
-The `clip` processor can be used to remove intrusions of neighbouring segments in regions / lines of a page.
+The [clip](ocrd_cis/ocropy/clip.py) processor can be used to remove intrusions of neighbouring segments in regions / lines of a page.
 It runs a connected component analysis on every text region / line of every PAGE in the input file group, as well as its overlapping neighbours, and for each binary object of conflict, determines whether it belongs to the neighbour, and can therefore be clipped to the background. It references the resulting segment image files in the output PAGE (via `AlternativeImage`).
 (Use this to suppress separators and neighbouring text.)
 ```sh
 ocrd-cis-ocropy-clip \
-  --input-file-grp OCR-D-SEG-REGION \
-  --output-file-grp OCR-D-SEG-REGION-CLIP \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-REGION \
+  -O OCR-D-SEG-REGION-CLIP \
+  -p '{"level-of-operation": "region"}'
+```
+
+Available parameters are:
+```sh
+   "level-of-operation" [string - "region"]
+    PAGE XML hierarchy level granularity to annotate images for
+    Possible values: ["region", "line"]
+   "dpi" [number - -1]
+    pixel density in dots per inch (overrides any meta-data in the
+    images); disabled when negative
+   "min_fraction" [number - 0.7]
+    share of foreground pixels that must be retained by the largest label
 ```
 
 ### ocrd-cis-ocropy-resegment
-The `resegment` processor can be used to remove overlap between neighbouring lines of a page.
+The [resegment](ocrd_cis/ocropy/resegment.py) processor can be used to remove overlap between neighbouring lines of a page.
 It runs a line segmentation on every text region of every PAGE in the input file group, and for each line already annotated, determines the label of largest extent within the original coordinates (polygon outline) in that line, and annotates the resulting coordinates in the output PAGE.
 (Use this to polygonalise text lines that are poorly segmented, e.g. via bounding boxes.)
 ```sh
 ocrd-cis-ocropy-resegment \
-  --input-file-grp OCR-D-SEG-LINE \
-  --output-file-grp OCR-D-SEG-LINE-RES \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-LINE \
+  -O OCR-D-SEG-LINE-RES \
+  -p '{"extend_margins": 3}'
+```
+
+Available parameters are:
+```sh
+   "dpi" [number - -1]
+    pixel density in dots per inch (overrides any meta-data in the
+    images); disabled when negative
+   "min_fraction" [number - 0.8]
+    share of foreground pixels that must be retained by the largest label
+   "extend_margins" [number - 3]
+    number of pixels to extend the input polygons horizontally and
+    vertically before intersecting
 ```
 
 ### ocrd-cis-ocropy-segment
-The `segment` processor can be used to segment (pages or) regions of a page into (regions and) lines.
+The [segment](ocrd_cis/ocropy/segment.py) processor can be used to segment (pages or) regions of a page into (regions and) lines.
 It runs a line segmentation on every (page or) text region of every PAGE in the input file group, and adds (text regions containing) `TextLine` elements with the resulting polygon outlines to the annotation of the output PAGE.
 (Does _not_ detect tables.)
 ```sh
 ocrd-cis-ocropy-segment \
-  --input-file-grp OCR-D-SEG-BLOCK \
-  --output-file-grp OCR-D-SEG-LINE \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-BLOCK \
+  -O OCR-D-SEG-LINE \
+  -p '{"level-of-operation": "page", "gap_height": 0.015}'
+```
+
+Available parameters are:
+```sh
+   "dpi" [number - -1]
+    pixel density in dots per inch (overrides any meta-data in the
+    images); disabled when negative; when disabled and no meta-data is
+    found, 300 is assumed
+   "level-of-operation" [string - "region"]
+    PAGE XML hierarchy level to read images from and add elements to
+    Possible values: ["page", "table", "region"]
+   "maxcolseps" [number - 20]
+    (when operating on the page/table level) maximum number of
+    white/background column separators to detect, counted piece-wise
+   "maxseps" [number - 20]
+    (when operating on the page/table level) number of black/foreground
+    column separators to detect (and suppress), counted piece-wise
+   "maximages" [number - 10]
+    (when operating on the page level) maximum number of black/foreground
+    very large components to detect (and suppress), counted piece-wise
+   "csminheight" [number - 4]
+    (when operating on the page/table level) minimum height of
+    white/background or black/foreground column separators in multiples
+    of scale/capheight, counted piece-wise
+   "hlminwidth" [number - 10]
+    (when operating on the page/table level) minimum width of
+    black/foreground horizontal separators in multiples of
+    scale/capheight, counted piece-wise
+   "gap_height" [number - 0.01]
+    (when operating on the page/table level) largest minimum pixel
+    average in the horizontal or vertical profiles (across the binarized
+    image) to still be regarded as a gap during recursive X-Y cut from
+    lines to regions; needs to be larger when more foreground noise is
+    present, reduce to avoid mistaking text for noise
+   "gap_width" [number - 1.5]
+    (when operating on the page/table level) smallest width in multiples
+    of scale/capheight of a valley in the horizontal or vertical
+    profiles (across the binarized image) to still be regarded as a gap
+    during recursive X-Y cut from lines to regions; needs to be smaller
+    when more foreground noise is present, increase to avoid mistaking
+    inter-line as paragraph gaps and inter-word as inter-column gaps
+   "overwrite_order" [boolean - true]
+    (when operating on the page/table level) remove any references for
+    existing TextRegion elements within the top (page/table) reading
+    order; otherwise append
+   "overwrite_separators" [boolean - true]
+    (when operating on the page/table level) remove any existing
+    SeparatorRegion elements; otherwise append
+   "overwrite_regions" [boolean - true]
+    (when operating on the page/table level) remove any existing
+    TextRegion elements; otherwise append
+   "overwrite_lines" [boolean - true]
+    (when operating on the region level) remove any existing TextLine
+    elements; otherwise append
+   "spread" [number - 2.4]
+    distance in points (pt) from the foreground to project text line (or
+    text region) labels into the background for polygonal contours; if
+    zero, project half a scale/capheight
 ```
 
 ### ocrd-cis-ocropy-deskew
-The `deskew` processor can be used to deskew pages / regions of a page.
+The [deskew](ocrd_cis/ocropy/deskew.py) processor can be used to deskew pages / regions of a page.
 It runs a projection profile-based skew estimation on every segment of every PAGE in the input file group and annotates the orientation angle in the output PAGE.
 (Does _not_ include orientation detection.)
 ```sh
 ocrd-cis-ocropy-deskew \
-  --input-file-grp OCR-D-SEG-LINE \
-  --output-file-grp OCR-D-SEG-LINE-DES \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-LINE \
+  -O OCR-D-SEG-LINE-DES \
+  -p '{"level-of-operation": "page", "maxskew": 10}'
+```
+
+Available parameters are:
+```sh
+   "maxskew" [number - 5.0]
+    modulus of maximum skewing angle to detect (larger will be slower, 0
+    will deactivate deskewing)
+   "level-of-operation" [string - "region"]
+    PAGE XML hierarchy level granularity to annotate images for
+    Possible values: ["page", "region"]
 ```
 
 ### ocrd-cis-ocropy-denoise
-The `denoise` processor can be used to despeckle pages / regions / lines of a page.
+The [denoise](ocrd_cis/ocropy/denoise.py) processor can be used to despeckle pages / regions / lines of a page.
 It runs a connected component analysis and removes small components (black or white) on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as `AlternativeImage`).
 ```sh
 ocrd-cis-ocropy-denoise \
-  --input-file-grp OCR-D-SEG-LINE-DES \
-  --output-file-grp OCR-D-SEG-LINE-DEN \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-LINE-DES \
+  -O OCR-D-SEG-LINE-DEN \
+  -p '{"noise_maxsize": 2}'
+```
+
+Available parameters are:
+```sh
+   "noise_maxsize" [number - 3.0]
+    maximum size in points (pt) for connected components to regard as
+    noise (0 will deactivate denoising)
+   "dpi" [number - -1]
+    pixel density in dots per inch (overrides any meta-data in the
+    images); disabled when negative
+   "level-of-operation" [string - "page"]
+    PAGE XML hierarchy level granularity to annotate images for
+    Possible values: ["page", "region", "line"]
 ```
 
 ### ocrd-cis-ocropy-binarize
-The `binarize` processor can be used to binarize (and optionally denoise and deskew) pages / regions / lines of a page.
+The [binarize](ocrd_cis/ocropy/binarize.py) processor can be used to binarize (and optionally denoise and deskew) pages / regions / lines of a page.
 It runs the "nlbin" adaptive whitelevel thresholding on every segment of every PAGE in the input file group and references the resulting segment image files in the output PAGE (as `AlternativeImage`). (If a deskewing angle has already been annotated in a region, the tool respects that and rotates accordingly.) Images can also be produced grayscale-normalized.
 ```sh
 ocrd-cis-ocropy-binarize \
-  --input-file-grp OCR-D-SEG-LINE-DES \
-  --output-file-grp OCR-D-SEG-LINE-BIN \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-LINE-DES \
+  -O OCR-D-SEG-LINE-BIN \
+  -p '{"level-of-operation": "page", "threshold": 0.7}'
+```
+
+Available parameters are:
+```sh
+   "method" [string - "ocropy"]
+    binarization method to use (only 'ocropy' will include deskewing and
+    denoising)
+    Possible values: ["none", "global", "otsu", "gauss-otsu", "ocropy"]
+   "threshold" [number - 0.5]
+    for the 'ocropy' and ' global' method, black/white threshold to apply
+    on the whitelevel normalized image (the larger the more/heavier
+    foreground)
+   "grayscale" [boolean - false]
+    for the 'ocropy' method, produce grayscale-normalized instead of
+    thresholded image
+   "maxskew" [number - 0.0]
+    modulus of maximum skewing angle (in degrees) to detect (larger will
+    be slower, 0 will deactivate deskewing)
+   "noise_maxsize" [number - 0]
+    maximum pixel number for connected components to regard as noise (0
+    will deactivate denoising)
+   "level-of-operation" [string - "page"]
+    PAGE XML hierarchy level granularity to annotate images for
+    Possible values: ["page", "region", "line"]
 ```
 
 ### ocrd-cis-ocropy-dewarp
-The `dewarp` processor can be used to vertically dewarp text lines of a page.
+The [dewarp](ocrd_cis/ocropy/dewarp.py) processor can be used to vertically dewarp text lines of a page.
 It runs the baseline estimation and center normalizer algorithm on every line in every text region of every PAGE in the input file group and references the resulting line image files in the output PAGE (as `AlternativeImage`).
 ```sh
 ocrd-cis-ocropy-dewarp \
-  --input-file-grp OCR-D-SEG-LINE-BIN \
-  --output-file-grp OCR-D-SEG-LINE-DEW \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-LINE-BIN \
+  -O OCR-D-SEG-LINE-DEW \
+  -p '{"range": 5}'
+```
+
+Available parameters are:
+```sh
+   "dpi" [number - -1]
+    pixel density in dots per inch (overrides any meta-data in the
+    images); disabled when negative
+   "range" [number - 4.0]
+    maximum vertical disposition or maximum margin (will be multiplied by
+    mean centerline deltas to yield pixels)
+   "max_neighbour" [number - 0.05]
+    maximum rate of foreground pixels intruding from neighbouring lines
+    (line will not be processed above that)
 ```
 
 ### ocrd-cis-ocropy-recognize
-The `recognize` processor can be used to recognize the lines / words / glyphs of a page.
+The [recognize](ocrd_cis/ocropy/recognize.py) processor can be used to recognize the lines / words / glyphs of a page.
 It runs LSTM optical character recognition on every line in every text region of every PAGE in the input file group and adds the resulting text annotation in the output PAGE.
 ```sh
 ocrd-cis-ocropy-recognize \
-  --input-file-grp OCR-D-SEG-LINE-DEW \
-  --output-file-grp OCR-D-OCR-OCRO \
-  --mets mets.xml
-  --parameter path/to/config.json
+  -I OCR-D-SEG-LINE-DEW \
+  -O OCR-D-OCR-OCRO \
+  -p '{"textequiv_level": "word", "model": "fraktur-jze.pyrnn"}'
+```
+
+Available parameters are:
+```sh
+   "textequiv_level" [string - "line"]
+    PAGE XML hierarchy level granularity to add the TextEquiv results to
+    Possible values: ["line", "word", "glyph"]
+   "model" [string]
+    ocropy model to apply (e.g. fraktur.pyrnn)
 ```
 
 ### Tesserocr
