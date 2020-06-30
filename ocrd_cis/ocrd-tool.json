@@ -1,0 +1,501 @@
+{
+	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
+	"version": "0.0.10",
+	"tools": {
+		"ocrd-cis-ocropy-binarize": {
+			"executable": "ocrd-cis-ocropy-binarize",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/binarization",
+				"preprocessing/optimization/grayscale_normalization",
+				"preprocessing/optimization/deskewing"
+			],
+			"input_file_grp": [
+				"OCR-D-IMG",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-IMG-BIN",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Binarize (and optionally deskew/despeckle) pages / regions / lines with ocropy",
+			"parameters": {
+				"method": {
+					"type": "string",
+					"enum": ["none", "global", "otsu", "gauss-otsu", "ocropy"],
+					"description": "binarization method to use (only 'ocropy' will include deskewing and denoising)",
+					"default": "ocropy"
+				},
+				"threshold": {
+					"type": "number",
+					"format": "float",
+					"description": "for the 'ocropy' and ' global' method, black/white threshold to apply on the whitelevel normalized image (the larger the more/heavier foreground)",
+					"default": 0.5
+				},
+				"grayscale": {
+					"type": "boolean",
+					"description": "for the 'ocropy' method, produce grayscale-normalized instead of thresholded image",
+					"default": false
+				},
+				"maxskew": {
+					"type": "number",
+					"format": "float",
+					"description": "modulus of maximum skewing angle (in degrees) to detect (larger will be slower, 0 will deactivate deskewing)",
+					"default": 0.0
+				},
+				"noise_maxsize": {
+					"type": "number",
+					"format": "int",
+					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
+					"default": 0
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "page"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-deskew": {
+			"executable": "ocrd-cis-ocropy-deskew",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/deskewing"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Deskew regions with ocropy (by annotating orientation angle and adding AlternativeImage)",
+			"parameters": {
+				"maxskew": {
+					"type": "number",
+					"description": "modulus of maximum skewing angle to detect (larger will be slower, 0 will deactivate deskewing)",
+					"default": 5.0
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "region"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-denoise": {
+			"executable": "ocrd-cis-ocropy-denoise",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/despeckling"
+			],
+			"input_file_grp": [
+				"OCR-D-IMG",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-IMG-DESPECK",
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Despeckle pages / regions / lines with ocropy",
+			"parameters": {
+				"noise_maxsize": {
+					"type": "number",
+					"format": "float",
+					"description": "maximum size in points (pt) for connected components to regard as noise (0 will deactivate denoising)",
+					"default": 3.0
+				},
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "page"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-clip": {
+			"executable": "ocrd-cis-ocropy-clip",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/region",
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-BLOCK",
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Clip text regions / lines at intersections with neighbours",
+			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["region", "line"],
+					"description": "PAGE XML hierarchy level granularity to annotate images for",
+					"default": "region"
+				},
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
+				"min_fraction": {
+					"type": "number",
+					"format": "float",
+					"description": "share of foreground pixels that must be retained by the largest label",
+					"default": 0.7
+				}
+			}
+		},
+		"ocrd-cis-ocropy-resegment": {
+			"executable": "ocrd-cis-ocropy-resegment",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
+			"parameters": {
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
+				"min_fraction": {
+					"type": "number",
+					"format": "float",
+					"description": "share of foreground pixels that must be retained by the largest label",
+					"default": 0.8
+				},
+				"extend_margins": {
+					"type": "number",
+					"format": "integer",
+					"description": "number of pixels to extend the input polygons horizontally and vertically before intersecting",
+					"default": 3
+				}
+			}
+		},
+		"ocrd-cis-ocropy-dewarp": {
+			"executable": "ocrd-cis-ocropy-dewarp",
+			"categories": [
+				"Image preprocessing"
+			],
+			"steps": [
+				"preprocessing/optimization/dewarping"
+			],
+			"description": "Dewarp line images with ocropy",
+			"input_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"parameters": {
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
+					"default": -1
+				},
+				"range": {
+					"type": "number",
+					"format": "float",
+					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels)",
+					"default": 4.0
+				},
+				"max_neighbour": {
+					"type": "number",
+					"format": "float",
+					"description": "maximum rate of foreground pixels intruding from neighbouring lines (line will not be processed above that)",
+					"default": 0.05
+				}
+			}
+		},
+		"ocrd-cis-ocropy-recognize": {
+			"executable": "ocrd-cis-ocropy-recognize",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"recognition/text-recognition"
+			],
+			"description": "Recognize text in (binarized+deskewed+dewarped) lines with ocropy",
+			"input_file_grp": [
+				"OCR-D-SEG-LINE",
+				"OCR-D-SEG-WORD",
+				"OCR-D-SEG-GLYPH"
+			],
+			"output_file_grp": [
+				"OCR-D-OCR-OCRO"
+			],
+			"parameters": {
+				"textequiv_level": {
+					"type": "string",
+					"enum": ["line", "word", "glyph"],
+					"description": "PAGE XML hierarchy level granularity to add the TextEquiv results to",
+					"default": "line"
+				},
+				"model": {
+					"type": "string",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-rec": {
+			"executable": "ocrd-cis-ocropy-rec",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"recognition/text-recognition"
+			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
+			],
+			"description": "Recognize text snippets",
+			"parameters": {
+				"model": {
+					"type": "string",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-segment": {
+			"executable": "ocrd-cis-ocropy-segment",
+			"categories": [
+				"Layout analysis"
+			],
+			"steps": [
+				"layout/segmentation/region",
+				"layout/segmentation/line"
+			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
+			],
+			"output_file_grp": [
+				"OCR-D-SEG-LINE"
+			],
+			"description": "Segment pages into regions and lines, tables into cells and lines, or regions into lines with ocropy",
+			"parameters": {
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative; when disabled and no meta-data is found, 300 is assumed",
+					"default": -1
+				},
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "table", "region"],
+					"description": "PAGE XML hierarchy level to read images from and add elements to",
+					"default": "region"
+				},
+				"maxcolseps": {
+					"type": "number",
+					"format": "integer",
+					"default": 20,
+					"description": "(when operating on the page/table level) maximum number of white/background column separators to detect, counted piece-wise"
+				},
+				"maxseps": {
+					"type": "number",
+					"format": "integer",
+					"default": 20,
+					"description": "(when operating on the page/table level) number of black/foreground column separators to detect (and suppress), counted piece-wise"
+				},
+				"maximages": {
+					"type": "number",
+					"format": "integer",
+					"default": 10,
+					"description": "(when operating on the page level) maximum number of black/foreground very large components to detect (and suppress), counted piece-wise"
+				},
+				"csminheight": {
+					"type": "number",
+					"format": "integer",
+					"default": 4,
+					"description": "(when operating on the page/table level) minimum height of white/background or black/foreground column separators in multiples of scale/capheight, counted piece-wise"
+				},
+				"hlminwidth": {
+					"type": "number",
+					"format": "integer",
+					"default": 10,
+					"description": "(when operating on the page/table level) minimum width of black/foreground horizontal separators in multiples of scale/capheight, counted piece-wise"
+				},
+				"gap_height": {
+					"type": "number",
+					"format": "float",
+					"default": 0.01,
+					"description": "(when operating on the page/table level) largest minimum pixel average in the horizontal or vertical profiles (across the binarized image) to still be regarded as a gap during recursive X-Y cut from lines to regions; needs to be larger when more foreground noise is present, reduce to avoid mistaking text for noise"
+				},
+				"gap_width": {
+					"type": "number",
+					"format": "float",
+					"default": 1.5,
+					"description": "(when operating on the page/table level) smallest width in multiples of scale/capheight of a valley in the horizontal or vertical profiles (across the binarized image) to still be regarded as a gap during recursive X-Y cut from lines to regions; needs to be smaller when more foreground noise is present, increase to avoid mistaking inter-line as paragraph gaps and inter-word as inter-column gaps"
+				},
+				"overwrite_order": {
+					"type": "boolean",
+					"default": true,
+					"description": "(when operating on the page/table level) remove any references for existing TextRegion elements within the top (page/table) reading order; otherwise append"
+				},
+				"overwrite_separators": {
+					"type": "boolean",
+					"default": true,
+					"description": "(when operating on the page/table level) remove any existing SeparatorRegion elements; otherwise append"
+				},
+				"overwrite_regions": {
+					"type": "boolean",
+					"default": true,
+					"description": "(when operating on the page/table level) remove any existing TextRegion elements; otherwise append"
+				},
+				"overwrite_lines": {
+					"type": "boolean",
+					"default": true,
+					"description": "(when operating on the region level) remove any existing TextLine elements; otherwise append"
+				},
+				"spread": {
+					"type": "number",
+					"format": "float",
+					"default": 2.4,
+					"description": "distance in points (pt) from the foreground to project text line (or text region) labels into the background for polygonal contours; if zero, project half a scale/capheight"
+				}
+			}
+		},
+		"ocrd-cis-ocropy-train": {
+			"executable": "ocrd-cis-ocropy-train",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"recognition/text-recognition"
+			],
+			"input_file_grp": [
+				"OCR-D-GT-SEG-BLOCK",
+				"OCR-D-SEG-BLOCK"
+			],
+			"description": "train model with ground truth from mets data",
+			"parameters": {
+				"textequiv_level": {
+					"type": "string",
+					"description": "PAGE XML hierarchy level granularity",
+					"enum": ["line", "word", "glyph"],
+					"default": "line"
+				},
+				"model": {
+					"type": "string",
+					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+				},
+				"ntrain": {
+					"type": "number",
+					"format": "integer",
+					"description": "lines to train before stopping",
+					"default": 1000000
+				},
+				"outputpath": {
+					"type": "string",
+					"description": "(existing) path for the trained model"
+				}
+			}
+		},
+		"ocrd-cis-align": {
+			"executable": "ocrd-cis-align",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"recognition/post-correction"
+			],
+			"input_file_grp": [
+				"OCR-D-OCR-1",
+				"OCR-D-OCR-2",
+				"OCR-D-OCR-N"
+			],
+			"output_file_grp": [
+				"OCR-D-ALIGNED"
+			],
+			"description": "Align multiple OCRs and/or GTs"
+		},
+		"ocrd-cis-postcorrect": {
+			"executable": "ocrd-cis-postcorrect",
+			"categories": [
+				"Text recognition and optimization"
+			],
+			"steps": [
+				"recognition/post-correction"
+			],
+			"description": "Post correct OCR results",
+			"input_file_grp": [
+				"OCR-D-LINE-ALIGNED"
+			],
+			"output_file_grp": [
+				"OCR-D-POST-CORRECTED"
+			],
+			"parameters": {
+				"maxCandidates": {
+					"description": "Maximum number of considered correction candidates per suspicious token",
+					"type": "number",
+					"format": "integer",
+					"default": 10
+				},
+				"profilerPath": {
+					"description": "Path to the profiler executable",
+					"required": true,
+					"type": "string"
+				},
+				"profilerConfig": {
+					"description": "Path to the profiler's language config file",
+					"required": true,
+					"type": "string"
+				},
+				"model": {
+					"description": "Path to the post correction model file",
+					"type": "string",
+					"required": true
+				},
+				"nOCR": {
+					"description": "Number of parallel OCR's to use for the post correction",
+					"type": "number",
+					"format": "integer",
+					"default": 1
+				},
+				"runLE": {
+					"description": "Do run the lexicon extension step for the post correction",
+  					"type": "boolean",
+					"default": false
+				}
+			}
+		}
+	}
+}
