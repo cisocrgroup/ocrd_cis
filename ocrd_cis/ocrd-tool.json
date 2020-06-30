@@ -1,6 +1,6 @@
 {
 	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
-	"version": "0.0.8",
+	"version": "0.0.10",
 	"tools": {
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",

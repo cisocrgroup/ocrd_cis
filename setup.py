@@ -21,9 +21,12 @@ from setuptools import find_packages
 with codecs.open('README.md', encoding='utf-8') as f:
     README = f.read()
 
+with open('./ocrd-tool.json', 'r') as f:
+    version = json.load(f)['version']
+
 setup(
     name='ocrd_cis',
-    version='0.0.9',
+    version=version,
     description='CIS OCR-D command line tools',
     long_description=README,
     long_description_content_type='text/markdown',
@@ -34,11 +37,11 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.4.0',
+        'ocrd>=2.10.4',
         'click',
         'scipy',
         'numpy>=1.17.0',
-        'pillow>=6.2.0',
+        'pillow>=7.1.2',
         'shapely',
         'scikit-image',
         'opencv-python-headless',
