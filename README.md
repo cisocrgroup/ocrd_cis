@@ -1,5 +1,6 @@
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/cisocrgroup/ocrd_cis.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cisocrgroup/ocrd_cis/context:python)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/cisocrgroup/ocrd_cis.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cisocrgroup/ocrd_cis/alerts/)
+[![image](https://img.shields.io/pypi/v/ocrd_cis.svg)](https://pypi.org/project/ocrd_cis/)
 
 Content:
    * [ocrd_cis](#ocrd_cis)
