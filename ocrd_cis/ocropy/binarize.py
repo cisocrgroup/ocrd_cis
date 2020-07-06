@@ -31,7 +31,6 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-binarize'
 LOG = getLogger('processor.OcropyBinarize')
-FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-BIN'
 
 def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False):
     LOG.debug('binarizing %dx%d image with method=%s', pil_image.width, pil_image.height, method)
@@ -81,12 +80,6 @@ class OcropyBinarize(Processor):
                 LOG.critical('requested method %s does not support grayscale normalized output',
                              self.parameter['method'])
                 raise Exception('only method=ocropy allows grayscale=true')
-            try:
-                self.page_grp, self.image_grp = self.output_file_grp.split(',')
-            except ValueError:
-                self.page_grp = self.output_file_grp
-                self.image_grp = FALLBACK_FILEGRP_IMG
-                LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
 
     def process(self):
         """Binarize (and optionally deskew/despeckle) the pages/regions/lines of the workspace.
@@ -102,21 +95,24 @@ class OcropyBinarize(Processor):
         by removing connected components smaller than ``noise_maxsize``.
         Finally, apply results to the image and export it as an image file.
 
-        Add the new image file to the workspace with the fileGrp USE given
-        in the second position of the output fileGrp, or ``OCR-D-IMG-BIN``,
-        and an ID based on input file and input element.
+        Add the new image file to the workspace along with the output fileGrp,
+        and using a file ID with suffix ``.IMG-BIN`` along with further
+        identification of the input element.
 
         Reference each new image in the AlternativeImage of the element.
 
         Produce a new output file by serialising the resulting hierarchy.
         """
         level = self.parameter['level-of-operation']
+        assert len(self.output_file_grp.split(',')) == 1, \
+            "Expected exactly one output file group, but '%s' has %d" % (
+                self.output_file_grp, len(self.output_file_grp.split(',')))
 
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            file_id = input_file.ID.replace(self.input_file_grp, self.image_grp)
+            file_id = input_file.ID.replace(self.input_file_grp, self.output_file_grp)
             if file_id == input_file.ID:
-                file_id = concat_padded(self.image_grp, n)
+                file_id = concat_padded(self.output_file_grp, n)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
@@ -164,19 +160,19 @@ class OcropyBinarize(Processor):
                                           file_id + '_' + region.id + '_' + line.id)
 
             # update METS (add the PAGE file):
-            file_id = input_file.ID.replace(self.input_file_grp, self.page_grp)
+            file_id = input_file.ID.replace(self.input_file_grp, self.output_file_grp)
             if file_id == input_file.ID:
-                file_id = concat_padded(self.page_grp, n)
-            file_path = os.path.join(self.page_grp, file_id + '.xml')
+                file_id = concat_padded(self.output_file_grp, n)
+            file_path = os.path.join(self.output_file_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
-                file_grp=self.page_grp,
+                file_grp=self.output_file_grp,
                 pageId=input_file.pageId,
                 local_filename=file_path,
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
-                     file_id, self.page_grp, out.local_filename)
+                     file_id, self.output_file_grp, out.local_filename)
 
     def process_page(self, page, page_image, page_xywh, page_id, file_id):
         LOG.info("About to binarize page '%s'", page_id)
@@ -207,15 +203,16 @@ class OcropyBinarize(Processor):
         page.set_orientation(orientation)
         # update METS (add the image file):
         if self.parameter['grayscale']:
-            file_id += '.nrm'
+            file_id += '.IMG-NRM'
             features += ',grayscale_normalized'
         else:
+            file_id += '.IMG-BIN'
             features += ',binarized'
         file_path = self.workspace.save_image_file(
             bin_image,
             file_id,
             page_id=page_id,
-            file_grp=self.image_grp)
+            file_grp=self.output_file_grp)
         # update PAGE (reference the image file):
         page.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
@@ -251,15 +248,16 @@ class OcropyBinarize(Processor):
         region.set_orientation(orientation)
         # update METS (add the image file):
         if self.parameter['grayscale']:
-            file_id += '.nrm'
+            file_id += '.IMG-NRM'
             features += ',grayscale_normalized'
         else:
+            file_id += '.IMG-BIN'
             features += ',binarized'
         file_path = self.workspace.save_image_file(
             bin_image,
             file_id,
             page_id=page_id,
-            file_grp=self.image_grp)
+            file_grp=self.output_file_grp)
         # update PAGE (reference the image file):
         region.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
@@ -289,15 +287,16 @@ class OcropyBinarize(Processor):
             features += ',despeckled'
         # update METS (add the image file):
         if self.parameter['grayscale']:
-            file_id += '.nrm'
+            file_id += '.IMG-NRM'
             features += ',grayscale_normalized'
         else:
+            file_id += '.IMG-BIN'
             features += ',binarized'
         file_path = self.workspace.save_image_file(
             bin_image,
             file_id,
             page_id=page_id,
-            file_grp=self.image_grp)
+            file_grp=self.output_file_grp)
         # update PAGE (reference the image file):
         line.add_AlternativeImage(AlternativeImageType(
             filename=file_path,

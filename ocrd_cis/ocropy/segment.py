@@ -54,7 +54,6 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-segment'
 LOG = getLogger('processor.OcropySegment')
-FALLBACK_FILEGRP_IMG = 'OCR-D-IMG-CLIP'
 
 def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
     """Convert label masks into polygon coordinates.
@@ -130,12 +129,6 @@ class OcropySegment(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropySegment, self).__init__(*args, **kwargs)
-        if hasattr(self, 'output_file_grp'):
-            try:
-                self.output_file_grp, self.image_file_grp = self.output_file_grp.split(',')
-            except ValueError:
-                self.image_file_grp = FALLBACK_FILEGRP_IMG
-                LOG.info("No output file group for images specified, falling back to '%s'", FALLBACK_FILEGRP_IMG)
 
     def process(self):
         """Segment pages into regions+lines, tables into cells+lines, or regions into lines.
@@ -211,6 +204,9 @@ class OcropySegment(Processor):
         overwrite_separators = self.parameter['overwrite_separators']
         overwrite_order = self.parameter['overwrite_order']
         oplevel = self.parameter['level-of-operation']
+        assert len(self.output_file_grp.split(',')) == 1, \
+            "Expected exactly one output file group, but '%s' has %d" % (
+                self.output_file_grp, len(self.output_file_grp.split(',')))
 
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
@@ -627,8 +623,8 @@ class OcropySegment(Processor):
             element_array[sepmask] = np.amax(element_array) # clip to white/bg
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
-                image_clipped, file_id + '_clip',
-                file_grp=self.image_file_grp)
+                image_clipped, file_id + '.IMG-CLIP',
+                file_grp=self.output_file_grp)
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
         else:
