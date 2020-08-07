@@ -7,7 +7,9 @@ from PIL import Image
 import Levenshtein
 
 from ocrd_utils import (
-    getLogger, concat_padded,
+    getLogger,
+    make_file_id,
+    assert_file_grp_cardinality,
     coordinates_for_segment,
     polygon_from_bbox,
     points_from_polygon,
@@ -130,6 +132,10 @@ class OcropyRecognize(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+
+        assert_file_grp_cardinality(self.input_file_grp, 1)
+        assert_file_grp_cardinality(self.output_file_grp, 1)
+
         # from ocropus-rpred:
         self.network = load_object(self.get_model(), verbose=1)
         for x in self.network.walk():
@@ -171,12 +177,8 @@ class OcropyRecognize(Processor):
             self.process_regions(regions, maxlevel, page_image, page_coords)
 
             # update METS (add the PAGE file):
-            file_id = input_file.ID.replace(self.input_file_grp,
-                                            self.output_file_grp)
-            if file_id == input_file.ID:
-                file_id = concat_padded(self.output_file_grp, n)
-            file_path = os.path.join(self.output_file_grp,
-                                     file_id + '.xml')
+            file_id = make_file_id(input_file.ID, self.output_file_grp)
+            file_path = os.path.join(self.output_file_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
                 file_grp=self.output_file_grp,
