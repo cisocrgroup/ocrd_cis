@@ -33,7 +33,8 @@ from ocrd_models.ocrd_page_generateds import (
 from ocrd import Processor
 from ocrd_utils import (
     getLogger,
-    concat_padded,
+    make_file_id,
+    assert_file_grp_cardinality,
     coordinates_of_segment,
     coordinates_for_segment,
     points_from_polygon,
@@ -204,16 +205,13 @@ class OcropySegment(Processor):
         overwrite_separators = self.parameter['overwrite_separators']
         overwrite_order = self.parameter['overwrite_order']
         oplevel = self.parameter['level-of-operation']
-        assert len(self.output_file_grp.split(',')) == 1, \
-            "Expected exactly one output file group, but '%s' has %d" % (
-                self.output_file_grp, len(self.output_file_grp.split(',')))
+
+        assert_file_grp_cardinality(self.input_file_grp, 1)
+        assert_file_grp_cardinality(self.output_file_grp, 1)
 
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            file_id = input_file.ID.replace(self.input_file_grp,
-                                            self.output_file_grp)
-            if file_id == input_file.ID:
-                file_id = concat_padded(self.output_file_grp, n)
+            file_id = make_file_id(input_file, self.output_file_grp)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)

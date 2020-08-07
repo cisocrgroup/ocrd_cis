@@ -16,7 +16,8 @@ from ocrd_models.ocrd_page import (
 from ocrd import Processor
 from ocrd_utils import (
     getLogger,
-    concat_padded,
+    make_file_id,
+    assert_file_grp_cardinality,
     coordinates_of_segment,
     polygon_from_points,
     bbox_from_polygon,
@@ -80,15 +81,12 @@ class OcropyClip(Processor):
         # deskewing, because that would make segments incomensurable with their
         # neighbours.
         level = self.parameter['level-of-operation']
-        assert len(self.output_file_grp.split(',')) == 1, \
-            "Expected exactly one output file group, but '%s' has %d" % (
-                self.output_file_grp, len(self.output_file_grp.split(',')))
+        assert_file_grp_cardinality(self.input_file_grp, 1)
+        assert_file_grp_cardinality(self.output_file_grp, 1)
 
         for (n, input_file) in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            file_id = input_file.ID.replace(self.input_file_grp, self.output_file_grp)
-            if file_id == input_file.ID:
-                file_id = concat_padded(self.output_file_grp, n)
+            file_id = make_file_id(input_file, self.output_file_grp)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
@@ -213,9 +211,6 @@ class OcropyClip(Processor):
                                              input_file.pageId, file_id + '_' + region.id + '_' + line.id)
 
             # update METS (add the PAGE file):
-            file_id = input_file.ID.replace(self.input_file_grp, self.output_file_grp)
-            if file_id == input_file.ID:
-                file_id = concat_padded(self.output_file_grp, n)
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
             out = self.workspace.add_file(
                 ID=file_id,
