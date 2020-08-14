@@ -1,6 +1,6 @@
 {
 	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
-	"version": "0.0.10",
+	"version": "0.1.0",
 	"tools": {
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
@@ -51,6 +51,12 @@
 					"type": "number",
 					"format": "int",
 					"description": "maximum pixel number for connected components to regard as noise (0 will deactivate denoising)",
+					"default": 0
+				},
+				"dpi": {
+					"type": "number",
+					"format": "float",
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when zero or negative",
 					"default": 0
 				},
 				"level-of-operation": {
@@ -121,8 +127,8 @@
 				"dpi": {
 					"type": "number",
 					"format": "float",
-					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
-					"default": -1
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when zero or negative",
+					"default": 0
 				},
 				"level-of-operation": {
 					"type": "string",
@@ -160,8 +166,8 @@
 				"dpi": {
 					"type": "number",
 					"format": "float",
-					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
-					"default": -1
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when zero or negative",
+					"default": 0
 				},
 				"min_fraction": {
 					"type": "number",
@@ -190,8 +196,8 @@
 				"dpi": {
 					"type": "number",
 					"format": "float",
-					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
-					"default": -1
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when zero or negative",
+					"default": 0
 				},
 				"min_fraction": {
 					"type": "number",
@@ -226,8 +232,8 @@
 				"dpi": {
 					"type": "number",
 					"format": "float",
-					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative",
-					"default": -1
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when zero or negative",
+					"default": 0
 				},
 				"range": {
 					"type": "number",
@@ -314,8 +320,8 @@
 				"dpi": {
 					"type": "number",
 					"format": "float",
-					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when negative; when disabled and no meta-data is found, 300 is assumed",
-					"default": -1
+					"description": "pixel density in dots per inch (overrides any meta-data in the images); disabled when zero or negative; when disabled and no meta-data is found, 300 is assumed",
+					"default": 0
 				},
 				"level-of-operation": {
 					"type": "string",

@@ -33,7 +33,7 @@ from .common import (
 TOOL = 'ocrd-cis-ocropy-binarize'
 LOG = getLogger('processor.OcropyBinarize')
 
-def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False):
+def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False, zoom=1.0):
     LOG.debug('binarizing %dx%d image with method=%s', pil_image.width, pil_image.height, method)
     if method == 'none':
         # useful if the images are already binary,
@@ -42,7 +42,7 @@ def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False):
     elif method == 'ocropy':
         # parameter defaults from ocropy-nlbin:
         array = pil2array(pil_image)
-        bin, angle = common.binarize(array, maxskew=maxskew, threshold=threshold, nrm=nrm)
+        bin, angle = common.binarize(array, maxskew=maxskew, threshold=threshold, nrm=nrm, zoom=zoom)
         return array2pil(bin), angle
     # equivalent to ocropy, but without deskewing:
     # elif method == 'kraken':
@@ -129,11 +129,21 @@ class OcropyBinarize(Processor):
                                                       value=self.parameter[name])
                                             for name in self.parameter.keys()])]))
                 
-            page_image, page_xywh, _ = self.workspace.image_from_page(
+            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
                 page, page_id, feature_filter='binarized')
+            if self.parameter['dpi'] > 0:
+                zoom = 300.0/self.parameter['dpi']
+            elif page_image_info.resolution != 1:
+                dpi = page_image_info.resolution
+                if page_image_info.resolutionUnit == 'cm':
+                    dpi *= 2.54
+                LOG.info('Page "%s" uses %f DPI', page_id, dpi)
+                zoom = 300.0/dpi
+            else:
+                zoom = 1
             
             if level == 'page':
-                self.process_page(page, page_image, page_xywh,
+                self.process_page(page, page_image, page_xywh, zoom,
                                   input_file.pageId, file_id)
             else:
                 regions = page.get_TextRegion() + (
@@ -144,7 +154,7 @@ class OcropyBinarize(Processor):
                     region_image, region_xywh = self.workspace.image_from_segment(
                         region, page_image, page_xywh, feature_filter='binarized')
                     if level == 'region':
-                        self.process_region(region, region_image, region_xywh,
+                        self.process_region(region, region_image, region_xywh, zoom,
                                             input_file.pageId, file_id + '_' + region.id)
                         continue
                     lines = region.get_TextLine()
@@ -153,7 +163,7 @@ class OcropyBinarize(Processor):
                     for line in lines:
                         line_image, line_xywh = self.workspace.image_from_segment(
                             line, region_image, region_xywh, feature_filter='binarized')
-                        self.process_line(line, line_image, line_xywh,
+                        self.process_line(line, line_image, line_xywh, zoom,
                                           input_file.pageId, region.id,
                                           file_id + '_' + region.id + '_' + line.id)
 
@@ -169,7 +179,7 @@ class OcropyBinarize(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def process_page(self, page, page_image, page_xywh, page_id, file_id):
+    def process_page(self, page, page_image, page_xywh, zoom, page_id, file_id):
         LOG.info("About to binarize page '%s'", page_id)
         features = page_xywh['features']
         if 'angle' in page_xywh and page_xywh['angle']:
@@ -182,7 +192,8 @@ class OcropyBinarize(Processor):
                                     method=self.parameter['method'],
                                     maxskew=maxskew,
                                     threshold=self.parameter['threshold'],
-                                    nrm=self.parameter['grayscale'])
+                                    nrm=self.parameter['grayscale'],
+                                    zoom=zoom)
         if angle:
             features += ',deskewed'
         page_xywh['angle'] = angle
@@ -213,7 +224,7 @@ class OcropyBinarize(Processor):
             filename=file_path,
             comments=features))
 
-    def process_region(self, region, region_image, region_xywh, page_id, file_id):
+    def process_region(self, region, region_image, region_xywh, zoom, page_id, file_id):
         LOG.info("About to binarize page '%s' region '%s'", page_id, region.id)
         features = region_xywh['features']
         if 'angle' in region_xywh and region_xywh['angle']:
@@ -222,12 +233,14 @@ class OcropyBinarize(Processor):
             bin_image, _ = binarize(region_image,
                                     method=self.parameter['method'],
                                     maxskew=0,
-                                    nrm=self.parameter['grayscale'])
+                                    nrm=self.parameter['grayscale'],
+                                    zoom=zoom)
         else:
             bin_image, angle = binarize(region_image,
                                         method=self.parameter['method'],
                                         maxskew=self.parameter['maxskew'],
-                                        nrm=self.parameter['grayscale'])
+                                        nrm=self.parameter['grayscale'],
+                                        zoom=zoom)
             if angle:
                 features += ',deskewed'
             region_xywh['angle'] = angle
@@ -258,14 +271,15 @@ class OcropyBinarize(Processor):
             filename=file_path,
             comments=features))
 
-    def process_line(self, line, line_image, line_xywh, page_id, region_id, file_id):
+    def process_line(self, line, line_image, line_xywh, zoom, page_id, region_id, file_id):
         LOG.info("About to binarize page '%s' region '%s' line '%s'",
                  page_id, region_id, line.id)
         features = line_xywh['features']
         bin_image, angle = binarize(line_image,
                                     method=self.parameter['method'],
                                     maxskew=self.parameter['maxskew'],
-                                    nrm=self.parameter['grayscale'])
+                                    nrm=self.parameter['grayscale'],
+                                    zoom=zoom)
         if angle:
             features += ',deskewed'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
