@@ -8,6 +8,7 @@ from ocrd.decorators import ocrd_cli_options
 from ocrd.decorators import ocrd_cli_wrap_processor
 from ocrd_utils import MIMETYPE_PAGE
 from ocrd_utils import getLogger
+from ocrd_utils import make_file_id
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml
 from ocrd_models.ocrd_page_generateds import TextEquivType
@@ -43,15 +44,14 @@ class Aligner(Processor):
             pcgts = self.align(alignments, ift)
             # keep the right part after OCR-D-...-filename
             # and prepend output_file_grp
-            # ID = concat_padded(self.output_file_grp, _id+1)
-            basename = os.path.basename(ift[0].input_file.url)
-            ID = self.output_file_grp + '-' + basename.replace('.xml', '')
+            input_file = ift[0].input_file
+            file_id = make_file_id(input_file, self.output_file_grp)
+            pcgts.set_pcGtsId(file_id)
             out = self.workspace.add_file(
-                ID=ID,
+                ID=file_id,
                 file_grp=self.output_file_grp,
-                pageId=ift[0].input_file.pageId,
-                basename=basename,
-                local_filename=os.path.join(self.output_file_grp, basename),
+                pageId=input_file.pageId,
+                local_filename=os.path.join(self.output_file_grp, file_id + '.xml'),
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts),
             )

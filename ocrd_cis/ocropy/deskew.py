@@ -112,6 +112,7 @@ class OcropyDeskew(Processor):
 
             # update METS (add the PAGE file):
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
+            pcgts.set_pcGtsId(file_id)
             out = self.workspace.add_file(
                 ID=file_id,
                 file_grp=self.output_file_grp,
