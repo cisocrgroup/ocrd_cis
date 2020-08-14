@@ -38,7 +38,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.10.4',
+        'ocrd>=2.13',
         'click',
         'scipy',
         'numpy>=1.17.0',
@@ -64,7 +64,6 @@ setup(
             'ocrd-cis-ocropy-deskew=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_deskew',
             'ocrd-cis-ocropy-dewarp=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_dewarp',
             'ocrd-cis-ocropy-recognize=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_recognize',
-            'ocrd-cis-ocropy-rec=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_rec',
             'ocrd-cis-ocropy-resegment=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_resegment',
             'ocrd-cis-ocropy-segment=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_segment',
             'ocrd-cis-ocropy-train=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_train',
