@@ -402,6 +402,7 @@ def DSAVE(title,array, interactive=False):
     from matplotlib import cm
     from matplotlib import patches as mpatches
     from tempfile import mkstemp
+    from os import close
     # set uniformly bright / maximally differentiating colors
     cmap = cm.rainbow # default viridis is too dark on low end
     # use black for bg (not in the cmap)
@@ -440,8 +441,9 @@ def DSAVE(title,array, interactive=False):
         plt.disconnect('key_press_event')
         return result
     else:
-        _,fname = mkstemp(suffix=title+".png")
+        fd, fname = mkstemp(suffix=title+".png")
         plt.imsave(fname,array,vmin=vmin,vmax=vmax,cmap=cmap)
+        close(fd)
         LOG.debug('DSAVE %s', fname)
 
 @checks(ABINARY2,NUMBER)

@@ -165,8 +165,8 @@ def read_image_gray(fname,pageno=0):
     the range 0...1 (unsigned) or -1...1 (signed)."""
     if type(fname)==tuple: fname,pageno = fname
     assert pageno==0
-    pil = PIL.Image.open(fname)
-    a = pil2array(pil)
+    with PIL.Image.open(fname) as pil:
+        a = pil2array(pil)
     if a.dtype==dtype('uint8'):
         a = a/255.0
     if a.dtype==dtype('int8'):
@@ -202,8 +202,8 @@ def read_image_binary(fname,dtype='i',pageno=0):
     of the given dtype."""
     if type(fname)==tuple: fname,pageno = fname
     assert pageno==0
-    pil = PIL.Image.open(fname)
-    a = pil2array(pil)
+    with PIL.Image.open(fname) as pil:
+        a = pil2array(pil)
     if a.ndim==3: a = amax(a,axis=2)
     return array(a>0.5*(amin(a)+amax(a)),dtype)
 
@@ -256,8 +256,8 @@ def make_seg_white(image):
 def read_line_segmentation(fname):
     """Reads a line segmentation, that is an RGB image whose values
     encode the segmentation of a text line.  Returns an int array."""
-    pil = PIL.Image.open(fname)
-    a = pil2array(pil)
+    with PIL.Image.open(fname) as pil:
+        a = pil2array(pil)
     assert a.dtype==dtype('B')
     assert a.ndim==3
     image = rgb2int(a)
@@ -276,8 +276,8 @@ def write_line_segmentation(fname,image):
 def read_page_segmentation(fname):
     """Reads a page segmentation, that is an RGB image whose values
     encode the segmentation of a page.  Returns an int array."""
-    pil = PIL.Image.open(fname)
-    a = pil2array(pil)
+    with PIL.Image.open(fname) as pil:
+        a = pil2array(pil)
     assert a.dtype==dtype('B')
     assert a.ndim==3
     segmentation = rgb2int(a)
