@@ -10,7 +10,6 @@ from ocrd_cis.ocropy.dewarp import OcropyDewarp
 from ocrd_cis.ocropy.recognize import OcropyRecognize
 from ocrd_cis.ocropy.segment import OcropySegment
 from ocrd_cis.ocropy.train import OcropyTrain
-from ocrd_cis.ocropy.rec import OcropyRec
 
 
 @click.command()
@@ -57,10 +56,3 @@ def ocrd_cis_ocropy_segment(*args, **kwargs):
 @ocrd_cli_options
 def ocrd_cis_ocropy_train(*args, **kwargs):
     return ocrd_cli_wrap_processor(OcropyTrain, *args, **kwargs)
-
-@click.command()
-@click.option('-f', '--fromdir', default = os.getcwd())
-@click.option('-t', '--todir', default = os.getcwd())
-@click.option('-m', '--model', default='en-default.pyrnn.gz')
-def ocrd_cis_ocropy_rec(fromdir, todir , model):
-    return OcropyRec(fromdir, todir, model)
