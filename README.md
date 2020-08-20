@@ -74,11 +74,11 @@ It is possible (and recommended) to install `ocrd_cis` in a custom user director
 ```
 
 ## Profiler
-The post correction is dependent on the language
-[profiler](https://github.com/cisocrgroup/Profiler) and its laguage
-configurations to generate corrections for suspicious words.  In order
-to use the post correction a profiler with according language
-configruations have to be present on the system.  You can refer to our
+The post-correction is dependent on the language
+[profiler](https://github.com/cisocrgroup/Profiler) and its language
+configurations to generate corrections for suspicious words. In order
+to use the post-correction, a profiler and according language
+configurations have to be present on the system. You can refer to our
 [manuals](https://github.com/cisocrgroup/Resources/tree/master/manuals)
 and our [lexical
 resources](https://github.com/cisocrgroup/Resources/tree/master/lexica)
