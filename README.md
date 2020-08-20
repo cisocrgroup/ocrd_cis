@@ -11,7 +11,7 @@ Content:
          * [ocrd-cis-postcorrect](#ocrd-cis-postcorrect)
          * [ocrd-cis-align](#ocrd-cis-align)
          * [ocrd-cis-data](#ocrd-cis-data)
-         * [Trainining](#trainining)
+         * [Training](#training)
          * [ocrd-cis-ocropy-train](#ocrd-cis-ocropy-train)
          * [ocrd-cis-ocropy-clip](#ocrd-cis-ocropy-clip)
          * [ocrd-cis-ocropy-resegment](#ocrd-cis-ocropy-resegment)
@@ -162,7 +162,7 @@ jar library, the pre-trained post correction model, the path to the
 default 3-grams language model file or the default training
 configuration file.  This tool does not follow the OCR-D conventions.
 
-### Trainining
+### Training
 There is no dedicated training script provided. Models are trained
 using the java implementation directly (check out the [training test
 script](tests/run_training_test.bash) for an example).  Training a
