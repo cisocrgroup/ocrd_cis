@@ -561,7 +561,7 @@ def compute_hlines(binary, scale,
     DSAVE('hlines5_selected', horiz+0.6*binary)
     # 6- dilate vertically a little
     #    to get a smooth contour without gaps
-    horiz = morph.r_dilation(horiz, (d0,d1))
+    horiz = morph.r_dilation(horiz, (d0,odd(scale)))
     DSAVE('hlines6_v-dilated', horiz+0.6*binary)
     return horiz > 0
 
@@ -630,7 +630,7 @@ def compute_separators_morph(binary, scale,
     DSAVE('colseps5_selected', vert+0.6*binary)
     # 6- dilate horizontally a little
     #    to get a smooth contour without gaps
-    vert = morph.r_dilation(vert, (d0,d1))
+    vert = morph.r_dilation(vert, (odd(scale),d1))
     DSAVE('colseps6_h-dilated', vert+0.6*binary)
     return vert > 0
 
