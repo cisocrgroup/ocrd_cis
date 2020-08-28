@@ -161,7 +161,7 @@ def addtoworkspace(wsdir, gtdir):
 
     _, _, files = os.walk(wsdir).__next__()
     if 'mets.xml' not in files:
-        initcmd = 'ocrd workspace init {}'.format(wsdir)
+        initcmd = 'ocrd workspace -d {} init'.format(wsdir)
         subprocess_cmd(initcmd)
 
 
