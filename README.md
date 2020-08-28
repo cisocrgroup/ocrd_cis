@@ -480,7 +480,7 @@ installed in order to run any tests).
 # Miscellaneous
 ## OCR-D workspace
 
-* Create a new (empty) workspace: `ocrd workspace init workspace-dir`
+* Create a new (empty) workspace: `ocrd workspace -d workspace-dir init`
 * cd into `workspace-dir`
 * Add new file to workspace: `ocrd workspace add file -G group -i id
   -m mimetype -g pageId`
