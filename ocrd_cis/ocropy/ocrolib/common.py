@@ -19,8 +19,6 @@ from .exceptions import (BadClassLabel, BadInput, FileNotFound,
                                 OcropusException)
 from numpy import (amax, amin, array, bitwise_and, clip, dtype, mean, minimum,
                    nan, sin, sqrt, zeros, unique, fromstring)
-from pylab import (clf, cm, ginput, gray, imshow, ion, subplot,
-                   where, xticks, yticks, title, xlabel, ylabel)
 from scipy.ndimage import morphology, measurements
 import PIL
 
@@ -802,6 +800,7 @@ def binarize_range(image,dtype='B',threshold=0.5):
 
 def plotgrid(data,d=10,shape=(30,30)):
     """Plot a list of images on a grid."""
+    from matplotlib.pyplot import ion, gray, clf, subplot, imshow, ginput
     ion()
     gray()
     clf()
@@ -813,11 +812,13 @@ def plotgrid(data,d=10,shape=(30,30)):
     ginput(1,timeout=0.1)
 
 def showrgb(r,g=None,b=None):
+    from matplotlib.pyplot import imshow
     if g is None: g = r
     if b is None: b = r
     imshow(array([r,g,b]).transpose([1,2,0]))
 
 def showgrid(l,cols=None,n=400,titles=None,xlabels=None,ylabels=None,**kw):
+    from matplotlib.pyplot import cm, xticks, yticks, subplot, imshow, title, xlabel, ylabel
     if "cmap" not in kw: kw["cmap"] = cm.gray
     if "interpolation" not in kw: kw["interpolation"] = "nearest"
     n = minimum(n,len(l))
