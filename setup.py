@@ -51,7 +51,7 @@ setup(
     ],
     extras_require={
         'debug': ['matplotlib>3.0.0'],
-    }
+    },
     package_data={
         '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar', '*.zip'],
     },
