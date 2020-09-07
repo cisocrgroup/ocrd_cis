@@ -3,7 +3,6 @@
 import os
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.ndimage import interpolation,filters,measurements
 
 def scale_to_h(img,target_height,order=1,dtype=np.dtype('f'),cval=0):
@@ -71,6 +70,7 @@ class CenterNormalizer:
         self.mad = np.mean(deltas[line!=0])
         self.r = int(1+self.range*self.mad)
         if self.debug:
+            import matplotlib.pyplot as plt
             plt.figure("center")
             plt.imshow(line,cmap=plt.cm.gray)
             plt.plot(self.center)
