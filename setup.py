@@ -46,10 +46,12 @@ setup(
         'shapely',
         'scikit-image',
         'opencv-python-headless',
-        'matplotlib>3.0.0',
         'python-Levenshtein',
         'calamari_ocr == 0.3.5'
     ],
+    extras_require={
+        'debug': ['matplotlib>3.0.0'],
+    }
     package_data={
         '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar', '*.zip'],
     },
