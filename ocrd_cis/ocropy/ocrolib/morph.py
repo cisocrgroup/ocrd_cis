@@ -5,7 +5,6 @@
 
 
 from numpy import *
-import pylab
 #from scipy.ndimage import morphology,measurements,filters
 from scipy.ndimage import measurements
 from scipy.ndimage.interpolation import shift
@@ -154,7 +153,8 @@ def rg_closing(image,size,origin=0):
 
 @checks(SEGMENTATION)
 def showlabels(x,n=7):
-    pylab.imshow(where(x>0,x%n+1,0),cmap=pylab.cm.gist_stern)
+    import matplotlib.pyplot as plt
+    plt.imshow(where(x>0,x%n+1,0),cmap=plt.cm.gist_stern)
 
 @checks(ABINARY2)
 def find_contours(image):
