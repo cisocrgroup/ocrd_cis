@@ -11,7 +11,7 @@ Content:
          * [ocrd-cis-postcorrect](#ocrd-cis-postcorrect)
          * [ocrd-cis-align](#ocrd-cis-align)
          * [ocrd-cis-data](#ocrd-cis-data)
-         * [Trainining](#trainining)
+         * [Training](#training)
          * [ocrd-cis-ocropy-train](#ocrd-cis-ocropy-train)
          * [ocrd-cis-ocropy-clip](#ocrd-cis-ocropy-clip)
          * [ocrd-cis-ocropy-resegment](#ocrd-cis-ocropy-resegment)
@@ -74,11 +74,11 @@ It is possible (and recommended) to install `ocrd_cis` in a custom user director
 ```
 
 ## Profiler
-The post correction is dependent on the language
-[profiler](https://github.com/cisocrgroup/Profiler) and its laguage
-configurations to generate corrections for suspicious words.  In order
-to use the post correction a profiler with according language
-configruations have to be present on the system.  You can refer to our
+The post-correction is dependent on the language
+[profiler](https://github.com/cisocrgroup/Profiler) and its language
+configurations to generate corrections for suspicious words. In order
+to use the post-correction, a profiler and according language
+configurations have to be present on the system. You can refer to our
 [manuals](https://github.com/cisocrgroup/Resources/tree/master/manuals)
 and our [lexical
 resources](https://github.com/cisocrgroup/Resources/tree/master/lexica)
@@ -162,7 +162,7 @@ jar library, the pre-trained post correction model, the path to the
 default 3-grams language model file or the default training
 configuration file.  This tool does not follow the OCR-D conventions.
 
-### Trainining
+### Training
 There is no dedicated training script provided. Models are trained
 using the java implementation directly (check out the [training test
 script](tests/run_training_test.bash) for an example).  Training a
@@ -480,7 +480,7 @@ installed in order to run any tests).
 # Miscellaneous
 ## OCR-D workspace
 
-* Create a new (empty) workspace: `ocrd workspace init workspace-dir`
+* Create a new (empty) workspace: `ocrd workspace -d workspace-dir init`
 * cd into `workspace-dir`
 * Add new file to workspace: `ocrd workspace add file -G group -i id
   -m mimetype -g pageId`

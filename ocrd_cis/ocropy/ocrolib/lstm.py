@@ -30,7 +30,6 @@ from collections import defaultdict
 import unicodedata, sys
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.ndimage import measurements,filters
 
 from . import common as ocrolib
@@ -806,6 +805,7 @@ def ctc_align_targets(outputs,targets,threshold=100.0,verbose=0,debug=0,lo=1e-5)
     lmatch = np.log(match)
 
     if debug:
+        import matplotlib.pyplot as plt
         plt.figure("ctcalign"); plt.clf();
         plt.subplot(411); plt.imshow(outputs.T,interpolation='nearest',cmap=plt.cm.hot)
         plt.subplot(412); plt.imshow(lmatch.T,interpolation='nearest',cmap=plt.cm.hot)

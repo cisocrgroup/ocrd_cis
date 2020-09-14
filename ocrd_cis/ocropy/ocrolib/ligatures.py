@@ -5,7 +5,7 @@
 ################################################################
 
 import re
-from pylab import uint32
+from numpy import uint32
 
 ### These aren't formal ligatures, they are character pairs
 ### that are frequently touching in Latin script documents.

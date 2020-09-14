@@ -1,8 +1,6 @@
 from __future__ import print_function
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from scipy.ndimage import filters,interpolation
 
 from .toplevel import *
@@ -131,6 +129,7 @@ def reading_order(lines,highlight=None,debug=0):
         if w[1].start<u[1].stop and w[1].stop>v[1].start: return 1
         return 0
     if highlight is not None:
+        import matplotlib.pyplot as plt
         plt.clf()
         plt.title("highlight")
         plt.imshow(lines)
@@ -178,6 +177,8 @@ def find(condition):
 def show_lines(image,lines,lsort):
     """Overlays the computed lines on top of the image, for debugging
     purposes."""
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
     ys,xs = [],[]
     plt.clf()
     plt.cla()
@@ -197,12 +198,14 @@ def show_lines(image,lines,lsort):
 
 @obsolete
 def read_gray(fname):
+    import matplotlib.pyplot as plt
     image = plt.imread(fname)
     if image.ndim==3: image = np.mean(image,2)
     return image
 
 @obsolete
 def read_binary(fname):
+    import matplotlib.pyplot as plt
     image = plt.imread(fname)
     if image.ndim==3: image = np.mean(image,2)
     image -= np.amin(image)
@@ -214,6 +217,7 @@ def read_binary(fname):
 @obsolete
 def rgbshow(r,g,b=None,gn=1,cn=0,ab=0,**kw):
     """Small function to display 2 or 3 images as RGB channels."""
+    import matplotlib.pyplot as plt
     if b is None: b = np.zeros(r.shape)
     combo = np.transpose(np.array([r,g,b]),axes=[1,2,0])
     if cn:
