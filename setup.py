@@ -43,7 +43,7 @@ setup(
         'scipy',
         'numpy>=1.17.0',
         'pillow>=7.1.2',
-        'shapely',
+        'shapely>=1.7.1',
         'scikit-image',
         'opencv-python-headless',
         'matplotlib>3.0.0',
