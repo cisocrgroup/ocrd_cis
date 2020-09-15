@@ -5,8 +5,9 @@ import numpy as np
 from skimage import draw
 from skimage.morphology import convex_hull_image
 import cv2
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, asPolygon
 from shapely.prepared import prep
+from shapely.ops import unary_union
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -666,15 +667,46 @@ def polygon_for_parent(polygon, parent):
                                [parent.get_imageWidth(),0]])
     else:
         parentp = Polygon(polygon_from_points(parent.get_Coords().points))
+    # check if clipping is necessary
     if childp.within(parentp):
         return polygon
+    # ensure input coords have valid paths (without self-intersection)
+    # (this can happen when shapes valid in floating point are rounded)
+    childp = make_valid(childp)
+    parentp = make_valid(parentp)
+    # clip to parent
     interp = childp.intersection(parentp)
-    if interp.is_empty:
+    # post-process
+    if interp.is_empty or interp.area == 0.0:
         # FIXME: we need a better strategy against this
         raise Exception("intersection of would-be segment with parent is empty")
+    if interp.type == 'GeometryCollection':
+        # heterogeneous result: filter zero-area shapes (LineString, Point)
+        interp = unary_union([geom for geom in interp.geoms if geom.area > 0])
     if interp.type == 'MultiPolygon':
+        # homogeneous result: construct convex hull to connect
+        # FIXME: construct concave hull / alpha shape
         interp = interp.convex_hull
+    if interp.minimum_clearance < 1.0:
+        # follow-up calculations will necessarily be integer;
+        # so anticipate rounding here and then ensure validity
+        interp = asPolygon(np.round(interp.exterior.coords))
+        interp = make_valid(interp)
     return interp.exterior.coords[:-1] # keep open
+
+def make_valid(polygon):
+    for split in range(1, len(polygon.exterior.coords)-1):
+        if polygon.is_valid or polygon.simplify(polygon.area).is_valid:
+            break
+        # simplification may not be possible (at all) due to ordering
+        # in that case, try another starting point
+        polygon = Polygon(polygon.exterior.coords[-split:]+polygon.exterior.coords[:-split])
+    for tolerance in range(1, int(polygon.area)):
+        if polygon.is_valid:
+            break
+        # simplification may require a larger tolerance
+        polygon = polygon.simplify(tolerance)
+    return polygon
 
 def page_get_reading_order(ro, rogroup):
     """Add all elements from the given reading order group to the given dictionary.
