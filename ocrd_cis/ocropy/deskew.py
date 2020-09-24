@@ -26,7 +26,6 @@ from .common import (
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 TOOL = 'ocrd-cis-ocropy-deskew'
-LOG = getLogger('processor.OcropyDeskew')
 
 def deskew(pil_image, maxskew=2):
     array = pil2array(pil_image)
@@ -59,6 +58,7 @@ class OcropyDeskew(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropyDeskew')
         level = self.parameter['level-of-operation']
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
@@ -124,6 +124,7 @@ class OcropyDeskew(Processor):
                      file_id, self.output_file_grp, out.local_filename)
 
     def _process_segment(self, segment, segment_image, segment_coords, segment_id, page_id, file_id):
+        LOG = getLogger('processor.OcropyDeskew')
         angle0 = segment_coords['angle'] # deskewing (w.r.t. top image) already applied to segment_image
         LOG.info("About to deskew %s", segment_id)
         angle = deskew(segment_image, maxskew=self.parameter['maxskew']) # additional angle to be applied

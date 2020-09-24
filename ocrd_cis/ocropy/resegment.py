@@ -37,7 +37,6 @@ from .common import (
 
 
 TOOL = 'ocrd-cis-ocropy-resegment'
-LOG = getLogger('processor.OcropyResegment')
 
 def resegment(line_polygon, region_labels, region_bin, line_id,
               extend_margins=3,
@@ -57,6 +56,7 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     If ``extend_margins`` is larger than zero, then extend ``line_polygon``
     by that amount of pixels horizontally and vertically before.
     """
+    LOG = getLogger('processor.OcropyResegment')
     # height, width = region_labels.shape
     # mask from line polygon:
     line_mask = np.zeros_like(region_labels)
@@ -144,6 +144,7 @@ class OcropyResegment(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropyResegment')
         # This makes best sense for bad/coarse line segmentation, like current GT
         # or as postprocessing for bbox-only steps.
         # Most notably, it can convert rectangles to polygons (polygonalization).

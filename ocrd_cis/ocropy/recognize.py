@@ -32,7 +32,6 @@ from .common import (
 )
 
 TOOL = 'ocrd-cis-ocropy-recognize'
-LOG = getLogger('processor.OcropyRecognize')
 
 def resize_keep_ratio(image, baseheight=48):
     scale = baseheight / image.height
@@ -132,6 +131,7 @@ class OcropyRecognize(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropyRecognize')
 
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
@@ -191,6 +191,7 @@ class OcropyRecognize(Processor):
                      file_id, self.output_file_grp, out.local_filename)
 
     def process_regions(self, regions, maxlevel, page_image, page_coords):
+        LOG = getLogger('processor.OcropyRecognize')
         edits = 0
         lengs = 0
         for region in regions:
@@ -214,6 +215,7 @@ class OcropyRecognize(Processor):
             LOG.info('CER: %.1f%%', 100.0 * edits / lengs)
 
     def process_lines(self, textlines, maxlevel, region_image, region_coords):
+        LOG = getLogger('processor.OcropyRecognize')
         edits = 0
         lengs = 0
         for line in textlines:

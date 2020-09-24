@@ -55,7 +55,6 @@ from .common import (
 )
 
 TOOL = 'ocrd-cis-ocropy-segment'
-LOG = getLogger('processor.OcropySegment')
 
 def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
     """Convert label masks into polygon coordinates.
@@ -71,6 +70,7 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
 
     Return these polygons as a list of label, polygon tuples.
     """
+    LOG = getLogger('processor.OcropySegment')
     results = list()
     for label in np.unique(bg_labels):
         if not label:
@@ -197,6 +197,7 @@ class OcropySegment(Processor):
         
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropySegment')
         # FIXME: allow passing a-priori info on reading order / textline order
         # (and then pass on as ``bt`` and ``rl``; however, there may be a mixture
         #  of different scripts; also, vertical writing needs internal rotation
@@ -412,6 +413,7 @@ class OcropySegment(Processor):
         in full page/table mode, then combine all separators among them with the
         newly detected separators to guide region segmentation.
         """
+        LOG = getLogger('processor.OcropySegment')
         element_array = pil2array(image)
         element_bin = np.array(element_array <= midrange(element_array), np.bool)
         sep_bin = np.zeros_like(element_bin, np.bool)
@@ -763,6 +765,7 @@ def page_subgroup_in_reading_order(roelem):
     
     Return the new group object.
     """
+    LOG = getLogger('processor.OcropySegment')
     if not roelem:
         LOG.error('Cannot subgroup from empty ReadingOrder element')
         return roelem

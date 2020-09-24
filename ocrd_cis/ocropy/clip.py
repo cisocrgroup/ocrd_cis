@@ -35,7 +35,6 @@ from .common import (
 )
 
 TOOL = 'ocrd-cis-ocropy-clip'
-LOG = getLogger('processor.OcropyClip')
 
 class OcropyClip(Processor):
 
@@ -80,6 +79,7 @@ class OcropyClip(Processor):
         # too. However, region-level clipping _must_ be run before region-level
         # deskewing, because that would make segments incomensurable with their
         # neighbours.
+        LOG = getLogger('processor.OcropyClip')
         level = self.parameter['level-of-operation']
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
@@ -226,6 +226,7 @@ class OcropyClip(Processor):
     def process_segment(self, segment, segment_mask, segment_polygon, neighbours,
                         background_image, parent_image, parent_coords, parent_bin,
                         page_id, file_id):
+        LOG = getLogger('processor.OcropyClip')
         # initialize AlternativeImage@comments classes from parent, except
         # for those operations that can apply on multiple hierarchy levels:
         features = ','.join(
