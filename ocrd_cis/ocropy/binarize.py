@@ -31,9 +31,9 @@ from .common import (
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 TOOL = 'ocrd-cis-ocropy-binarize'
-LOG = getLogger('processor.OcropyBinarize')
 
 def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False, zoom=1.0):
+    LOG = getLogger('processor.OcropyBinarize')
     LOG.debug('binarizing %dx%d image with method=%s', pil_image.width, pil_image.height, method)
     if method == 'none':
         # useful if the images are already binary,
@@ -76,6 +76,7 @@ class OcropyBinarize(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyBinarize, self).__init__(*args, **kwargs)
+        LOG = getLogger('processor.OcropyBinarize')
         if hasattr(self, 'output_file_grp'):
             if self.parameter['grayscale'] and self.parameter['method'] != 'ocropy':
                 LOG.critical('requested method %s does not support grayscale normalized output',
@@ -104,6 +105,7 @@ class OcropyBinarize(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropyBinarize')
         level = self.parameter['level-of-operation']
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
@@ -181,6 +183,7 @@ class OcropyBinarize(Processor):
                      file_id, self.output_file_grp, out.local_filename)
 
     def process_page(self, page, page_image, page_xywh, zoom, page_id, file_id):
+        LOG = getLogger('processor.OcropyBinarize')
         LOG.info("About to binarize page '%s'", page_id)
         features = page_xywh['features']
         if 'angle' in page_xywh and page_xywh['angle']:
@@ -226,6 +229,7 @@ class OcropyBinarize(Processor):
             comments=features))
 
     def process_region(self, region, region_image, region_xywh, zoom, page_id, file_id):
+        LOG = getLogger('processor.OcropyBinarize')
         LOG.info("About to binarize page '%s' region '%s'", page_id, region.id)
         features = region_xywh['features']
         if 'angle' in region_xywh and region_xywh['angle']:
@@ -273,6 +277,7 @@ class OcropyBinarize(Processor):
             comments=features))
 
     def process_line(self, line, line_image, line_xywh, zoom, page_id, region_id, file_id):
+        LOG = getLogger('processor.OcropyBinarize')
         LOG.info("About to binarize page '%s' region '%s' line '%s'",
                  page_id, region_id, line.id)
         features = line_xywh['features']

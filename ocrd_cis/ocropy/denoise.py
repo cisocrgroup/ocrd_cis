@@ -22,7 +22,6 @@ from .common import (
     remove_noise)
 
 TOOL = 'ocrd-cis-ocropy-denoise'
-LOG = getLogger('processor.OcropyDenoise')
 
 class OcropyDenoise(Processor):
 
@@ -53,6 +52,7 @@ class OcropyDenoise(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropyDenoise')
         level = self.parameter['level-of-operation']
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
@@ -133,6 +133,7 @@ class OcropyDenoise(Processor):
                      file_id, self.output_file_grp, out.local_filename)
 
     def process_segment(self, segment, segment_image, segment_xywh, zoom, page_id, file_id):
+        LOG = getLogger('processor.OcropyDenoise')
         LOG.info("About to despeckle '%s'", file_id)
         bin_image = remove_noise(segment_image,
                                  maxsize=self.parameter['noise_maxsize']/zoom*300/72) # in pt

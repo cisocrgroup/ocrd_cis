@@ -27,7 +27,6 @@ from .common import (
 #sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 TOOL = 'ocrd-cis-ocropy-dewarp'
-LOG = getLogger('processor.OcropyDewarp')
 
 class InvalidLine(Exception):
     """Line image does not allow dewarping and should be ignored."""
@@ -100,6 +99,7 @@ class OcropyDewarp(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
+        LOG = getLogger('processor.OcropyDewarp')
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
 
