@@ -16,8 +16,6 @@ from .ocrolib.toplevel import *
 
 from ocrd_utils import getLogger
 
-LOG = getLogger('ocrolib') # to be refined by importer
-
 # method similar to ocrolib.read_image_gray
 @checks(Image.Image)
 def pil2array(image, alpha=0):
@@ -110,6 +108,7 @@ def estimate_skew_angle(image, angles, min_factor=1.5):
     is larger than the average scores by ``min_factor``, or zero
     otherwise.
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     # TODO: make zoomable, i.e. interpolate down to max 300 DPI to be faster
     # TODO: sweep through angles very coarse, then hill climbing for precision
     # TODO: try with shear (i.e. simply numpy shift) instead of true rotation
@@ -223,6 +222,7 @@ def binarize(image,
     - if ``maxskew>0``, then the deskewing angle (in degrees counter-cw) applied,
       otherwise zero
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     extreme = (np.sum(image < 0.05) + np.sum(image > 0.95)) * 1.0 / np.prod(image.shape)
     if extreme > 0.95:
         comment = "no-normalization"
@@ -284,6 +284,7 @@ def borderclean_bin(binary, margin=4):
 
     Return a Numpy array (with 0 for stay and 1 for remove).
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     h, w = binary.shape
     h1, w1 = min(margin, h//2 - 4), min(margin, w//2 - 4)
     h2, w2 = -h1 if h1 else h, -w1 if w1 else w
@@ -397,6 +398,7 @@ def DSAVE(title,array, interactive=False):
     - False: save all plots as PNG files under /tmp (or $TMPDIR)
       (call image viewer with file list based on date stamps)
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import cm
@@ -587,6 +589,7 @@ def compute_separators_morph(binary, scale,
     
     Returns a same-size bool array as separator mask.
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     LOG.debug("considering at most %g black column separators", maxseps)
     ## no large vertical dilation here, because
     ## that would turn letters into lines; but
@@ -648,6 +651,7 @@ def compute_colseps_conv(binary, scale=1.0, csminheight=10, maxcolseps=2):
     
     Returns a same-size bool array as separator mask.
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     LOG.debug("considering at most %g whitespace column separators", maxcolseps)
     # find vertical whitespace by thresholding
     smoothed = filters.gaussian_filter(1.0*binary,(scale,scale*0.5))
@@ -847,6 +851,7 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
 def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label, and join them morphologically."""
+    LOG = getLogger('ocrolib') # to be refined by importer
     # merge labels horizontally to avoid splitting lines at long whitespace
     # (to prevent corners from becoming the largest label when spreading
     #  into the background; and make contiguous contours possible), but
@@ -990,6 +995,7 @@ def compute_segmentation(binary,
     - Numpy array of vertical background separators mask,
     - the estimated scale (i.e. median sqrt bbox area of glyph components).
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     # TODO generalize to multi-scale (with `scale` as group array instead of float)
     DSAVE("input_binary",binary)
     LOG.debug('estimating glyph scale')
@@ -1082,6 +1088,7 @@ def compute_segmentation(binary,
 # - as separate step on the PIL.Image
 @checks(Image.Image)
 def remove_noise(pil_image, maxsize=8):
+    LOG = getLogger('ocrolib') # to be refined by importer
     array = pil2array(pil_image)
     binary = np.array(array <= ocrolib.midrange(array), np.uint8)
     # TODO we should use opening/closing against fg/bg noise instead pixel counting
@@ -1194,6 +1201,7 @@ def lines2regions(binary, llabels,
     
     Return a Numpy array of text region labels.
     """
+    LOG = getLogger('ocrolib') # to be refined by importer
     lbinary = binary * llabels
     # suppress separators (weak integration)
     if isinstance(sepmask, np.ndarray):
