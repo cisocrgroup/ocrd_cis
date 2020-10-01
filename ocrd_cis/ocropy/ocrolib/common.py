@@ -24,7 +24,7 @@ import PIL
 
 from . import default
 from .default import getlocal
-from .toplevel import (checks, ABINARY2, AINT2, AINT3, BOOL, DARKSEG, GRAYSCALE,
+from .toplevel import (checks, LOG, ABINARY2, AINT2, AINT3, BOOL, DARKSEG, GRAYSCALE,
                       LIGHTSEG, LINESEG, PAGESEG)
 from . import chars
 from . import ligatures
@@ -34,7 +34,6 @@ import multiprocessing
 from . import sl
 
 pickle_mode = 2
-
 
 ################################################################
 # text normalization
@@ -187,7 +186,8 @@ def write_image_gray(fname,image,normalize=0,verbose=0):
     type, its values are clipped to the range [0,1],
     multiplied by 255 and converted to unsigned bytes.  Otherwise,
     the image must be of type unsigned byte."""
-    if verbose: print("# writing", fname)
+    if verbose:
+        LOG.info("# writing '%s'", fname)
     if isfloatarray(image):
         image = array(255*clip(image,0.0,1.0),'B')
     assert image.dtype==dtype('B'),"array has wrong dtype: %s"%image.dtype
@@ -210,7 +210,8 @@ def write_image_binary(fname,image,verbose=0):
     """Write a binary image to disk. This verifies first that the given image
     is, in fact, binary.  The image may be of any type, but must consist of only
     two values."""
-    if verbose: print("# writing", fname)
+    if verbose:
+        LOG.info("# writing '%s'", fname)
     assert image.ndim==2
     image = array(255*(image>midrange(image)),'B')
     im = array2pil(image)
@@ -440,8 +441,8 @@ def load_object(fname,zip=0,nofind=0,verbose=0):
     class names that have changed."""
     if not nofind:
         fname = ocropus_find_file(fname)
-    #if verbose:
-    #    print("# loading object", fname)
+    if verbose:
+        LOG.info("# loading object '%s'", fname)
     if zip==0 and fname.endswith(".gz"):
         zip = 1
     if zip>0:
@@ -720,16 +721,12 @@ def caller():
 
 def die(message,*args):
     """Die with an error message."""
-    message = message%args
-    message = caller()+" FATAL "+message+"\n"
-    sys.stderr.write(message)
+    LOG.critical(caller() + ' ' + message, args)
     sys.exit(1)
 
 def warn(message,*args):
     """Give a warning message."""
-    message = message%args
-    message = caller()+" WARNING "+message+"\n"
-    sys.stderr.write(message)
+    LOG.warning(caller() + ' ' + message, args)
 
 already_warned = {}
 
@@ -738,9 +735,7 @@ def warn_once(message,*args):
     c = caller()
     if c in already_warned: return
     already_warned[c] = 1
-    message = message%args
-    message = c+" WARNING "+message+"\n"
-    sys.stderr.write(message)
+    LOG.warning(c + ' ' + message, args)
 
 def quick_check_page_components(page_bin,dpi):
     """Quickly check whether the components of page_bin are

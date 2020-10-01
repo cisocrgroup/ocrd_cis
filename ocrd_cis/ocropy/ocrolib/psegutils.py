@@ -227,5 +227,6 @@ def rgbshow(r,g,b=None,gn=1,cn=0,ab=0,**kw):
         combo /= max(np.abs(np.amin(combo)),np.abs(np.amax(combo)))
     if ab:
         combo = np.abs(combo)
-    if np.amin(combo)<0: print("warning: values less than zero")
+    if np.amin(combo)<0:
+        LOG.warning("RGB values less than zero")
     plt.imshow(np.clip(combo,0,1),**kw)

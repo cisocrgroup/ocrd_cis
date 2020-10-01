@@ -20,7 +20,6 @@ class CenterNormalizer:
         self.debug = int(os.getenv("debug_center") or "0")
         self.target_height = target_height
         self.range,self.smoothness,self.extra = params
-        print("# CenterNormalizer")
     def setHeight(self,target_height):
         self.target_height = target_height
     def check(self,line, max_ignore=0.02):

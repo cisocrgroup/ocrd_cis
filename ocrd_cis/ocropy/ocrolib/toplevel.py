@@ -4,9 +4,12 @@ import linecache
 import os
 import sys
 import warnings
+import logging
 
 import numpy as np
 from functools import (reduce, wraps)
+
+LOG = logging.getLogger('ocrolib')
 
 ### printing
 
@@ -54,15 +57,15 @@ def trace1(f):
         try:
             global _trace1_depth
             _trace1_depth += 1
-            print(" " * _trace1_depth, "ENTER", name, ":", end=' ')
+            message = " " * _trace1_depth + " ENTER %s: " % name
             for k,v in list(zip(argnames,args))+list(kw.items()):
-                print("%s=%s" % (k, strc(v)), end=' ')
-            print()
+                message += "%s=%s " % (k, strc(v))
+            LOG.debug(message)
             result = f(*args,**kw)
-            print(" " * _trace1_depth, "LEAVE", name, ":", strc(result))
+            LOG.debug(" " * _trace1_depth + " LEAVE %s: %s", name, strc(result))
             return result
         except Exception as e:
-            print(" " * _trace1_depth, "ERROR", name, ":", e)
+            LOG.debug(" " * _trace1_depth + " ERROR %s: ", name, exc_info=e)
             raise
         finally:
             _trace1_depth -= 1
@@ -78,13 +81,16 @@ def tracing(f):
             fname = frame.f_code.co_filename
             lineno = frame.f_lineno
             base = os.path.basename(fname)
-            print("%s(%s): %s" % (base, lineno,
-                                  linecache.getline(fname, lineno)))
+            LOG.debug("%s(%s): %s", base, lineno,
+                      linecache.getline(fname, lineno))
         return localtrace
     @wraps(f)
     def wrapper(*args,**kw):
         sys.settrace(globaltrace)
+        level = LOG.level
+        LOG.setLevel('DEBUG')
         result = f(*args,**kw)
+        LOG.setLevel(level)
         sys.settrace(None)
         return result
     return wrapper
@@ -205,7 +211,7 @@ def checks(*types,**ktypes):
                     e.var = var
                     raise e
                 except:
-                    print("unknown exception while checking function:", name)
+                    LOG.critical("unknown exception while checking function: '%s'", name)
                     raise
             result = f(*args,**kw)
             checktype(result,kw.get("_",True))
