@@ -10,8 +10,6 @@ from ocrd_utils import (
 )
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
-    MetadataItemType,
-    LabelsType, LabelType,
     to_xml, AlternativeImageType
 )
 from ocrd import Processor
@@ -76,9 +74,14 @@ class OcropyDewarp(Processor):
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyDewarp, self).__init__(*args, **kwargs)
         if hasattr(self, 'output_file_grp'):
-            # defaults from ocrolib.lineest:
-            range_ = self.parameter['range']
-            self.lnorm = lineest.CenterNormalizer(params=(range_, 1.0, 0.3))
+            # processing context
+            self.setup()
+    
+    def setup(self):
+        # defaults from ocrolib.lineest:
+        range_ = self.parameter['range']
+        self.lnorm = lineest.CenterNormalizer(params=(range_, 1.0, 0.3))
+        self.logger = getLogger('processor.OcropyDewarp')
 
     def process(self):
         """Dewarp the lines of the workspace.
@@ -99,31 +102,18 @@ class OcropyDewarp(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
-        LOG = getLogger('processor.OcropyDewarp')
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
 
         for (n, input_file) in enumerate(self.input_files):
-            LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
+            self.logger.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = make_file_id(input_file, self.output_file_grp)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
+            self.add_metadata(pcgts)
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
                 
-            # add metadata about this operation and its runtime parameters:
-            metadata = pcgts.get_Metadata() # ensured by from_file()
-            metadata.add_MetadataItem(
-                MetadataItemType(type_="processingStep",
-                                 name=self.ocrd_tool['steps'][0],
-                                 value=TOOL,
-                                 Labels=[LabelsType(
-                                     externalModel="ocrd-tool",
-                                     externalId="parameters",
-                                     Label=[LabelType(type_=name,
-                                                      value=self.parameter[name])
-                                            for name in self.parameter.keys()])]))
-            
             page_image, page_xywh, page_image_info = self.workspace.image_from_page(
                 page, page_id)
             if self.parameter['dpi'] > 0:
@@ -132,36 +122,36 @@ class OcropyDewarp(Processor):
                 dpi = page_image_info.resolution
                 if page_image_info.resolutionUnit == 'cm':
                     dpi *= 2.54
-                LOG.info('Page "%s" uses %f DPI', page_id, dpi)
+                self.logger.info('Page "%s" uses %f DPI', page_id, dpi)
                 zoom = 300.0/dpi
             else:
                 zoom = 1
 
-            regions = page.get_TextRegion()
+            regions = page.get_AllRegions(classes=['Text'])
             if not regions:
-                LOG.warning('Page "%s" contains no text regions', page_id)
+                self.logger.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
                 region_image, region_xywh = self.workspace.image_from_segment(
                     region, page_image, page_xywh)
 
                 lines = region.get_TextLine()
                 if not lines:
-                    LOG.warning('Region %s contains no text lines', region.id)
+                    self.logger.warning('Region %s contains no text lines', region.id)
                 for line in lines:
                     line_image, line_xywh = self.workspace.image_from_segment(
                         line, region_image, region_xywh)
 
-                    LOG.info("About to dewarp page '%s' region '%s' line '%s'",
-                             page_id, region.id, line.id)
+                    self.logger.info("About to dewarp page '%s' region '%s' line '%s'",
+                                     page_id, region.id, line.id)
                     try:
                         dew_image = dewarp(line_image, self.lnorm, check=True,
                                            max_neighbour=self.parameter['max_neighbour'],
                                            zoom=zoom)
                     except InvalidLine as err:
-                        LOG.error('cannot dewarp line "%s": %s', line.id, err)
+                        self.logger.error('cannot dewarp line "%s": %s', line.id, err)
                         continue
                     except InadequateLine as err:
-                        LOG.warning('cannot dewarp line "%s": %s', line.id, err)
+                        self.logger.warning('cannot dewarp line "%s": %s', line.id, err)
                         # as a fallback, simply pad the image vertically
                         # (just as dewarping would do on average, so at least
                         #  this line has similar margins as the others):
@@ -188,5 +178,5 @@ class OcropyDewarp(Processor):
                 local_filename=file_path,
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts))
-            LOG.info('created file ID: %s, file_grp: %s, path: %s',
-                     file_id, self.output_file_grp, out.local_filename)
+            self.logger.info('created file ID: %s, file_grp: %s, path: %s',
+                             file_id, self.output_file_grp, out.local_filename)

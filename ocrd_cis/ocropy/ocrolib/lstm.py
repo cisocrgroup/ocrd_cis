@@ -33,15 +33,12 @@ import numpy as np
 from scipy.ndimage import measurements,filters
 
 from . import common as ocrolib
+from .toplevel import LOG
 from .exceptions import RecognitionError
 from .edist import levenshtein
 from . import utils
 
 initial_range = 0.1
-
-class RangeError(Exception):
-    def __init__(self,s=None):
-        Exception.__init__(self,s)
 
 def prepare_line(line,pad=16):
     """Prepare a line for recognition; this inverts it, transposes
@@ -216,7 +213,7 @@ class Network:
             ds.ravel()[:] = self.momentum * ds.ravel()[:] + self.learning_rate * dw.ravel()[:]
             w.ravel()[:] += ds.ravel()[:]
             if self.verbose:
-                print(n, (np.amin(w), np.amax(w)), (np.amin(dw), np.amax(dw)))
+                LOG.info("{} {} {}".format(n, (np.amin(w), np.amax(w)), (np.amin(dw), np.amax(dw))))
 
     def forward(self,xs):
         """Propagate activations forward through the network.
@@ -270,7 +267,7 @@ class Logreg(Network):
         vars = sorted("W2".split())
         for v in vars:
             a = np.array(getattr(self,v))
-            print(v, a.shape, np.amin(a), np.amax(a))
+            LOG.info("{} {} {} {}".format(v, a.shape, np.amin(a), np.amax(a)))
     def weights(self):
         yield self.W2,self.DW2,"Logreg"
 
@@ -314,7 +311,7 @@ class Softmax(Network):
         vars = sorted("W2".split())
         for v in vars:
             a = np.array(getattr(self,v))
-            print(v, a.shape, np.amin(a), np.amax(a))
+            LOG.info("{} {} {} {}".format(v, a.shape, np.amin(a), np.amax(a)))
     def weights(self):
         yield self.W2,self.DW2,"Softmax"
 
@@ -504,7 +501,7 @@ class LSTM(Network):
         vars = sorted(vars)
         for v in vars:
             a = np.array(getattr(self,v))
-            print(v, a.shape, np.amin(a), np.amax(a))
+            LOG.info("{} {} {} {}".format(v, a.shape, np.amin(a), np.amax(a)))
     def preSave(self):
         self.max_n = max(500,len(self.ci))
         self.allocate(1)
@@ -719,7 +716,7 @@ def make_target(cs,nc):
             result[2*i+1,j] = 1.0
         result[-1,0] = 1.0
     except(IndexError):
-        print('\n!!! Uuups, something went wrong !!!\nDid you import a model that was trained on less characters then needed for this operation?')
+        LOG.critical('Cannot index target class. Did you load a model that was trained on less characters then needed for this operation?')
         sys.exit(1)
     return result
 

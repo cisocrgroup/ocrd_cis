@@ -11,8 +11,6 @@ from shapely.ops import unary_union
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
-    MetadataItemType,
-    LabelsType, LabelType,
     to_xml, CoordsType,
     TextLineType,
     TextRegionType,
@@ -216,21 +214,9 @@ class OcropySegment(Processor):
             file_id = make_file_id(input_file, self.output_file_grp)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
+            self.add_metadata(pcgts)
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            
-            # add metadata about this operation and its runtime parameters:
-            metadata = pcgts.get_Metadata() # ensured by from_file()
-            metadata.add_MetadataItem(
-                MetadataItemType(type_="processingStep",
-                                 name=self.ocrd_tool['steps'][0],
-                                 value=TOOL,
-                                 Labels=[LabelsType(
-                                     externalModel="ocrd-tool",
-                                     externalId="parameters",
-                                     Label=[LabelType(type_=name,
-                                                      value=self.parameter[name])
-                                            for name in self.parameter.keys()])]))
             
             # TODO: also allow grayscale_normalized (try/except?)
             page_image, page_coords, page_image_info = self.workspace.image_from_page(

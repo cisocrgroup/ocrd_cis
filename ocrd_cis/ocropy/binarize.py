@@ -15,8 +15,6 @@ from ocrd_utils import (
 )
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
-    MetadataItemType,
-    LabelsType, LabelType,
     to_xml, AlternativeImageType
 )
 from ocrd import Processor
@@ -76,12 +74,16 @@ class OcropyBinarize(Processor):
         kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
         super(OcropyBinarize, self).__init__(*args, **kwargs)
-        LOG = getLogger('processor.OcropyBinarize')
         if hasattr(self, 'output_file_grp'):
-            if self.parameter['grayscale'] and self.parameter['method'] != 'ocropy':
-                LOG.critical('requested method %s does not support grayscale normalized output',
-                             self.parameter['method'])
-                raise Exception('only method=ocropy allows grayscale=true')
+            # processing context
+            self.setup()
+    
+    def setup(self):
+        self.logger = getLogger('processor.OcropyBinarize')
+        if self.parameter['grayscale'] and self.parameter['method'] != 'ocropy':
+            self.logger.critical('requested method %s does not support grayscale normalized output',
+                                 self.parameter['method'])
+            raise Exception('only method=ocropy allows grayscale=true')
 
     def process(self):
         """Binarize (and optionally deskew/despeckle) the pages/regions/lines of the workspace.
@@ -105,31 +107,18 @@ class OcropyBinarize(Processor):
 
         Produce a new output file by serialising the resulting hierarchy.
         """
-        LOG = getLogger('processor.OcropyBinarize')
         level = self.parameter['level-of-operation']
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
 
         for (n, input_file) in enumerate(self.input_files):
-            LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
+            self.logger.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = make_file_id(input_file, self.output_file_grp)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
+            self.add_metadata(pcgts)
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-            
-            # add metadata about this operation and its runtime parameters:
-            metadata = pcgts.get_Metadata() # ensured by from_file()
-            metadata.add_MetadataItem(
-                MetadataItemType(type_="processingStep",
-                                 name=self.ocrd_tool['steps'][0],
-                                 value=TOOL,
-                                 Labels=[LabelsType(
-                                     externalModel="ocrd-tool",
-                                     externalId="parameters",
-                                     Label=[LabelType(type_=name,
-                                                      value=self.parameter[name])
-                                            for name in self.parameter.keys()])]))
                 
             page_image, page_xywh, page_image_info = self.workspace.image_from_page(
                 page, page_id, feature_filter='binarized')
@@ -139,7 +128,7 @@ class OcropyBinarize(Processor):
                 dpi = page_image_info.resolution
                 if page_image_info.resolutionUnit == 'cm':
                     dpi *= 2.54
-                LOG.info('Page "%s" uses %f DPI', page_id, dpi)
+                self.logger.info('Page "%s" uses %f DPI', page_id, dpi)
                 zoom = 300.0/dpi
             else:
                 zoom = 1
@@ -148,10 +137,12 @@ class OcropyBinarize(Processor):
                 self.process_page(page, page_image, page_xywh, zoom,
                                   input_file.pageId, file_id)
             else:
-                regions = page.get_TextRegion() + (
-                    page.get_TableRegion() if level == 'region' else [])
+                if level == 'table':
+                    regions = page.get_TableRegion()
+                else: # region
+                    regions = page.get_AllRegions(classes=['Text'])
                 if not regions:
-                    LOG.warning('Page "%s" contains no text regions', page_id)
+                    self.logger.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
                     region_image, region_xywh = self.workspace.image_from_segment(
                         region, page_image, page_xywh, feature_filter='binarized')
@@ -161,7 +152,8 @@ class OcropyBinarize(Processor):
                         continue
                     lines = region.get_TextLine()
                     if not lines:
-                        LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
+                        self.logger.warning('Page "%s" region "%s" contains no text lines',
+                                            page_id, region.id)
                     for line in lines:
                         line_image, line_xywh = self.workspace.image_from_segment(
                             line, region_image, region_xywh, feature_filter='binarized')
@@ -179,12 +171,11 @@ class OcropyBinarize(Processor):
                 local_filename=file_path,
                 mimetype=MIMETYPE_PAGE,
                 content=to_xml(pcgts))
-            LOG.info('created file ID: %s, file_grp: %s, path: %s',
-                     file_id, self.output_file_grp, out.local_filename)
+            self.logger.info('created file ID: %s, file_grp: %s, path: %s',
+                             file_id, self.output_file_grp, out.local_filename)
 
     def process_page(self, page, page_image, page_xywh, zoom, page_id, file_id):
-        LOG = getLogger('processor.OcropyBinarize')
-        LOG.info("About to binarize page '%s'", page_id)
+        self.logger.info("About to binarize page '%s'", page_id)
         features = page_xywh['features']
         if 'angle' in page_xywh and page_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
@@ -229,8 +220,7 @@ class OcropyBinarize(Processor):
             comments=features))
 
     def process_region(self, region, region_image, region_xywh, zoom, page_id, file_id):
-        LOG = getLogger('processor.OcropyBinarize')
-        LOG.info("About to binarize page '%s' region '%s'", page_id, region.id)
+        self.logger.info("About to binarize page '%s' region '%s'", page_id, region.id)
         features = region_xywh['features']
         if 'angle' in region_xywh and region_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
@@ -277,9 +267,8 @@ class OcropyBinarize(Processor):
             comments=features))
 
     def process_line(self, line, line_image, line_xywh, zoom, page_id, region_id, file_id):
-        LOG = getLogger('processor.OcropyBinarize')
-        LOG.info("About to binarize page '%s' region '%s' line '%s'",
-                 page_id, region_id, line.id)
+        self.logger.info("About to binarize page '%s' region '%s' line '%s'",
+                         page_id, region_id, line.id)
         features = line_xywh['features']
         bin_image, angle = binarize(line_image,
                                     method=self.parameter['method'],
@@ -294,8 +283,8 @@ class OcropyBinarize(Processor):
         #orientation = -angle
         #orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
         #line.set_orientation(orientation) # does not exist on line level!
-        LOG.warning("cannot add orientation %.2f to page '%s' region '%s' line '%s'",
-                    -angle, page_id, region_id, line.id)
+        self.logger.warning("cannot add orientation %.2f to page '%s' region '%s' line '%s'",
+                            -angle, page_id, region_id, line.id)
         bin_image = remove_noise(bin_image,
                                  maxsize=self.parameter['noise_maxsize'])
         if self.parameter['noise_maxsize']:
