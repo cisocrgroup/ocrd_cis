@@ -17,8 +17,6 @@ from ocrd_utils import (
 )
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
-    MetadataItemType,
-    LabelsType, LabelType,
     to_xml, TextEquivType,
     CoordsType, GlyphType, WordType
 )
@@ -151,28 +149,16 @@ class OcropyRecognize(Processor):
         for (n, input_file) in enumerate(self.input_files):
             self.logger.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             pcgts = page_from_file(self.workspace.download_file(input_file))
+            self.add_metadata(pcgts)
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
-
-            # add metadata about this operation and its runtime parameters:
-            metadata = pcgts.get_Metadata() # ensured by from_file()
-            metadata.add_MetadataItem(
-                MetadataItemType(type_="processingStep",
-                                 name=self.ocrd_tool['steps'][0],
-                                 value=TOOL,
-                                 Labels=[LabelsType(
-                                     externalModel="ocrd-tool",
-                                     externalId="parameters",
-                                     Label=[LabelType(type_=name,
-                                                      value=self.parameter[name])
-                                            for name in self.parameter.keys()])]))
 
             page_image, page_coords, _ = self.workspace.image_from_page(
                 page, page_id)
 
             self.logger.info("Recognizing text in page '%s'", page_id)
             # region, line, word, or glyph level:
-            regions = page.get_TextRegion()
+            regions = page.get_AllRegions(classes=['Text'])
             if not regions:
                 self.logger.warning("Page '%s' contains no text regions", page_id)
             self.process_regions(regions, maxlevel, page_image, page_coords)

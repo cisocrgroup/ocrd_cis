@@ -61,7 +61,7 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "region", "line"],
+					"enum": ["page", "table", "region", "line"],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "page"
 				}
@@ -92,7 +92,7 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "region"],
+					"enum": ["page", "table", "region"],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "region"
 				}
