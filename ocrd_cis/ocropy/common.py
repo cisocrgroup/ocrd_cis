@@ -14,9 +14,7 @@ from .ocrolib import morph, psegutils, sl
 # for decorators (type-checks etc):
 from .ocrolib.toplevel import *
 
-from ocrd_utils import getLogger
-
-LOG = getLogger('ocrolib') # to be refined by importer
+LOG = logging.getLogger('ocrolib') # to be refined by importer
 
 # method similar to ocrolib.read_image_gray
 @checks(Image.Image)
