@@ -121,7 +121,12 @@ class OcropyClip(Processor):
                 page.get_UnknownRegion())
             if not num_texts:
                 LOG.warning('Page "%s" contains no text regions', page_id)
-            background = ImageStat.Stat(page_image).median[0]
+            background = ImageStat.Stat(page_image)
+            # workaround for Pillow#4925
+            if len(background.bands) > 1:
+                background = tuple(background.median)
+            else:
+                background = background.median[0]
             if level == 'region':
                 background_image = Image.new('L', page_image.size, background)
                 page_array = pil2array(page_image)
