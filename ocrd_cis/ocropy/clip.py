@@ -137,13 +137,14 @@ class OcropyClip(Processor):
                 # in relative coordinates for mask/cropping
                 polygons = [coordinates_of_segment(region, page_image, page_coords)
                             for region in regions]
-                masks = [pil2array(polygon_mask(page_image, polygon)).astype(np.uint8)
-                         for polygon in polygons]
-                for i, mask in enumerate(masks[num_texts:], num_texts):
+                for i, polygon in enumerate(polygons[num_texts:], num_texts):
                     # for non-text regions, extend mask by 3 pixels in each direction
                     # to ensure they do not leak components accidentally
                     # (accounts for bad cropping of such regions in GT):
-                    masks[i] = filters.maximum_filter(mask, 7)
+                    polygon = Polygon(polygon).buffer(3).exterior.coords[:-1] # keep open
+                    polygons[i] = polygon
+                masks = [pil2array(polygon_mask(page_image, polygon)).astype(np.uint8)
+                         for polygon in polygons]
             for i, region in enumerate(regions):
                 if i >= num_texts:
                     break # keep non-text regions unchanged
