@@ -128,7 +128,7 @@ class OcropyClip(Processor):
             else:
                 background = background.median[0]
             if level == 'region':
-                background_image = Image.new('L', page_image.size, background)
+                background_image = Image.new(page_image.mode, page_image.size, background)
                 page_array = pil2array(page_image)
                 page_bin = np.array(page_array <= midrange(page_array), np.uint8)
                 # in absolute coordinates merely for comparison/intersection
@@ -172,7 +172,7 @@ class OcropyClip(Processor):
                     continue
                 region_image, region_coords = self.workspace.image_from_segment(
                     region, page_image, page_coords, feature_selector='binarized')
-                background_image = Image.new('L', region_image.size, background)
+                background_image = Image.new(region_image.mode, region_image.size, background)
                 region_array = pil2array(region_image)
                 region_bin = np.array(region_array <= midrange(region_array), np.uint8)
                 # in absolute coordinates merely for comparison/intersection
