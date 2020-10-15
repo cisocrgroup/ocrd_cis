@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import os.path
 import numpy as np
 from PIL import Image, ImageStat, ImageOps
-from scipy.ndimage import filters
 from shapely.geometry import Polygon
 from shapely.prepared import prep
 
