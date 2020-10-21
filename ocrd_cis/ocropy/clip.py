@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import os.path
 import numpy as np
 from PIL import Image, ImageStat, ImageOps
-from scipy.ndimage import filters
 from shapely.geometry import Polygon
 from shapely.prepared import prep
 
@@ -128,7 +127,7 @@ class OcropyClip(Processor):
             else:
                 background = background.median[0]
             if level == 'region':
-                background_image = Image.new('L', page_image.size, background)
+                background_image = Image.new(page_image.mode, page_image.size, background)
                 page_array = pil2array(page_image)
                 page_bin = np.array(page_array <= midrange(page_array), np.uint8)
                 # in absolute coordinates merely for comparison/intersection
@@ -137,13 +136,14 @@ class OcropyClip(Processor):
                 # in relative coordinates for mask/cropping
                 polygons = [coordinates_of_segment(region, page_image, page_coords)
                             for region in regions]
-                masks = [pil2array(polygon_mask(page_image, polygon)).astype(np.uint8)
-                         for polygon in polygons]
-                for i, mask in enumerate(masks[num_texts:], num_texts):
+                for i, polygon in enumerate(polygons[num_texts:], num_texts):
                     # for non-text regions, extend mask by 3 pixels in each direction
                     # to ensure they do not leak components accidentally
                     # (accounts for bad cropping of such regions in GT):
-                    masks[i] = filters.maximum_filter(mask, 7)
+                    polygon = Polygon(polygon).buffer(3).exterior.coords[:-1] # keep open
+                    polygons[i] = polygon
+                masks = [pil2array(polygon_mask(page_image, polygon)).astype(np.uint8)
+                         for polygon in polygons]
             for i, region in enumerate(regions):
                 if i >= num_texts:
                     break # keep non-text regions unchanged
@@ -172,7 +172,7 @@ class OcropyClip(Processor):
                     continue
                 region_image, region_coords = self.workspace.image_from_segment(
                     region, page_image, page_coords, feature_selector='binarized')
-                background_image = Image.new('L', region_image.size, background)
+                background_image = Image.new(region_image.mode, region_image.size, background)
                 region_array = pil2array(region_image)
                 region_bin = np.array(region_array <= midrange(region_array), np.uint8)
                 # in absolute coordinates merely for comparison/intersection
