@@ -93,6 +93,9 @@ def resegment(line_polygon, region_labels, region_bin, line_id,
     max_contour = np.argmax(contour_areas)
     max_area = contour_areas[max_contour]
     total_area = cv2.contourArea(np.expand_dims(line_polygon, 1))
+    if not total_area:
+        LOG.warning('Empty line polygon for line "%s"', line_id)
+        return None
     if max_area / total_area < 0.5 * threshold_relative:
         # using a different, more conservative threshold here:
         # avoid being overly strict with cropping background,
