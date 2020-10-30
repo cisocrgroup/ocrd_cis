@@ -1431,8 +1431,7 @@ def lines2regions(binary, llabels,
         y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
         x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
         if debug: LOG.debug('   prominent y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
-        if (isinstance(sepmask, np.ndarray) and
-            np.count_nonzero(sepmask)):
+        if npartitions > 0:
             # TODO this can be avoided when backtracking below
             # suppress peaks creating fewer partitions than others --
             # how large in our preferred direction will the new partitions
@@ -1458,6 +1457,9 @@ def lines2regions(binary, llabels,
             y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
             x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
             if debug: LOG.debug('   most partitioning y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        else:
+            y_partitionscores = None
+            x_partitionscores = None
         # suppress less prominent peaks again, this time stricter
         y_prominence = np.amax(y_weights, initial=0)
         x_prominence = np.amax(x_weights, initial=0)
