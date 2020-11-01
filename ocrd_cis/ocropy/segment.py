@@ -285,7 +285,8 @@ class OcropySegment(Processor):
                     ro.set_OrderedGroup(rogroup)
                 # go get TextRegions with TextLines (and SeparatorRegions):
                 self._process_element(page, ignore, page_image, page_coords,
-                                      page_id, file_id, zoom, rogroup=rogroup)
+                                      page_id, file_id,
+                                      input_file.pageId, zoom, rogroup=rogroup)
             elif oplevel == 'table':
                 ignore.extend(page.get_TextRegion())
                 regions = list(page.get_TableRegion())
@@ -335,7 +336,8 @@ class OcropySegment(Processor):
                         reading_order[region.id] = roelem
                     # go get TextRegions with TextLines (and SeparatorRegions)
                     self._process_element(region, subignore, region_image, region_coords,
-                                          region.id, file_id + '_' + region.id, zoom, rogroup=roelem)
+                                          region.id, file_id + '_' + region.id,
+                                          input_file.pageid, zoom, rogroup=roelem)
             else: # 'region'
                 regions = list(page.get_TextRegion())
                 # besides top-level text regions, line-segment any table cells,
@@ -366,7 +368,8 @@ class OcropySegment(Processor):
                         region, page_image, page_coords, feature_selector='binarized')
                     # go get TextLines
                     self._process_element(region, ignore, region_image, region_coords,
-                                          region.id, file_id + '_' + region.id, zoom)
+                                          region.id, file_id + '_' + region.id,
+                                          input_file.pageId, zoom)
 
             # update METS (add the PAGE file):
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
@@ -381,7 +384,7 @@ class OcropySegment(Processor):
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
 
-    def _process_element(self, element, ignore, image, coords, element_id, file_id, zoom=1.0, rogroup=None):
+    def _process_element(self, element, ignore, image, coords, element_id, file_id, page_id, zoom=1.0, rogroup=None):
         """Add PAGE layout elements by segmenting an image.
 
         Given a PageType, TableRegionType or TextRegionType ``element``, and
@@ -612,6 +615,7 @@ class OcropySegment(Processor):
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
                 image_clipped, file_id + '.IMG-CLIP',
+                pageId=page_id,
                 file_grp=self.output_file_grp)
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
