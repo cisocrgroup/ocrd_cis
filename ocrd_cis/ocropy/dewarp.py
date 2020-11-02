@@ -34,6 +34,8 @@ class InadequateLine(Exception):
 
 # from ocropus-dewarp, but without resizing
 def dewarp(image, lnorm, check=True, max_neighbour=0.02, zoom=1.0):
+    if not image.width or not image.height:
+        raise InvalidLine('image size is zero')
     line = pil2array(image)
     
     if np.prod(line.shape) == 0:
