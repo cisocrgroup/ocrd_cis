@@ -257,7 +257,7 @@ class OcropyResegment(Processor):
                     file_path = self.workspace.save_image_file(
                         line_image,
                         file_id=file_id + '_' + region.id + '_' + line.id + '.IMG-RESEG',
-                        page_id=page_id,
+                        page_id=input_file.pageId,
                         file_grp=self.output_file_grp)
                     # update PAGE (reference the image file):
                     line.add_AlternativeImage(AlternativeImageType(
