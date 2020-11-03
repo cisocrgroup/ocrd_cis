@@ -955,7 +955,9 @@ def compute_segmentation(binary,
     Given a binarized (and inverted) image as Numpy array ``image``, compute
     a complete segmentation of it into text lines as a label array.
 
-    If ``fullpage`` is false, then avoid single-line horizontal splits.
+    If ``fullpage`` is false, then
+    - avoid single-line horizontal splits, and
+    - ignore any foreground in ``seps``.
 
     If ``fullpage`` is true, then
     - allow all horizontal splits, and search
@@ -1005,13 +1007,13 @@ def compute_segmentation(binary,
         binary = np.minimum(binary,1-hlines)
         binary = np.minimum(binary,1-vlines)
         binary = np.minimum(binary,1-images)
-        if seps is not None:
-            # suppress separators/images for line estimation
-            binary = (1-seps) * binary
     else:
         hlines = np.zeros_like(binary, np.bool)
         vlines = np.zeros_like(binary, np.bool)
         images = np.zeros_like(binary, np.bool)
+    if seps is not None:
+        # suppress separators/images for line estimation
+        binary = (1-seps) * binary
 
     LOG.debug('computing gradient map')
     bottom, top, boxmap = compute_gradmaps(binary, scale,
