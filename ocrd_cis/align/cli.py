@@ -91,9 +91,6 @@ class Aligner(Processor):
         for i, line in enumerate(lines):
             if lines[0].region.get_TextEquiv() is None:
                 lines[0].region.TextEquiv = []
-            # ensure to append enough text equivs
-            while len(lines[0].region.get_TextEquiv()) <= i:
-                lines[0].region.add_TextEquiv(TextEquivType())
             self.log.debug('line alignment: %s [%s - %s]',
                           get_textequiv_unicode(line.region),
                           line.region.get_id(),
