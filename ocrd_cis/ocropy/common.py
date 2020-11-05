@@ -1011,8 +1011,9 @@ def compute_segmentation(binary,
         hlines = np.zeros_like(binary, np.bool)
         vlines = np.zeros_like(binary, np.bool)
         images = np.zeros_like(binary, np.bool)
-    if seps is not None:
+    if seps is not None and not seps.all():
         # suppress separators/images for line estimation
+        # (unless it encompasses the full image for some reason)
         binary = (1-seps) * binary
 
     LOG.debug('computing gradient map')
