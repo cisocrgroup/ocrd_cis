@@ -619,7 +619,7 @@ class OcropySegment(Processor):
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
                 image_clipped, file_id + '.IMG-CLIP',
-                pageId=page_id,
+                page_id=page_id,
                 file_grp=self.output_file_grp)
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
@@ -646,7 +646,18 @@ class OcropySegment(Processor):
                 # annotate result:
                 element.add_TextLine(TextLineType(id=line_id, Coords=CoordsType(
                     points=points_from_polygon(line_polygon))))
-
+            if not sep_bin.any():
+                return
+            # annotate a text/image-separated image
+            element_array[sep_bin] = np.amax(element_array) # clip to white/bg
+            image_clipped = array2pil(element_array)
+            file_path = self.workspace.save_image_file(
+                image_clipped, file_id + '.IMG-CLIP',
+                page_id=page_id,
+                file_grp=self.output_file_grp)
+            # update PAGE (reference the image file):
+            element.add_AlternativeImage(AlternativeImageType(
+                filename=file_path, comments=coords['features'] + ',clipped'))
 
 def polygon_for_parent(polygon, parent):
     """Clip polygon to parent polygon range.
