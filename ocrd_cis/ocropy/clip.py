@@ -229,16 +229,16 @@ class OcropyClip(Processor):
         segment_image = image_from_polygon(parent_image, segment_polygon)
         segment_bbox = bbox_from_polygon(segment_polygon)
         for neighbour, neighbour_mask in neighbours:
+            if not np.any(segment_mask > neighbour_mask):
+                LOG.info('Ignoring enclosing neighbour "%s" of segment "%s" on page "%s"',
+                         neighbour.id, segment.id, page_id)
+                continue
             # find connected components that (only) belong to the neighbour:
             intruders = segment_mask * morph.keep_marked(parent_bin, neighbour_mask > 0) # overlaps neighbour
             intruders = morph.remove_marked(intruders, segment_mask > neighbour_mask) # but exclusively
             num_intruders = np.count_nonzero(intruders)
             num_foreground = np.count_nonzero(segment_mask * parent_bin)
             if not num_intruders:
-                continue
-            if num_intruders / num_foreground > 1.0 - self.parameter['min_fraction']:
-                LOG.info('Too many intruders (%d/%d) from neighbour "%s" in segment "%s" on page "%s"',
-                         num_intruders, num_foreground, neighbour.id, segment.id, page_id)
                 continue
             LOG.debug('segment "%s" vs neighbour "%s": suppressing %d pixels on page "%s"',
                       segment.id, neighbour.id, np.count_nonzero(intruders), page_id)
