@@ -103,6 +103,7 @@ class OcropyClip(Processor):
             else:
                 zoom = 1
 
+            # FIXME: what about text regions inside table regions?
             regions = list(page.get_TextRegion())
             num_texts = len(regions)
             regions += (
@@ -241,6 +242,10 @@ class OcropyClip(Processor):
                 continue
             LOG.debug('segment "%s" vs neighbour "%s": suppressing %d pixels on page "%s"',
                       segment.id, neighbour.id, np.count_nonzero(intruders), page_id)
+            # suppress in segment_mask so these intruders can stay in the neighbours
+            # (are not removed from both sides)
+            segment_mask -= intruders
+            # suppress in derived image result to be annotated
             clip_mask = array2pil(intruders)
             segment_image.paste(background_image, mask=clip_mask) # suppress in raw image
             if segment_image.mode in ['RGB', 'L', 'RGBA', 'LA']:
