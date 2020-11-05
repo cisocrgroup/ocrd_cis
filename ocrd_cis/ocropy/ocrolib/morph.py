@@ -188,6 +188,8 @@ def spread_labels(labels,maxdist=9999999):
     #distances,features = morphology.distance_transform_edt(labels==0,return_distances=1,return_indices=1)
     #indexes = features[0]*labels.shape[1]+features[1]
     #spread = labels.ravel()[indexes.ravel()].reshape(*labels.shape)
+    if not labels.any():
+        return labels
     distances,indexes = cv2.distanceTransformWithLabels(array(labels==0,uint8),cv2.DIST_L2,cv2.DIST_MASK_PRECISE,labelType=cv2.DIST_LABEL_PIXEL)
     spread = labels[where(labels>0)][indexes-1]
     spread *= (distances<maxdist)
