@@ -366,6 +366,10 @@ class OcropySegment(Processor):
                     # TODO: also allow grayscale_normalized (try/except?)
                     region_image, region_coords = self.workspace.image_from_segment(
                         region, page_image, page_coords, feature_selector='binarized')
+                    # if the region images have already been clipped against their neighbours specifically,
+                    # then we don't need to suppress all neighbours' foreground generally here
+                    if 'clipped' in region_coords['features'].split(','):
+                        ignore = []
                     # go get TextLines
                     self._process_element(region, ignore, region_image, region_coords,
                                           region.id, file_id + '_' + region.id,
@@ -450,7 +454,7 @@ class OcropySegment(Processor):
                 raise Exception(report)
             line_labels, hlines, vlines, images, colseps, scale = compute_segmentation(
                 # suppress separators and ignored regions for textline estimation
-                # but keep them for h/v-line detection:
+                # but keep them for h/v-line detection (in fullpage mode):
                 element_bin, seps=(sep_bin+ignore_labels)>0,
                 zoom=zoom, fullpage=fullpage,
                 spread_dist=round(self.parameter['spread']/zoom*300/72), # in pt
