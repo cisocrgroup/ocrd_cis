@@ -227,6 +227,7 @@ class OcropyResegment(Processor):
                         # crop region arrays accordingly:
                         line_polygon = coordinates_of_segment(line, region_image, region_xywh)
                         line_bbox = bbox_from_polygon(line_polygon)
+                        line_bbox = np.clip(line_bbox, [0] * 4, [region_image.width, region_image.height] * 2)
                         line_labels = region_labels[line_bbox[1]:line_bbox[3],
                                                     line_bbox[0]:line_bbox[2]]
                         line_bin = region_bin[line_bbox[1]:line_bbox[3],
