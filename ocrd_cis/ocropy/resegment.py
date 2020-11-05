@@ -249,7 +249,7 @@ class OcropyResegment(Processor):
                         # convert back to absolute (page) coordinates:
                         line_polygon = coordinates_for_segment(line_polygon, region_image, region_xywh)
                     # annotate result:
-                    line.get_Coords().points = points_from_polygon(line_polygon)
+                    line.get_Coords().set_points(points_from_polygon(line_polygon))
                     # create new image:
                     line_image, line_xywh = self.workspace.image_from_segment(
                         line, region_image, region_xywh, feature_selector='binarized')
