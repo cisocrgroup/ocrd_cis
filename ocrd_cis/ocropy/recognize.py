@@ -164,7 +164,7 @@ class OcropyRecognize(Processor):
             self.process_regions(regions, maxlevel, page_image, page_coords)
 
             # update METS (add the PAGE file):
-            file_id = make_file_id(input_file.ID, self.output_file_grp)
+            file_id = make_file_id(input_file, self.output_file_grp)
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
             pcgts.set_pcGtsId(file_id)
             out = self.workspace.add_file(
