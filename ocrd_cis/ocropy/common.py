@@ -395,14 +395,17 @@ def DSAVE(title,array, interactive=False):
     - False: save all plots as PNG files under /tmp (or $TMPDIR)
       (call image viewer with file list based on date stamps)
     """
+    if not enabled:
+        return
     logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import cm
     from matplotlib import patches as mpatches
     from tempfile import mkstemp
     from os import close
+    import copy
     # set uniformly bright / maximally differentiating colors
-    cmap = cm.rainbow # default viridis is too dark on low end
+    cmap = copy.copy(cm.rainbow) # default viridis is too dark on low end
     # use black for bg (not in the cmap)
     cmap.set_bad(color='black') # for background (normal)
     # allow calling with extra fg as 2nd array
@@ -422,6 +425,9 @@ def DSAVE(title,array, interactive=False):
             vmax = np.amax(array) # over
             array = array.copy()
             array[array2>0] = vmax+1 # fg
+    else:
+        vmin = 0
+        vmax = np.amax(array)
     array = array.astype('float')
     array[array==0] = np.nan # bad (extra color)
     if interactive:
@@ -439,7 +445,7 @@ def DSAVE(title,array, interactive=False):
         plt.disconnect('key_press_event')
         return result
     else:
-        fd, fname = mkstemp(suffix=title+".png")
+        fd, fname = mkstemp(suffix="_" + title + ".png")
         plt.imsave(fname,array,vmin=vmin,vmax=vmax,cmap=cmap)
         close(fd)
         LOG.debug('DSAVE %s', fname)
@@ -466,6 +472,8 @@ def compute_images(binary, scale, maximages=5):
     # 1- filter largest connected components
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=2*maximages)
     DSAVE('images1_large', images+0.6*binary)
+    if not images.any():
+        return images > 0
     # 2- open horizontally and vertically to suppress
     #    v/h-lines; these will be detected separately,
     #    and it is dangerous to combine them into one
@@ -488,6 +496,8 @@ def compute_images(binary, scale, maximages=5):
     # 5- select nbest
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=maximages)
     DSAVE('images5_selected', images+0.6*binary)
+    if not images.any():
+        return images > 0
     # 6- dilate a little to get a smooth contour without gaps
     dilated = morph.r_dilation(images, (odd(scale),odd(scale)))
     images = morph.propagate_labels_majority(binary, dilated+1)
@@ -547,6 +557,8 @@ def compute_hlines(binary, scale,
     horiz = np.where(horiz, opened, 2)
     horiz = morph.spread_labels(horiz, maxdist=d1) % 2 | opened
     DSAVE('hlines3_reconstructed', horiz+0.6*binary)
+    if not horiz.any():
+        return horiz > 0
     # 4- disregard parts from images; we don't want
     #    to compete/overlap with image objects too much,
     #    or waste our nbest on them
@@ -613,6 +625,8 @@ def compute_separators_morph(binary, scale,
     vert = np.where(vert, opened, 2)
     vert = morph.spread_labels(vert, maxdist=d1) % 2 | opened
     DSAVE('colseps3_reconstructed', vert+0.6*binary)
+    if not vert.any():
+        return vert > 0
     # 4- disregard parts from images; we don't want
     #    to compete/overlap with image objects too much,
     #    or waste our nbest on them
@@ -848,70 +862,83 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label, and join them morphologically."""
     # merge labels horizontally to avoid splitting lines at long whitespace
-    # (to prevent corners from becoming the largest label when spreading
-    #  into the background; and make contiguous contours possible), but
+    # (ensuring contiguous contours), but
     # ignore conflicts which affect only small fractions of either line
     # (avoiding merges for small vertical overlap):
-    relabel = np.unique(seeds)
-    labels = relabel[relabel > 0] # without background
-    objects = [(0,0)] + measurements.find_objects(seeds)
-    centers = [(0,0)] + measurements.center_of_mass(binary, seeds, labels)
+    labels = np.unique(seeds * (binary > 0)) # without empty foreground
+    labels = labels[labels > 0] # without background
+    seeds[~np.isin(seeds, labels, assume_unique=True)] = 0
+    DSAVE("hmerge0_nonempty", seeds)
+    if len(labels) < 2:
+        return seeds
+    objects = measurements.find_objects(seeds)
+    centers = measurements.center_of_mass(binary, seeds, labels)
+    relabel = np.arange(np.max(seeds)+1, dtype=seeds.dtype)
+    # FIXME: get incidence of y overlaps to avoid full inner loops
+    LOG.debug('checking %d non-empty line seeds for overlaps', len(labels))
     for label in labels:
         seed = seeds == label
+        if not seed.any():
+            continue
         DSAVE('hmerge1_seed', seed)
         # close to fill holes from underestimated scale
         seed = morph.rb_closing(seed, (scale, scale))
         DSAVE('hmerge2_closed', seed)
-        # open horizontally to remove extruding ascenders/descenders
-        seed = morph.rb_opening(seed, (1, 3*scale))
-        DSAVE('hmerge3_h-opened', seed)
-        # close horizontally to overlap with possible neighbors
-        seed = morph.rb_closing(seed, (1, 2*seeds.shape[1]))
+        # not really necessary (seed does not contain ascenders/descenders):
+        # # open horizontally to remove extruding ascenders/descenders
+        # seed = morph.rb_opening(seed, (1, 3*scale))
+        # DSAVE('hmerge3_h-opened', seed)
+        if not seed.any():
+            continue
+        obj = measurements.find_objects(seed)[0]
+        if obj is None:
+            continue
+        seed[obj[0], 0:seed.shape[1]] = 1
         DSAVE('hmerge4_h-closed', seed)
         # get overlaps
-        neighbors, counts = np.unique(seeds * seed, return_counts=True)
-        for candidate, count in zip(neighbors, counts):
-            if candidate in [0, label]:
+        for label2 in labels:
+            if label == label2 or relabel[label] == label2:
                 continue
-            total = np.count_nonzero(seeds == candidate)
+            obj2 = objects[label2-1]
+            if not obj2:
+                continue
+            if not sl.yoverlaps(obj, obj2):
+                continue
+            center = centers[labels.searchsorted(label)]
+            bbox = objects[label-1]
+            center2 = centers[labels.searchsorted(label2)]
+            bbox2 = objects[label2-1]
+            if (not (bbox2[0].start < center[0] < bbox2[0].stop) or
+                not (bbox[0].start < center2[0] < bbox[0].stop) or
+                (bbox2[1].start < center[1] < bbox2[1].stop) or
+                (bbox[1].start < center2[1] < bbox[1].stop)):
+                LOG.debug('ignoring h-overlap between %d and %d (not mutually centric)', label, label2)
+                continue
+            seed2 = seeds == label2
+            count = np.count_nonzero(seed2 * seed)
+            total = np.count_nonzero(seed2)
             if count < threshold * total:
-                LOG.debug('ignoring h-overlap between %d and %d (only %d of %d)', label, candidate, count, total)
+                LOG.debug('ignoring h-overlap between %d and %d (only %d of %d)', label, label2, count, total)
                 continue
-            label_center = centers[label]
-            label_box = objects[label]
-            candidate_center = centers[candidate]
-            candidate_box = objects[candidate]
-            if not (candidate_box[0].start < label_center[0] < candidate_box[0].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (y center not within other)', label, candidate)
-                continue
-            if not (label_box[0].start < candidate_center[0] < label_box[0].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (does not contain other y center)', label, candidate)
-                continue
-            if (candidate_box[1].start < label_center[1] < candidate_box[1].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (x center within other)', label, candidate)
-                continue
-            if (label_box[1].start < candidate_center[1] < label_box[1].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (contains other x center)', label, candidate)
-                continue
-            LOG.debug('hmerging %d with %d', candidate, label)
+            LOG.debug('hmerging %d with %d', label2, label)
             # the new label could have been relabelled already:
             new_label = relabel[label]
             # assign candidate to (new assignment for) label:
-            relabel[candidate] = new_label
+            relabel[label2] = new_label
             # re-assign labels already relabelled to candidate:
-            relabel[relabel == candidate] = new_label
+            relabel[relabel == label2] = new_label
             # fill the horizontal background between both regions:
-            candidate_y, candidate_x = np.where(seeds == candidate)
-            new_label_y, new_label_x = np.where(seeds == new_label)
+            candidate_y, candidate_x = np.where(seed2)
+            new_label_y, new_label_x = np.where(seeds == label)
             for y in np.intersect1d(candidate_y, new_label_y):
                 can_x_min = candidate_x[candidate_y == y][0]
                 can_x_max = candidate_x[candidate_y == y][-1]
                 new_x_min = new_label_x[new_label_y == y][0]
                 new_x_max = new_label_x[new_label_y == y][-1]
                 if can_x_max < new_x_min:
-                    seeds[y, can_x_max:new_x_min] = new_label
+                    seeds[y, can_x_max:new_x_min] = label
                 if new_x_max < can_x_min:
-                    seeds[y, new_x_max:can_x_min] = new_label
+                    seeds[y, new_x_max:can_x_min] = label
     # apply re-assignments:
     seeds = relabel[seeds]
     DSAVE("hmerge5_connected", seeds)
@@ -1051,7 +1078,7 @@ def compute_segmentation(binary,
         DSAVE("lineseeds_filtered", [seeds,binary])
     else:
         seeds = hmerge_line_seeds(binary, seeds, scale)
-    
+
     LOG.debug('spreading seed labels')
     # spread labels from seeds to bg, but watch fg,
     # voting for majority on bg conflicts,
