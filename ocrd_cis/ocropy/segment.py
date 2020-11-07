@@ -54,7 +54,7 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-segment'
 
-def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
+def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
     """Convert label masks into polygon coordinates.
 
     Given a Numpy array of background labels ``bg_labels``,
@@ -81,8 +81,15 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=False):
                       label, name)
             continue
         # simplify to convex hull
-        if simplify:
-            bg_mask = convex_hull_image(bg_mask).astype(np.uint8)
+        if simplify is not None:
+            hull = convex_hull_image(bg_mask).astype(np.uint8)
+            conflicts = np.setdiff1d((hull>0) * simplify,
+                                     (bg_mask>0) * simplify)
+            if conflicts.any():
+                LOG.debug('Cannot simplify %d: convex hull would create additional intersections %s',
+                          label, str(conflicts))
+            else:
+                bg_mask = hull
         # find outer contour (parts):
         contours, _ = cv2.findContours(bg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # determine areas of parts:
@@ -428,10 +435,9 @@ class OcropySegment(Processor):
                 sep_bin[draw.polygon(segment_polygon[:, 1],
                                      segment_polygon[:, 0],
                                      sep_bin.shape)] = True
-            else:
-                ignore_labels[draw.polygon(segment_polygon[:, 1],
-                                           segment_polygon[:, 0],
-                                           ignore_labels.shape)] = i+1 # mapped back for RO
+            ignore_labels[draw.polygon(segment_polygon[:, 1],
+                                       segment_polygon[:, 0],
+                                       ignore_labels.shape)] = i+1 # mapped back for RO
         if isinstance(element, PageType):
             element_name = 'page'
             fullpage = True
@@ -480,15 +486,17 @@ class OcropySegment(Processor):
         if isinstance(element, (PageType, TableRegionType)):
             # aggregate text lines to text regions
             try:
-                # pass ignored regions as "line labels"
-                # (which cannot be split, but may be grouped together)
+                # pass ignored regions as "line labels with initial assignment",
+                # i.e. identical line and region labels
                 # to detect their reading order among the others
+                # (these cannot be split or grouped together with other regions)
                 line_labels = np.where(line_labels, line_labels+len(ignore), ignore_labels)
                 # suppress separators/images in fg and try to use for partitioning slices
                 sepmask = np.maximum(np.maximum(hlines, vlines),
                                      np.maximum(sep_bin, images))
                 region_labels = lines2regions(
                     element_bin, line_labels,
+                    rlabels=ignore_labels,
                     sepmask=np.maximum(sepmask, colseps), # add bg
                     # decide horizontal vs vertical cut when gaps of similar size
                     prefer_vertical=not isinstance(element, TableRegionType),
@@ -520,66 +528,80 @@ class OcropySegment(Processor):
             for region_label in np.unique(region_labels):
                 if not region_label:
                     continue # no bg
-                # filter text lines within this text region:
-                region_line_labels = line_labels * (region_labels == region_label)
-                # filter (ignored) existing regions within this region:
-                region_ignore_labels = np.minimum(region_line_labels, len(ignore)+1)
-                for line_label in np.argsort(morph.reading_order(region_ignore_labels)):
-                    if (not line_label or
-                        not np.any(element_bin * region_ignore_labels == line_label)):
+                region_mask = region_labels == region_label
+                region_line_labels = line_labels * region_mask
+                region_line_labels0 = np.setdiff1d(region_line_labels, [0])
+                if not np.all(region_line_labels0 > len(ignore)):
+                    # existing region from `ignore` merely to be ordered
+                    # (no new region, no actual text lines)
+                    assert len(region_line_labels0) == 1, \
+                        "region label %d has both existing regions and new lines (%s)" % (
+                            region_label, str(region_line_labels0))
+                    region = ignore[region_line_labels0[0] - 1]
+                    if rogroup and not isinstance(region, SeparatorRegionType):
+                        index = page_add_to_reading_order(rogroup, region.id, index)
+                    LOG.debug('Region label %d is for ignored region "%s"',
+                              region_label, region.id)
+                    continue
+                # normal case: new lines inside new regions
+                # remove binary-empty labels, and re-order locally
+                order = np.argsort(morph.reading_order(region_line_labels))
+                order[np.setdiff1d(region_line_labels0, element_bin * region_line_labels)] = 0
+                region_line_labels = order[region_line_labels]
+                # find contours for region (can be non-contiguous)
+                regions = masks2polygons(region_mask * region_label, element_bin,
+                                         '%s "%s"' % (element_name, element_id),
+                                         min_area=6000/zoom/zoom,
+                                         simplify=ignore_labels * ~(sep_bin))
+                # find contours for lines (can be non-contiguous)
+                lines = masks2polygons(region_line_labels, element_bin,
+                                       'region "%s"' % element_id,
+                                       min_area=640/zoom/zoom)
+                # create new lines in new regions (allocating by intersection)
+                line_polys = [Polygon(polygon) for _, polygon in lines]
+                for _, region_polygon in regions:
+                    region_poly = prep(Polygon(region_polygon))
+                    # convert back to absolute (page) coordinates:
+                    region_polygon = coordinates_for_segment(region_polygon, image, coords)
+                    region_polygon = polygon_for_parent(region_polygon, element)
+                    if region_polygon is None:
+                        LOG.warning('Ignoring extant region contour for region label %d', region_label)
                         continue
-                    # split into new regions and order-only
-                    if line_label <= len(ignore):
-                        # existing region from `ignore` merely to be ordered
-                        # (no new region, no actual text line)
-                        if rogroup:
-                            index = page_add_to_reading_order(rogroup, ignore[line_label-1].id, index)
-                        LOG.debug('Region label %d line label %d is for ignored region "%s"',
-                                  region_label, line_label, ignore[line_label-1].id)
-                        continue
-                    # normal case: new lines inside new regions
-                    # find contours for region (can be non-contiguous)
-                    region_polygons = masks2polygons(((region_labels == region_label) *
-                                                      (line_labels > len(ignore))), element_bin,
-                                                     '%s "%s"' % (element_name, element_id),
-                                                     min_area=6000/zoom/zoom, simplify=True)
-                    # find contours for lines (can be non-contiguous)
-                    line_polygons = masks2polygons((region_line_labels *
-                                                    (line_labels > len(ignore))), element_bin,
-                                                   'region "%s"' % element_id,
-                                                   min_area=640/zoom/zoom)
-                    # create new lines in new regions
-                    line_polys = [Polygon(polygon) for _, polygon in line_polygons]
-                    for region_no, (_, region_polygon) in enumerate(region_polygons, region_no+1):
-                        region_poly = prep(Polygon(region_polygon))
+                    # annotate result:
+                    region_no += 1
+                    region_id = element_id + "_region%04d" % region_no
+                    LOG.debug('Region label %d becomes ID "%s"', region_label, region_id)
+                    region = TextRegionType(
+                        id=region_id, Coords=CoordsType(
+                        points=points_from_polygon(region_polygon)))
+                    # find out which line (contours) belong to which region (contours)
+                    line_no = 0
+                    for i, line_poly in enumerate(line_polys):
+                        if not region_poly.intersects(line_poly): # .contains
+                            continue
+                        line_label, line_polygon = lines[i]
                         # convert back to absolute (page) coordinates:
-                        region_polygon = coordinates_for_segment(region_polygon, image, coords)
-                        region_polygon = polygon_for_parent(region_polygon, element)
+                        line_polygon = coordinates_for_segment(line_polygon, image, coords)
+                        line_polygon = polygon_for_parent(line_polygon, region)
+                        if line_polygon is None:
+                            LOG.warning('Ignoring extant line contour for region label %d line label %d',
+                                        region_label, line_label)
+                            continue
                         # annotate result:
-                        region_id = element_id + "_region%04d" % region_no
-                        LOG.debug('Region label %d becomes ID "%s"', region_label, region_id)
-                        region = TextRegionType(id=region_id, Coords=CoordsType(
-                            points=points_from_polygon(region_polygon)))
-                        # find out which line (contours) belong to which region (contours)
-                        for line_no, (line_label, line_polygon) in enumerate(line_polygons):
-                            line_poly = line_polys[line_no]
-                            if not region_poly.intersects(line_poly): # contains
-                                continue
-                            # convert back to absolute (page) coordinates:
-                            line_polygon = coordinates_for_segment(line_polygon, image, coords)
-                            line_polygon = polygon_for_parent(line_polygon, region)
-                            # annotate result:
-                            line_id = region_id + "_line%04d" % line_no
-                            LOG.debug('Line label %d becomes ID "%s"', line_label, line_id)
-                            line = TextLineType(id=line_id, Coords=CoordsType(
-                                points=points_from_polygon(line_polygon)))
-                            region.add_TextLine(line)
-                        if region.get_TextLine():
-                            element.add_TextRegion(region)
-                            LOG.info('Added region "%s" with %d lines for %s "%s"',
-                                     region_id, len(line_polygons), element_name, element_id)
-                            if rogroup:
-                                index = page_add_to_reading_order(rogroup, region.id, index)
+                        line_no += 1
+                        line_id = region_id + "_line%04d" % line_no
+                        LOG.debug('Line label %d becomes ID "%s"', line_label, line_id)
+                        line = TextLineType(
+                            id=line_id, Coords=CoordsType(
+                            points=points_from_polygon(line_polygon)))
+                        region.add_TextLine(line)
+                    # if the region has received text lines, keep it
+                    if region.get_TextLine():
+                        element.add_TextRegion(region)
+                        LOG.info('Added region "%s" with %d lines for %s "%s"',
+                                 region_id, line_no, element_name, element_id)
+                        if rogroup:
+                            index = page_add_to_reading_order(rogroup, region.id, index)
             # add additional image/non-text regions from compute_segmentation
             # (e.g. drop-capitals or images) ...
             image_labels, num_images = morph.label(images)
@@ -588,13 +610,18 @@ class OcropySegment(Processor):
             # find contours around region labels (can be non-contiguous):
             image_polygons = masks2polygons(image_labels, element_bin,
                                             '%s "%s"' % (element_name, element_id))
-            for region_no, (_, polygon) in enumerate(image_polygons, region_no+1):
-                region_id = element_id + "_image%04d" % region_no
+            for image_label, polygon in image_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
                 region_polygon = polygon_for_parent(region_polygon, element)
+                if region_polygon is None:
+                    LOG.warning('Ignoring extant region contour for image label %d', image_label)
+                    continue
+                region_no += 1
                 # annotate result:
-                element.add_ImageRegion(ImageRegionType(id=region_id, Coords=CoordsType(
+                region_id = element_id + "_image%04d" % region_no
+                element.add_ImageRegion(ImageRegionType(
+                    id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
             # split rulers into separator regions:
             hline_labels, num_hlines = morph.label(hlines)
@@ -606,13 +633,18 @@ class OcropySegment(Processor):
                                             '%s "%s"' % (element_name, element_id))
             vline_polygons = masks2polygons(vline_labels, element_bin,
                                             '%s "%s"' % (element_name, element_id))
-            for region_no, (_, polygon) in enumerate(hline_polygons + vline_polygons, region_no+1):
-                region_id = element_id + "_sep%04d" % region_no
+            for _, polygon in hline_polygons + vline_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
                 region_polygon = polygon_for_parent(region_polygon, element)
+                if region_polygon is None:
+                    LOG.warning('Ignoring extant region contour for separator')
+                    continue
                 # annotate result:
-                element.add_SeparatorRegion(SeparatorRegionType(id=region_id, Coords=CoordsType(
+                region_no += 1
+                region_id = element_id + "_sep%04d" % region_no
+                element.add_SeparatorRegion(SeparatorRegionType(
+                    id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
             # annotate a text/image-separated image
             element_array[sepmask] = np.amax(element_array) # clip to white/bg
@@ -638,16 +670,23 @@ class OcropySegment(Processor):
             line_polygons = masks2polygons(line_labels, element_bin,
                                            'region "%s"' % element_id,
                                            min_area=640/zoom/zoom)
-            for line_no, (_, polygon) in enumerate(line_polygons):
-                line_id = element_id + "_line%04d" % line_no
+            line_no = 0
+            for line_label, polygon in line_polygons:
                 # convert back to absolute (page) coordinates:
                 line_polygon = coordinates_for_segment(polygon, image, coords)
                 line_polygon = polygon_for_parent(line_polygon, element)
+                if line_polygon is None:
+                    LOG.warning('Ignoring extant line contour for line label %d',
+                                line_label)
+                    continue
                 # annotate result:
-                element.add_TextLine(TextLineType(id=line_id, Coords=CoordsType(
+                line_no += 1
+                line_id = element_id + "_line%04d" % line_no
+                element.add_TextLine(TextLineType(
+                    id=line_id, Coords=CoordsType(
                     points=points_from_polygon(line_polygon))))
             if not sep_bin.any():
-                return
+                return # no derived image
             # annotate a text/image-separated image
             element_array[sep_bin] = np.amax(element_array) # clip to white/bg
             image_clipped = array2pil(element_array)
@@ -685,8 +724,7 @@ def polygon_for_parent(polygon, parent):
     interp = childp.intersection(parentp)
     # post-process
     if interp.is_empty or interp.area == 0.0:
-        # FIXME: we need a better strategy against this
-        raise Exception("intersection of would-be segment with parent is empty")
+        return None
     if interp.type == 'GeometryCollection':
         # heterogeneous result: filter zero-area shapes (LineString, Point)
         interp = unary_union([geom for geom in interp.geoms if geom.area > 0])

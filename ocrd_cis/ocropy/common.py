@@ -1104,6 +1104,7 @@ def remove_noise(pil_image, maxsize=8):
 
 @checks(ABINARY2,SEGMENTATION)
 def lines2regions(binary, llabels,
+                  rlabels=None,
                   sepmask=None,
                   prefer_vertical=None,
                   rl=False, bt=False,
@@ -1118,6 +1119,10 @@ def lines2regions(binary, llabels,
       (including text lines, separators, images etc)
     - ``llabels``, a segmentation of the page into adjacent textlines
       (including locally correct reading order)
+    - (optionally) ``rlabels``, an initial solution as a (possibly partial)
+      segmentation of the page into region labels (assignment of line labels);
+      these regions will stay grouped together, but will be re-assigned labels
+      in the order of cutting/partitioning
     - (optionally) ``sepmask``, a mask array of fg or bg separators;
       it is applied before, but also during recursive X-Y cut:
       In each iteration's box, if sepmask creates enough partitions
@@ -1188,9 +1193,10 @@ def lines2regions(binary, llabels,
     cuts, as well as non-rectangular partitioning from h/v-lines and
     column separators.
     
-    Each slice which cannot be cut/partitioned further gets a new
+    Each slice which cannot be cut/partitioned any further gets a new
     region label (in the order of the call chain, which is controlled
     by ``rl`` and ``bt``), covering all the line labels inside it.
+    If ``rlabels`` is given, use this for initial regions.
     
     Afterwards, for each region label, simplify regions by using
     their convex hull polygon.
@@ -1206,7 +1212,6 @@ def lines2regions(binary, llabels,
         # add them to sepmask (to avoid adding fake partitions)
         sepmask = 1-morph.keep_marked(1-sepmask, lbinary>0)
         DSAVE('sepmask', [sepmask,binary])
-    relabel = np.zeros(np.amax(llabels)+1, np.int)
     objects = [None] + morph.find_objects(llabels)
     #centers = measurements.center_of_mass(binary, llabels)
     if scale is None:
@@ -1214,6 +1219,7 @@ def lines2regions(binary, llabels,
     bincounts = np.bincount(lbinary.flatten())
     
     LOG.debug('combining lines to regions')
+    relabel = np.zeros(np.amax(llabels)+1, np.int)
     num_regions = 0
     def recursive_x_y_cut(box, mask=None, is_partition=False, debug=False):
         """Split lbinary at horizontal or vertical gaps recursively.
@@ -1234,13 +1240,27 @@ def lines2regions(binary, llabels,
             """Assign current line labels into new region, and re-order them inside."""
             nonlocal num_regions
             nonlocal relabel
-            linelabels = np.setdiff1d(np.unique(lbin), [0])
+            linelabels = np.setdiff1d(lbin, [0])
             if debug: LOG.debug('checking line labels %s for conflicts', str(linelabels))
             # when there is a conflict for a line label, assign (or keep) the more frequent region label
             linelabels = [label
                           for label in linelabels
                           if (not relabel[label] or
                               np.count_nonzero(lbin == label) > 0.5 * bincounts[label])]
+            if not linelabels:
+                return
+            if rlabels is not None:
+                # (partial) initial segmentation exists
+                rlab = sl.cut(rlabels, box)
+                if isinstance(mask, np.ndarray):
+                    rlab = np.where(mask, rlab, 0)
+                for label in np.intersect1d(linelabels, lbin * (rlab > 0)):
+                    num_regions += 1
+                    if debug: LOG.debug('new region {} for existing region {}'.format(num_regions, label))
+                    else:
+                        LOG.debug('new region %d for existing region', num_regions)
+                    relabel[label] = num_regions
+                    linelabels.remove(label)
             if not linelabels:
                 return
             num_regions += 1
