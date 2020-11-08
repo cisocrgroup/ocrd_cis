@@ -344,7 +344,7 @@ class OcropySegment(Processor):
                     # go get TextRegions with TextLines (and SeparatorRegions)
                     self._process_element(region, subignore, region_image, region_coords,
                                           region.id, file_id + '_' + region.id,
-                                          input_file.pageid, zoom, rogroup=roelem)
+                                          input_file.pageId, zoom, rogroup=roelem)
             else: # 'region'
                 regions = list(page.get_TextRegion())
                 # besides top-level text regions, line-segment any table cells,
