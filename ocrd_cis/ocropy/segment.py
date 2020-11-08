@@ -472,7 +472,7 @@ class OcropySegment(Processor):
                 hlminwidth=self.parameter['hlminwidth'])
         except Exception as err:
             if isinstance(element, TextRegionType):
-                LOG.warning('Cannot line-segment region "%s": %s', element_id, err)
+                LOG.error('Cannot line-segment region "%s": %s', element_id, err)
                 # as a fallback, add a single text line comprising the whole region:
                 element.add_TextLine(TextLineType(id=element_id + "_line", Coords=element.get_Coords()))
             else:
@@ -507,7 +507,7 @@ class OcropySegment(Processor):
                          len(np.unique(region_labels)) - 1,
                          element_name, element_id)
             except Exception as err:
-                LOG.warning('Cannot region-segment %s "%s": %s',
+                LOG.error('Cannot region-segment %s "%s": %s',
                             element_name, element_id, err)
                 region_labels = np.array(line_labels > 0, np.uint8)
             
