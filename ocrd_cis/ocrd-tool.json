@@ -238,8 +238,14 @@
 				"range": {
 					"type": "number",
 					"format": "float",
-					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels)",
+					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels); also the mean vertical padding",
 					"default": 4.0
+				},
+				"smoothness": {
+					"type": "number",
+					"format": "float",
+					"description": "kernel size (relative to image height) of horizontal blur applied to foreground to find the center line; the smaller the more dynamic (0.1 would be a better default)",
+					"default": 1.0
 				},
 				"max_neighbour": {
 					"type": "number",

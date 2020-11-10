@@ -81,8 +81,14 @@ class OcropyDewarp(Processor):
     
     def setup(self):
         # defaults from ocrolib.lineest:
-        range_ = self.parameter['range']
-        self.lnorm = lineest.CenterNormalizer(params=(range_, 1.0, 0.3))
+        self.lnorm = lineest.CenterNormalizer(
+            params=(self.parameter['range'],
+                    self.parameter['smoothness'],
+                    # let's not expose this for now
+                    # (otherwise we must explain mutual
+                    #  dependency between smoothness
+                    #  and extra params)
+                    0.3))
         self.logger = getLogger('processor.OcropyDewarp')
 
     def process(self):
