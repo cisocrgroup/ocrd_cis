@@ -23,7 +23,7 @@ def label(image,**kw):
     """
     n, labels = cv2.connectedComponents(image.astype(uint8))
     #n, labels = cv2.connectedComponentsWithAlgorithm(image.astype(uint8), connectivity=4, ltype=2, ccltype=cv2.CCL_DEFAULT)
-    return labels, n
+    return labels, n-1
     # try: return measurements.label(image,**kw)
     # except: pass
     # types = ["int32","uint32","int64","uint64","int16","uint16"]
