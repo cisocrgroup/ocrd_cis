@@ -395,8 +395,6 @@ def DSAVE(title,array, interactive=False):
     - False: save all plots as PNG files under /tmp (or $TMPDIR)
       (call image viewer with file list based on date stamps)
     """
-    if not enabled:
-        return
     logging.getLogger('matplotlib').setLevel(logging.WARNING) # workaround
     from matplotlib import pyplot as plt
     from matplotlib import cm
@@ -809,6 +807,7 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
         bmarked = filters.maximum_filter(bmarked,(1,odd(scale))) *(1-colseps)
     tmarked = filters.maximum_filter(tmarked,(1,odd(scale))) *(1-colseps)
     ##tmarked = filters.maximum_filter(tmarked,(1,20))
+    # why not just np.diff(bmarked-tmarked, axis=0, append=0) > 0 ?
     seeds = np.zeros(binary.shape,'i')
     delta = max(3,int(scale))
     for x in range(bmarked.shape[1]):
@@ -876,6 +875,16 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
     relabel = np.arange(np.max(seeds)+1, dtype=seeds.dtype)
     # FIXME: get incidence of y overlaps to avoid full inner loops
     LOG.debug('checking %d non-empty line seeds for overlaps', len(labels))
+    def h_compatible(obj1, obj2, center1, center2):
+        if not (obj2[0].start < center1[0] < obj2[0].stop):
+            return False
+        if not (obj1[0].start < center2[0] < obj1[0].stop):
+            return False
+        if (obj2[1].start < center1[1] < obj2[1].stop):
+            return False
+        if (obj1[1].start < center2[1] < obj1[1].stop):
+            return False
+        return True
     for label in labels:
         seed = seeds == label
         if not seed.any():
@@ -906,12 +915,9 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
                 continue
             center = centers[labels.searchsorted(label)]
             bbox = objects[label-1]
-            center2 = centers[labels.searchsorted(label2)]
-            bbox2 = objects[label2-1]
-            if (not (bbox2[0].start < center[0] < bbox2[0].stop) or
-                not (bbox[0].start < center2[0] < bbox[0].stop) or
-                (bbox2[1].start < center[1] < bbox2[1].stop) or
-                (bbox[1].start < center2[1] < bbox[1].stop)):
+            if not all(h_compatible(bbox, bbox2, center, center2)
+                       for bbox2, center2 in [(objects[i-1], centers[labels.searchsorted(i)])
+                                              for i in np.nonzero(relabel == relabel[label2])[0]]):
                 LOG.debug('ignoring h-overlap between %d and %d (not mutually centric)', label, label2)
                 continue
             seed2 = seeds == label2
