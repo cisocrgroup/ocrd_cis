@@ -48,6 +48,7 @@ from .common import (
     pil2array,
     array2pil,
     check_page, check_region,
+    hmerge_line_seeds,
     compute_segmentation,
     lines2regions
 )
@@ -545,9 +546,11 @@ class OcropySegment(Processor):
                     continue
                 # normal case: new lines inside new regions
                 # remove binary-empty labels, and re-order locally
-                order = np.argsort(morph.reading_order(region_line_labels))
+                order = morph.reading_order(region_line_labels)
                 order[np.setdiff1d(region_line_labels0, element_bin * region_line_labels)] = 0
                 region_line_labels = order[region_line_labels]
+                # avoid horizontal gaps
+                region_line_labels = hmerge_line_seeds(element_bin, region_line_labels, scale)
                 # find contours for region (can be non-contiguous)
                 regions = masks2polygons(region_mask * region_label, element_bin,
                                          '%s "%s"' % (element_name, element_id),
@@ -656,8 +659,6 @@ class OcropySegment(Processor):
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
         else:
-            LOG.info('Found %d text lines for region "%s"',
-                     len(np.unique(line_labels)) - 1, element_id)
             # get mask from region polygon:
             region_polygon = coordinates_of_segment(element, image, coords)
             region_mask = np.zeros_like(element_bin, np.bool)
