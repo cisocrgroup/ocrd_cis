@@ -488,8 +488,9 @@ def compute_images(binary, scale, maximages=5):
     # 4- reconstruct the losses up to a certain distance
     #    to avoid creeping into pure h/v-lines again but still
     #    cover most of the large object
-    images = np.where(images, closed, 2)
-    images = morph.spread_labels(images, maxdist=scale) % 2 | closed
+    #images = np.where(images, closed, 2)
+    #images = morph.spread_labels(images, maxdist=scale) % 2 | closed
+    images = morph.rb_reconstruction(closed, images, step=2, maxsteps=scale)
     DSAVE('images4_reconstructed', images+0.6*binary)
     # 5- select nbest
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=maximages)
@@ -552,8 +553,9 @@ def compute_hlines(binary, scale,
     #    cover most of the line even if not perfectly horizontal
     # (it would be fantastic if we could calculate the
     #  distance transform with stronger horizontal weights)
-    horiz = np.where(horiz, opened, 2)
-    horiz = morph.spread_labels(horiz, maxdist=d1) % 2 | opened
+    #horiz = np.where(horiz, opened, 2)
+    #horiz = morph.spread_labels(horiz, maxdist=d1) % 2 | opened
+    horiz = morph.rb_reconstruction(opened, horiz, step=2, maxsteps=d1//2)
     DSAVE('hlines3_reconstructed', horiz+0.6*binary)
     if not horiz.any():
         return horiz > 0
@@ -620,8 +622,9 @@ def compute_separators_morph(binary, scale,
     #    cover most of the line even if not perfectly vertical
     # (it would be fantastic if we could calculate the
     #  distance transform with stronger vertical weights)
-    vert = np.where(vert, opened, 2)
-    vert = morph.spread_labels(vert, maxdist=d1) % 2 | opened
+    #vert = np.where(vert, opened, 2)
+    #vert = morph.spread_labels(vert, maxdist=d1) % 2 | opened
+    vert = morph.rb_reconstruction(opened, vert, step=2, maxsteps=d1//2)
     DSAVE('colseps3_reconstructed', vert+0.6*binary)
     if not vert.any():
         return vert > 0

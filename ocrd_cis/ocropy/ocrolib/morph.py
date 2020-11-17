@@ -125,6 +125,20 @@ def rb_closing(image,size,origin=0):
     # image = rb_dilation(image,size,origin=0)
     # return rb_erosion(image,size,origin=-1)
 
+@checks(ABINARY2,ABINARY2)
+def rb_reconstruction(image,mask,step=1,maxsteps=None):
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (2*step+1,2*step+1))
+    dilated = image.astype(uint8)
+    while maxsteps is None or maxsteps > 0:
+        dilated = cv2.dilate(src=dilated, kernel=kernel)
+        cv2.bitwise_and(src1=dilated, src2=mask.astype(uint8), dst=dilated)
+        # did result change?
+        if (image == dilated).all():
+            return dilated
+        if maxsteps:
+            maxsteps -= step
+    return dilated
+    
 @checks(GRAYSCALE,uintpair)
 def rg_dilation(image,size,origin=0):
     """Grayscale dilation using fast OpenCV.dilate."""
