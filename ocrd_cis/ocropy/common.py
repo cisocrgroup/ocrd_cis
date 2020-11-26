@@ -1337,8 +1337,8 @@ def lines2regions(binary, llabels,
                         linelabels[0] = 0 # without bg
                         # get significant line labels for this partition
                         # (but keep insignificant non-empty labels when complete)
-                        linelabels = np.nonzero(linelabels >= np.minimum(
-                            np.maximum(bincounts, 1), min_line * scale))[0]
+                        linelabels = np.nonzero(linelabels >= min(max(1, bincounts.max()),
+                                                                  min_line * scale))[0]
                         if np.any(linelabels):
                             lpartitions.append(linelabels)
                             if debug: LOG.debug('  sepmask partition %d: %s', label, str(linelabels))
