@@ -295,6 +295,11 @@ class OcropySegment(Processor):
                 self._process_element(page, ignore, page_image, page_coords,
                                       page_id, file_id,
                                       input_file.pageId, zoom, rogroup=rogroup)
+                if (not rogroup.get_RegionRefIndexed() and
+                    not rogroup.get_OrderedGroupIndexed() and
+                    not rogroup.get_UnorderedGroupIndexed()):
+                     # schema forbids empty OrderedGroup
+                    ro.set_OrderedGroup(None)
             elif oplevel == 'table':
                 ignore.extend(page.get_TextRegion())
                 regions = list(page.get_TableRegion())
