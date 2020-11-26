@@ -515,7 +515,7 @@ class OcropySegment(Processor):
             except Exception as err:
                 LOG.error('Cannot region-segment %s "%s": %s',
                             element_name, element_id, err)
-                region_labels = np.array(line_labels > 0, np.uint8)
+                region_labels = np.where(line_labels > len(ignore), 1 + len(ignore), line_labels)
             
             # prepare reading order group index
             if rogroup:
