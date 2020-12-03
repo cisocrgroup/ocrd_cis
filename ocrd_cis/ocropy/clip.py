@@ -240,8 +240,8 @@ class OcropyClip(Processor):
             num_foreground = np.count_nonzero(segment_mask * parent_bin)
             if not num_intruders:
                 continue
-            LOG.debug('segment "%s" vs neighbour "%s": suppressing %d pixels on page "%s"',
-                      segment.id, neighbour.id, np.count_nonzero(intruders), page_id)
+            LOG.debug('segment "%s" vs neighbour "%s": suppressing %d of %d pixels on page "%s"',
+                      segment.id, neighbour.id, num_intruders, num_foreground, page_id)
             # suppress in segment_mask so these intruders can stay in the neighbours
             # (are not removed from both sides)
             segment_mask -= intruders

@@ -193,6 +193,12 @@
 			],
 			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
 			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level granularity to segment lines in",
+					"default": "page"
+				},
 				"dpi": {
 					"type": "number",
 					"format": "float",
@@ -203,7 +209,7 @@
 					"type": "number",
 					"format": "float",
 					"description": "share of foreground pixels that must be retained by the largest label",
-					"default": 0.8
+					"default": 0.75
 				},
 				"extend_margins": {
 					"type": "number",

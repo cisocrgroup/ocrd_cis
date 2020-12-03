@@ -6,7 +6,6 @@ from ocrd_utils import (
     getLogger,
     make_file_id,
     assert_file_grp_cardinality,
-    rotate_image,
     MIMETYPE_PAGE
 )
 from ocrd_modelfactory import page_from_file

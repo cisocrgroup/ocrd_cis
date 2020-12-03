@@ -727,7 +727,11 @@ def polygon_for_parent(polygon, parent):
     if childp.within(parentp):
         return childp.exterior.coords[:-1]
     # clip to parent
-    interp = childp.intersection(parentp)
+    interp = make_intersection(childp, parentp)
+    return interp.exterior.coords[:-1] # keep open
+
+def make_intersection(poly1, poly2):
+    interp = poly1.intersection(poly2)
     # post-process
     if interp.is_empty or interp.area == 0.0:
         return None
@@ -743,7 +747,7 @@ def polygon_for_parent(polygon, parent):
         # so anticipate rounding here and then ensure validity
         interp = asPolygon(np.round(interp.exterior.coords))
         interp = make_valid(interp)
-    return interp.exterior.coords[:-1] # keep open
+    return interp
 
 def make_valid(polygon):
     for split in range(1, len(polygon.exterior.coords)-1):

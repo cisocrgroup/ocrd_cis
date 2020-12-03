@@ -3,13 +3,12 @@ from __future__ import absolute_import
 import os.path
 import numpy as np
 from skimage import draw
-import cv2
 from shapely.geometry import Polygon
-from scipy.ndimage import filters
+from shapely.prepared import prep
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
-    to_xml, AlternativeImageType
+    to_xml, PageType
 )
 from ocrd import Processor
 from ocrd_utils import (
@@ -18,100 +17,30 @@ from ocrd_utils import (
     assert_file_grp_cardinality,
     coordinates_of_segment,
     coordinates_for_segment,
-    bbox_from_polygon,
     points_from_polygon,
     MIMETYPE_PAGE
 )
 
 from .. import get_ocrd_tool
-from .ocrolib import midrange
+from .ocrolib import midrange, morph
 from .common import (
     pil2array,
+    # DSAVE,
     # binarize,
+    check_page,
     check_region,
+    hmerge_line_seeds,
     compute_segmentation
     #borderclean_bin
 )
-
+from .segment import (
+    masks2polygons,
+    polygon_for_parent,
+    make_valid,
+    make_intersection
+)
 
 TOOL = 'ocrd-cis-ocropy-resegment'
-
-def resegment(line_polygon, region_labels, region_bin, line_id,
-              extend_margins=3,
-              threshold_relative=0.8, threshold_absolute=50):
-    """Reduce line polygon in a labelled region to the largest intersection.
-
-    Given a Numpy array ``line_polygon`` of relative coordinates
-    in a region given by a Numpy array ``region_labels`` of numbered
-    segments and a Numpy array ``region_bin`` of foreground pixels,
-    find the label of the largest segment that intersects the polygon.
-    If the number of foreground pixels within that segment is larger
-    than ``threshold_absolute`` and if the share of foreground pixels
-    within the whole polygon is larger than ``threshold_relative``,
-    then compute the contour of that intersection and return it
-    as a new polygon. Otherwise, return None.
-
-    If ``extend_margins`` is larger than zero, then extend ``line_polygon``
-    by that amount of pixels horizontally and vertically before.
-    """
-    LOG = getLogger('processor.OcropyResegment')
-    # height, width = region_labels.shape
-    # mask from line polygon:
-    line_mask = np.zeros_like(region_labels)
-    line_mask[draw.polygon(line_polygon[:,1], line_polygon[:,0], line_mask.shape)] = 1
-    line_mask[draw.polygon_perimeter(line_polygon[:,1], line_polygon[:,0], line_mask.shape)] = 1
-    #DSAVE('line %s mask' % line_id, line_mask + 0.5 * region_bin)
-    # pad line polygon (extend the mask):
-    line_mask = filters.maximum_filter(line_mask, 1 + 2 * extend_margins)
-    # intersect with region labels
-    line_labels = region_labels * line_mask
-    if not np.count_nonzero(line_labels):
-        LOG.warning('Label mask is empty for line "%s"', line_id)
-        return None
-    # find the mask of the largest label (in the foreground):
-    total_count = np.sum(region_bin * line_mask)
-    line_labels_fg = region_bin * line_labels
-    if not np.count_nonzero(line_labels_fg):
-        LOG.warning('No foreground pixels within line mask for line "%s"', line_id)
-        return None
-    label_counts = np.bincount(line_labels_fg.flat)
-    max_label = np.argmax(label_counts[1:]) + 1
-    max_count = label_counts[max_label]
-    if (max_count < threshold_absolute and
-        max_count / total_count < threshold_relative):
-        LOG.info('Largest label (%d) is too small (%d/%d) in line "%s"',
-                 max_label, max_count, total_count, line_id)
-        return None
-    LOG.debug('Black pixels before/after resegment of line "%s" (nlabels=%d): %d/%d',
-              line_id, len(label_counts.nonzero()[0]), total_count, max_count)
-    line_mask = np.array(line_labels == max_label, np.uint8)
-    #DSAVE('line %s mask tight' % line_id, line_mask + 0.5 * region_bin)
-    # find outer contour (parts):
-    contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # determine largest part by area:
-    contour_areas = [cv2.contourArea(contour) for contour in contours]
-    max_contour = np.argmax(contour_areas)
-    max_area = contour_areas[max_contour]
-    total_area = cv2.contourArea(np.expand_dims(line_polygon, 1))
-    if not total_area:
-        LOG.warning('Empty line polygon for line "%s"', line_id)
-        return None
-    if max_area / total_area < 0.5 * threshold_relative:
-        # using a different, more conservative threshold here:
-        # avoid being overly strict with cropping background,
-        # just ensure the contours are not a split of the mask
-        LOG.warning('Largest label (%d) largest contour (%d) is small (%d/%d) in line "%s"',
-                    max_label, max_contour, max_area, total_area, line_id)
-    contour = contours[max_contour]
-    # simplify shape:
-    # can produce invalid (self-intersecting) polygons:
-    #polygon = cv2.approxPolyDP(contour, 2, False)[:, 0, ::] # already ordered x,y
-    polygon = contour[:, 0, ::] # already ordered x,y
-    polygon = Polygon(polygon).simplify(2).exterior.coords[:-1] # keep open
-    if len(polygon) < 4:
-        LOG.warning('found no contour of >=4 points for line "%s"', line_id)
-        return None
-    return polygon
 
 class OcropyResegment(Processor):
 
@@ -127,35 +56,37 @@ class OcropyResegment(Processor):
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the line level.
 
-        Next, get each region image according to the layout annotation (from
-        the alternative image of the region, or by cropping via coordinates
-        into the higher-level image), and compute a new line segmentation
-        from that (as a label mask).
+        Next, get the image according to the layout annotation (from
+        the alternative image of the page, or by cropping from annotated
+        Border and rotating from annotated orientation), and compute a new
+        line segmentation for that (as a label mask, suppressing all non-text
+        regions' foreground), and polygonalize its contours.
 
-        Then for each line within the region, find the label with the largest
-        foreground area in the binarized image within the annotated polygon
-        (or rectangle) of the line. Unless its relative area is too small,
-        or its center is far off, convert that label's mask into a polygon
-        outline, intersect with the old polygon, and find the contour of that
-        segment. Annotate the result as new coordinates of the line.
-
-        Add the new image file to the workspace along with the output fileGrp,
-        and using a file ID with suffix ``.IMG-RESEG`` along with further
-        identification of the input element.
+        Then calculate overlaps between the new and existing lines, i.e.
+        which existing line polygons (or rectangles) contain most of each
+        new line polygon, sorting by the shared area's ratio. Next, for each
+        new line, if the largest relative overlap is sufficient, and its
+        center is close to the center of the existing line, then assign that
+        new line to that existing line, annotating the new coordinates, and
+        stripping it from the overlap candidates for the other new lines.
+        Thus, at the end, all new and existing lines will have been used
+        at most once, but not all existing lines might have been resegmented
+        (either because there were no matches at all, or the percentage of
+        overlap was too small).
 
         Produce a new output file by serialising the resulting hierarchy.
         """
         LOG = getLogger('processor.OcropyResegment')
         # This makes best sense for bad/coarse line segmentation, like current GT
-        # or as postprocessing for bbox-only steps.
-        # Most notably, it can convert rectangles to polygons (polygonalization).
+        # or as postprocessing for bbox-only steps like Tesseract.
+        # Most notably, it can convert rectangles to polygons (polygonalization),
+        # and enforce conflicting lines shared between neighbouring regions.
         # It depends on a decent line segmentation from ocropy though. So it
-        # _should_ ideally be run after deskewing (on the page or region level),
-        # _must_ be run after binarization (on page or region level). Also, the
-        # method's accuracy crucially depends on a good estimate of the images'
+        # _should_ ideally be run after deskewing (on the page level),
+        # _must_ be run after binarization (on page level). Also, the method's
+        # accuracy crucially depends on a good estimate of the images'
         # pixel density (at least if source input is not 300 DPI).
-        threshold = self.parameter['min_fraction']
-        margin = self.parameter['extend_margins']
+        level = self.parameter['level-of-operation']
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
 
@@ -168,7 +99,7 @@ class OcropyResegment(Processor):
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
             page = pcgts.get_Page()
             
-            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+            page_image, page_coords, page_image_info = self.workspace.image_from_page(
                 page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
                 zoom = 300.0/self.parameter['dpi']
@@ -181,89 +112,38 @@ class OcropyResegment(Processor):
             else:
                 zoom = 1
 
+            ignore = (page.get_ImageRegion() +
+                      page.get_LineDrawingRegion() +
+                      page.get_GraphicRegion() +
+                      page.get_ChartRegion() +
+                      page.get_MapRegion() +
+                      page.get_MathsRegion() +
+                      page.get_ChemRegion() +
+                      page.get_MusicRegion() +
+                      page.get_AdvertRegion() +
+                      page.get_NoiseRegion() +
+                      page.get_SeparatorRegion() +
+                      page.get_UnknownRegion() +
+                      page.get_CustomRegion())
             regions = page.get_AllRegions(classes=['Text'])
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
-            for region in regions:
-                lines = region.get_TextLine()
-                if not lines:
-                    LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
-                    continue
-                if len(lines) == 1:
-                    LOG.warning('Page "%s" region "%s" contains only one line', page_id, region.id)
-                    continue
-                region_image, region_xywh = self.workspace.image_from_segment(
-                    region, page_image, page_xywh, feature_selector='binarized')
-                region_array = pil2array(region_image)
-                #region_array, _ = common.binarize(region_array, maxskew=0) # just in case still raw
-                region_bin = np.array(region_array <= midrange(region_array), np.bool)
-                report = check_region(region_bin, zoom)
-                try:
-                    if report:
-                        raise Exception(report)
-                    region_labels, _, _, _, _, _ = compute_segmentation(region_bin, zoom=zoom)
-                except Exception as err:
-                    LOG.warning('Cannot line-segment page "%s" region "%s": %s',
-                                page_id, region.id, err)
-                    # fallback option 1: borderclean
-                    # label margins vs interior, but with the interior
-                    # extended into the margin by its connected components
-                    # to remove noise from neighbouring regions:
-                    #region_labels = borderclean_bin(region_bin, margin=round(4/zoom)) + 1
-                    # too dangerous, because we risk losing dots from i or punctuation;
-                    # fallback option2: only extend_margins
-                    # instead, just provide a uniform label, so at least we get
-                    # to extend the polygon margins:
-                    #region_labels = np.ones_like(region_bin)
-                    # fallback option3: keep unchanged
-                    continue
-                for line in lines:
-                    if line.get_AlternativeImage():
-                        # get cropped line image:
-                        line_image, line_xywh = self.workspace.image_from_segment(
-                            line, region_image, region_xywh, feature_selector='binarized')
-                        LOG.debug("Using AlternativeImage (%s) for line '%s'",
-                                  line_xywh['features'], line.id)
-                        # crop region arrays accordingly:
-                        line_polygon = coordinates_of_segment(line, region_image, region_xywh)
-                        line_bbox = bbox_from_polygon(line_polygon)
-                        line_bbox = np.clip(line_bbox, [0] * 4, [region_image.width, region_image.height] * 2)
-                        line_labels = region_labels[line_bbox[1]:line_bbox[3],
-                                                    line_bbox[0]:line_bbox[2]]
-                        line_bin = region_bin[line_bbox[1]:line_bbox[3],
-                                              line_bbox[0]:line_bbox[2]]
-                        # get polygon in relative (line) coordinates:
-                        line_polygon = coordinates_of_segment(line, line_image, line_xywh)
-                        line_polygon = resegment(line_polygon, line_labels, line_bin, line.id,
-                                                 extend_margins=margin, threshold_relative=threshold)
-                        if line_polygon is None:
-                            continue # not good enough – keep
-                        # convert back to absolute (page) coordinates:
-                        line_polygon = coordinates_for_segment(line_polygon, line_image, line_xywh)
+            elif level == 'page':
+                lines = [line for region in regions
+                         for line in region.get_TextLine()]
+                if lines:
+                    self._process_segment(page, page_image, page_coords, page_id, zoom, lines, ignore)
+                else:
+                    LOG.warning('Page "%s" contains no text regions with lines', page_id)
+            else:
+                for region in regions:
+                    lines = region.get_TextLine()
+                    if lines:
+                        region_image, region_coords = self.workspace.image_from_segment(
+                            region, page_image, page_coords, feature_selector='binarized')
+                        self._process_segment(region, region_image, region_coords, page_id, zoom, lines, ignore)
                     else:
-                        # get polygon in relative (region) coordinates:
-                        line_polygon = coordinates_of_segment(line, region_image, region_xywh)
-                        line_polygon = resegment(line_polygon, region_labels, region_bin, line.id,
-                                                 extend_margins=margin, threshold_relative=threshold)
-                        if line_polygon is None:
-                            continue # not good enough – keep
-                        # convert back to absolute (page) coordinates:
-                        line_polygon = coordinates_for_segment(line_polygon, region_image, region_xywh)
-                    # annotate result:
-                    line.get_Coords().set_points(points_from_polygon(line_polygon))
-                    # create new image:
-                    line_image, line_xywh = self.workspace.image_from_segment(
-                        line, region_image, region_xywh, feature_selector='binarized')
-                    # update METS (add the image file):
-                    file_path = self.workspace.save_image_file(
-                        line_image,
-                        file_id=file_id + '_' + region.id + '_' + line.id + '.IMG-RESEG',
-                        page_id=input_file.pageId,
-                        file_grp=self.output_file_grp)
-                    # update PAGE (reference the image file):
-                    line.add_AlternativeImage(AlternativeImageType(
-                        filename=file_path,
-                        comments=region_xywh['features']))
+                        LOG.warning('Page "%s" region "%s" contains no text lines', page_id, region.id)
 
             # update METS (add the PAGE file):
             file_path = os.path.join(self.output_file_grp, file_id + '.xml')
@@ -277,3 +157,157 @@ class OcropyResegment(Processor):
                 content=to_xml(pcgts))
             LOG.info('created file ID: %s, file_grp: %s, path: %s',
                      file_id, self.output_file_grp, out.local_filename)
+
+    def _process_segment(self, parent, parent_image, parent_coords, page_id, zoom, lines, ignore):
+        LOG = getLogger('processor.OcropyResegment')
+        threshold = self.parameter['min_fraction']
+        margin = self.parameter['extend_margins']
+        # prepare line segmentation
+        parent_array = pil2array(parent_image)
+        #parent_array, _ = common.binarize(parent_array, maxskew=0) # just in case still raw
+        parent_bin = np.array(parent_array <= midrange(parent_array), np.bool)
+        ignore_bin = np.ones_like(parent_bin, np.bool)
+        if isinstance(parent, PageType):
+            tag = 'page'
+            fullpage = True
+            report = check_page(parent_bin, zoom)
+        else:
+            tag = 'region'
+            fullpage = False
+            report = check_region(parent_bin, zoom)
+        try:
+            if report:
+                raise Exception(report)
+            # only text region(s) may contain new text lines
+            regions = set(line.parent_object_ for line in lines)
+            region_labels = np.zeros_like(parent_bin, np.bool)
+            region_labels = np.tile(np.expand_dims(region_labels, -1), (1,1,len(regions)))
+            for i, segment in enumerate(regions):
+                LOG.debug('unmasking area of text region "%s" for "%s"',
+                          segment.id, page_id)
+                segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+                segment_y, segment_x = draw.polygon(segment_polygon[:, 1],
+                                                    segment_polygon[:, 0],
+                                                    ignore_bin.shape)
+                ignore_bin[segment_y, segment_x] = False
+                region_labels[segment_y, segment_x, i] = True
+            # mask/ignore overlapping neighbours
+            for i, segment in enumerate(ignore):
+                LOG.debug('masking area of %s "%s" for "%s"',
+                          type(segment).__name__[:-4], segment.id, page_id)
+                segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+                # If segment_polygon lies outside of element (causing
+                # negative/above-max indices), either fully or partially,
+                # then this will silently ignore them. The caller does
+                # not need to concern herself with this.
+                segment_y, segment_x = draw.polygon(segment_polygon[:, 1],
+                                                    segment_polygon[:, 0],
+                                                    ignore_bin.shape)
+                ignore_bin[segment_y, segment_x] = True
+            new_line_labels, _, _, _, _, scale = compute_segmentation(
+                parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
+                maxseps=0, maxcolseps=0, maximages=0)
+            if fullpage:
+                # on page level, long horizontal gaps will split lines
+                # we still should try to merge them, but not across region boundaries
+                # (lines can already belong to multiple regions before, but
+                #  they should not get any more conflicts through hmerge):
+                merged_labels = hmerge_line_seeds(parent_bin, new_line_labels, scale)
+                merged = morph.correspondences(new_line_labels, merged_labels)
+                across = np.zeros(merged_labels.max() + 1, np.bool)
+                for ilabel, olabel, _ in merged.T:
+                    iregions = region_labels[new_line_labels == ilabel].nonzero()[1]
+                    oregions = region_labels[merged_labels == olabel].nonzero()[1]
+                    if np.setdiff1d(oregions,iregions).any():
+                        across[olabel] = True
+                for ilabel, olabel, _ in merged.T:
+                    if across[olabel]:
+                        merged_labels[merged_labels == olabel] = new_line_labels[merged_labels == olabel]
+                new_line_labels = merged_labels
+        except Exception as err:
+            LOG.warning('Cannot line-segment %s "%s": %s',
+                        tag, page_id if fullpage else parent.id, err)
+            return
+        # line_labels = np.zeros_like(parent_array, np.uint8)
+        # for j, line in enumerate(lines, 1):
+        #     line_polygon = coordinates_of_segment(line, parent_image, parent_coords)
+        #     line_labels[draw.polygon(line_polygon[:,1], line_polygon[:,0],
+        #                              line_labels.shape)] = j
+        # DSAVE('line_labels', line_labels + 0.5 * parent_bin)
+        # DSAVE('new_line_labels', new_line_labels + 0.5 * parent_bin)
+        LOG.info("Found %d new line labels for %d existing lines on %s '%s'",
+                 new_line_labels.max(), len(lines), tag, page_id if fullpage else parent.id)
+        # polygonalize and prepare comparison
+        new_line_polygons = masks2polygons(new_line_labels, parent_bin,
+                                           '%s "%s"' % (tag, page_id if fullpage else parent.id),
+                                           min_area=640/zoom/zoom)
+        new_line_polygons = [make_valid(Polygon(line_poly))
+                             for line_label, line_poly in new_line_polygons]
+        line_polygons = [prep(make_valid(Polygon(coordinates_of_segment(
+            line, parent_image, parent_coords))).buffer(margin))
+                         for line in lines]
+        # compare segmentations, calculating ratio of overlapping background area
+        intersections = dict()
+        overlaps = np.zeros((len(new_line_polygons), len(line_polygons)), np.float)
+        for i, new_line_poly in enumerate(new_line_polygons):
+            for j, line_poly in enumerate(line_polygons):
+                # too strict: .contains
+                if line_poly.intersects(new_line_poly):
+                    inter = make_intersection(line_poly.context, new_line_poly)
+                    if not inter:
+                        continue
+                    ratio = inter.area / line_poly.context.area
+                    overlaps[i, j] = ratio
+                    intersections[(i, j)] = inter
+        # assign new lines to existing lines if possible
+        order = np.argsort(np.max(overlaps, axis=1))
+        for i in order[::-1]:
+            j = np.argmax(overlaps[i])
+            line = lines[j]
+            ratio = overlaps[i, j]
+            if ratio < threshold:
+                LOG.debug("new line for '%s' only has %.1f%% bg",
+                          line.id, ratio * 100)
+                continue
+            # now determine ratio of overlapping foreground area
+            inter_polygon = intersections[(i,j)]
+            line_polygon = line_polygons[j].context
+            line_mask = np.zeros_like(parent_bin, np.bool)
+            inter_coords = np.array(inter_polygon.exterior.coords[:-1], np.int)
+            line_coords = np.array(line_polygon.exterior.coords[:-1], np.int)
+            line_mask[draw.polygon(inter_coords[:,1], inter_coords[:,0],
+                                   line_mask.shape)] = True
+            # DSAVE('inter_mask', line_mask + 0.5 * parent_bin)
+            inter_count = np.count_nonzero(parent_bin * line_mask)
+            line_mask[:,:] = False
+            line_mask[draw.polygon(line_coords[:,1], line_coords[:,0],
+                                   line_mask.shape)] = True
+            # DSAVE('line_mask', line_mask + 0.5 * parent_bin)
+            line_count = np.count_nonzero(parent_bin * line_mask)
+            if not line_count:
+                LOG.debug("existing line '%s' had no fg", line.id)
+                continue
+            ratio = inter_count / line_count
+            if ratio < threshold:
+                LOG.debug("new line for '%s' only has %.1f%% fg",
+                          line.id, ratio * 100)
+                continue
+            LOG.debug('Black pixels before/after resegment of line "%s": %d/%d',
+                      line.id, line_count, inter_count)
+            new_center = inter_polygon.centroid
+            center = line_polygon.centroid
+            # FIXME: apply reasonable threshold for centroid distance
+            LOG.debug("new line for '%s' has centroid distance %.2f",
+                      line.id, center.distance(new_center))
+            # avoid getting another new line assigned
+            overlaps[:, j] = 0
+            # convert back to absolute (page) coordinates:
+            line_polygon = coordinates_for_segment(inter_polygon.exterior.coords[:-1],
+                                                   parent_image, parent_coords)
+            line_polygon = polygon_for_parent(line_polygon, line.parent_object_)
+            if line_polygon is None:
+                LOG.warning("Ignoring extant new polygon for line '%s'", line.id)
+                return
+            # annotate result:
+            line.get_Coords().set_points(points_from_polygon(line_polygon))
+        
