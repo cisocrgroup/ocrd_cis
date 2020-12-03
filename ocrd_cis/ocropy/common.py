@@ -870,7 +870,7 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
     labels = np.unique(seeds * (binary > 0)) # without empty foreground
     labels = labels[labels > 0] # without background
     seeds[~np.isin(seeds, labels, assume_unique=True)] = 0
-    DSAVE("hmerge0_nonempty", seeds)
+    #DSAVE("hmerge0_nonempty", seeds)
     if len(labels) < 2:
         return seeds
     objects = measurements.find_objects(seeds)
@@ -892,10 +892,10 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
         seed = seeds == label
         if not seed.any():
             continue
-        DSAVE('hmerge1_seed', seed)
+        #DSAVE('hmerge1_seed', seed)
         # close to fill holes from underestimated scale
         seed = morph.rb_closing(seed, (scale, scale))
-        DSAVE('hmerge2_closed', seed)
+        #DSAVE('hmerge2_closed', seed)
         # not really necessary (seed does not contain ascenders/descenders):
         # # open horizontally to remove extruding ascenders/descenders
         # seed = morph.rb_opening(seed, (1, 3*scale))
@@ -906,7 +906,7 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
         if obj is None:
             continue
         seed[obj[0], 0:seed.shape[1]] = 1
-        DSAVE('hmerge4_h-closed', seed)
+        #DSAVE('hmerge4_h-closed', seed)
         # get overlaps
         for label2 in labels:
             if label == label2 or relabel[label] == label2:
@@ -939,15 +939,25 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
             # fill the horizontal background between both regions:
             candidate_y, candidate_x = np.where(seed2)
             new_label_y, new_label_x = np.where(seeds == label)
+            gap = np.zeros_like(seed2, np.bool)
             for y in np.intersect1d(candidate_y, new_label_y):
                 can_x_min = candidate_x[candidate_y == y][0]
                 can_x_max = candidate_x[candidate_y == y][-1]
                 new_x_min = new_label_x[new_label_y == y][0]
                 new_x_max = new_label_x[new_label_y == y][-1]
                 if can_x_max < new_x_min:
-                    seeds[y, can_x_max:new_x_min] = label
+                    gap[y, can_x_max:new_x_min] = True
                 if new_x_max < can_x_min:
-                    seeds[y, new_x_max:can_x_min] = label
+                    gap[y, new_x_max:can_x_min] = True
+            # find y with shortest gap
+            gapwidth = gap.sum(axis=1)
+            gapwidth[gapwidth==0] = seed.shape[1]
+            mingap = gapwidth < gapwidth.min() + 4
+            # make contiguous
+            mingap = mingap.nonzero()[0]
+            gap[0:mingap[0]] = False
+            gap[mingap[-1]:] = False
+            seeds[gap] = label
     # apply re-assignments:
     seeds = relabel[seeds]
     DSAVE("hmerge5_connected", seeds)
