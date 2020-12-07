@@ -67,10 +67,13 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
     becomes a polygon. (Thus, labels can be split into multiple
     polygons.)
 
-    Return these polygons as a list of label, polygon tuples.
+    Return a tuple:
+    - these polygons as a list of label, polygon tuples, and
+    - a Numpy array of new background labels for that list.
     """
     LOG = getLogger('processor.OcropySegment')
     results = list()
+    result_labels = np.zeros_like(bg_labels, dtype=bg_labels.dtype)
     for label in np.unique(bg_labels):
         if not label:
             # ignore if background
@@ -128,7 +131,8 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
                             label, i, name)
                 continue
             results.append((label, polygon))
-    return results
+            result_labels[contour_labels == i+1] = len(results)
+    return results, result_labels
 
 class OcropySegment(Processor):
 
@@ -557,14 +561,14 @@ class OcropySegment(Processor):
                 # avoid horizontal gaps
                 region_line_labels = hmerge_line_seeds(element_bin, region_line_labels, scale)
                 # find contours for region (can be non-contiguous)
-                regions = masks2polygons(region_mask * region_label, element_bin,
-                                         '%s "%s"' % (element_name, element_id),
-                                         min_area=6000/zoom/zoom,
-                                         simplify=ignore_labels * ~(sep_bin))
+                regions, _ = masks2polygons(region_mask * region_label, element_bin,
+                                            '%s "%s"' % (element_name, element_id),
+                                            min_area=6000/zoom/zoom,
+                                            simplify=ignore_labels * ~(sep_bin))
                 # find contours for lines (can be non-contiguous)
-                lines = masks2polygons(region_line_labels, element_bin,
-                                       'region "%s"' % element_id,
-                                       min_area=640/zoom/zoom)
+                lines, _ = masks2polygons(region_line_labels, element_bin,
+                                          'region "%s"' % element_id,
+                                          min_area=640/zoom/zoom)
                 # create new lines in new regions (allocating by intersection)
                 line_polys = [Polygon(polygon) for _, polygon in lines]
                 for _, region_polygon in regions:
@@ -616,8 +620,8 @@ class OcropySegment(Processor):
             LOG.info('Found %d large non-text/image regions for %s "%s"',
                      num_images, element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            image_polygons = masks2polygons(image_labels, element_bin,
-                                            '%s "%s"' % (element_name, element_id))
+            image_polygons, _ = masks2polygons(image_labels, element_bin,
+                                               '%s "%s"' % (element_name, element_id))
             for image_label, polygon in image_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
@@ -637,10 +641,10 @@ class OcropySegment(Processor):
             LOG.info('Found %d/%d h/v-lines for %s "%s"',
                      num_hlines, num_vlines, element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            hline_polygons = masks2polygons(hline_labels, element_bin,
-                                            '%s "%s"' % (element_name, element_id))
-            vline_polygons = masks2polygons(vline_labels, element_bin,
-                                            '%s "%s"' % (element_name, element_id))
+            hline_polygons, _ = masks2polygons(hline_labels, element_bin,
+                                               '%s "%s"' % (element_name, element_id))
+            vline_polygons, _ = masks2polygons(vline_labels, element_bin,
+                                               '%s "%s"' % (element_name, element_id))
             for _, polygon in hline_polygons + vline_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
@@ -673,9 +677,9 @@ class OcropySegment(Processor):
             # ensure the new line labels do not extrude from the region:
             line_labels = line_labels * region_mask
             # find contours around labels (can be non-contiguous):
-            line_polygons = masks2polygons(line_labels, element_bin,
-                                           'region "%s"' % element_id,
-                                           min_area=640/zoom/zoom)
+            line_polygons, _ = masks2polygons(line_labels, element_bin,
+                                              'region "%s"' % element_id,
+                                              min_area=640/zoom/zoom)
             line_no = 0
             for line_label, polygon in line_polygons:
                 # convert back to absolute (page) coordinates:
