@@ -544,6 +544,7 @@ class OcropySegment(Processor):
                 if not np.all(region_line_labels0 > len(ignore)):
                     # existing region from `ignore` merely to be ordered
                     # (no new region, no actual text lines)
+                    region_line_labels0 = np.intersect1d(region_line_labels0, ignore_labels)
                     assert len(region_line_labels0) == 1, \
                         "region label %d has both existing regions and new lines (%s)" % (
                             region_label, str(region_line_labels0))

@@ -1295,25 +1295,43 @@ def lines2regions(binary, llabels,
                               np.count_nonzero(lbin == label) > 0.5 * bincounts[label])]
             if not linelabels:
                 return
-            if rlabels is not None:
-                # (partial) initial segmentation exists
+            if rlabels is None:
+                num_regions += 1
+                if debug:
+                    LOG.debug('new region {} for lines {}'.format(num_regions, linelabels))
+                else:
+                    LOG.debug('new region %d for %d lines', num_regions, len(linelabels))
+                relabel[linelabels] = num_regions
+            else:
+                # (partial) initial segmentation exists - order existing and non-existing groups
                 rlab = sl.cut(rlabels, box)
                 if isinstance(mask, np.ndarray):
                     rlab = np.where(mask, rlab, 0)
-                for label in np.intersect1d(linelabels, lbin * (rlab > 0)):
+                llab = sl.cut(llabels, box)
+                if isinstance(mask, np.ndarray):
+                    llab = np.where(mask, llab, 0)
+                linelabels0 = np.zeros(llabels.max()+1, dtype=np.bool)
+                linelabels0[linelabels] = True
+                llab *= linelabels0[llab]
+                newregion = rlab.max()+1
+                rlab = np.where(llab, np.where(rlab, rlab, newregion), 0)
+                order = np.argsort(morph.reading_order(rlab,rl,bt))
+                for region in order:
+                    lines = np.setdiff1d(np.unique(llab * (rlab == region)), [0])
+                    if not lines.any():
+                        continue
                     num_regions += 1
-                    if debug: LOG.debug('new region {} for existing region {}'.format(num_regions, label))
+                    if region == newregion:
+                        if debug:
+                            LOG.debug('new region {} for lines {}'.format(num_regions, lines))
+                        else:
+                            LOG.debug('new region %d for %d lines', num_regions, len(lines))
                     else:
-                        LOG.debug('new region %d for existing region', num_regions)
-                    relabel[label] = num_regions
-                    linelabels.remove(label)
-            if not linelabels:
-                return
-            num_regions += 1
-            if debug: LOG.debug('new region {} for lines {}'.format(num_regions, linelabels))
-            else:
-                LOG.debug('new region %d for %d lines', num_regions, len(linelabels))
-            relabel[linelabels] = num_regions
+                        if debug:
+                            LOG.debug('new region {} for existing region {} lines {}'.format(num_regions, region, lines))
+                        else:
+                            LOG.debug('new region %d for existing region {}', num_regions, region)
+                    relabel[lines] = num_regions
         
         _, lcounts = np.unique(lbin, return_counts=True)
         if (len(lcounts) <= 2 or
@@ -1617,12 +1635,12 @@ def lines2regions(binary, llabels,
         for start, stop in cuts:
             #box[1*choose_vertical] ... dim to cut in
             #box[1-choose_vertical] ... dim to range over
-            if choose_vertical:
+            if choose_vertical: # "cut in vertical direction"
                 sub = sl.box(0, len(y), start, stop)
-            else:
+            else: # "cut in horizontal direction"
                 sub = sl.box(start, stop, 0, len(x))
-            LOG.debug('next %s block on %s is %s', 'vertical'
-                      if choose_vertical else 'horizontal',
+            LOG.debug('next %s block on %s is %s', 'horizontal'
+                      if choose_vertical else 'vertical',
                       box, sub)
             recursive_x_y_cut(sl.compose(box,sub),
                               mask=sl.cut(mask,sub) if isinstance(mask, np.ndarray)
