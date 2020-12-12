@@ -1330,7 +1330,7 @@ def lines2regions(binary, llabels,
                         if debug:
                             LOG.debug('new region {} for existing region {} lines {}'.format(num_regions, region, lines))
                         else:
-                            LOG.debug('new region %d for existing region {}', num_regions, region)
+                            LOG.debug('new region %d for existing region %d', num_regions, region)
                     relabel[lines] = num_regions
         
         _, lcounts = np.unique(lbin, return_counts=True)
