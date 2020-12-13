@@ -860,7 +860,7 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
     return seeds
 
 @checks(ABINARY2,SEGMENTATION,NUMBER)
-def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
+def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label, and join them morphologically."""
     # merge labels horizontally to avoid splitting lines at long whitespace
@@ -929,26 +929,26 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
             if count < threshold * total:
                 LOG.debug('ignoring h-overlap between %d and %d (only %d of %d)', label, label2, count, total)
                 continue
-            LOG.debug('hmerging %d with %d', label2, label)
-            # the new label could have been relabelled already:
-            new_label = relabel[label]
-            # assign candidate to (new assignment for) label:
-            relabel[label2] = new_label
-            # re-assign labels already relabelled to candidate:
-            relabel[relabel == label2] = new_label
-            # fill the horizontal background between both regions:
-            candidate_y, candidate_x = np.where(seed2)
-            new_label_y, new_label_x = np.where(seeds == label)
+            label1_y, label1_x = np.where(seeds == label)
+            label2_y, label2_x = np.where(seed2)
+            shared_y = np.intersect1d(label1_y, label2_y)
             gap = np.zeros_like(seed2, np.bool)
-            for y in np.intersect1d(candidate_y, new_label_y):
-                can_x_min = candidate_x[candidate_y == y][0]
-                can_x_max = candidate_x[candidate_y == y][-1]
-                new_x_min = new_label_x[new_label_y == y][0]
-                new_x_max = new_label_x[new_label_y == y][-1]
+            for y in shared_y:
+                can_x_min = label2_x[label2_y == y][0]
+                can_x_max = label2_x[label2_y == y][-1]
+                new_x_min = label1_x[label1_y == y][0]
+                new_x_max = label1_x[label1_y == y][-1]
                 if can_x_max < new_x_min:
-                    gap[y, can_x_max:new_x_min] = True
+                    if (seps is None or
+                        not seps[y, can_x_max:new_x_min].any()):
+                        gap[y, can_x_max:new_x_min] = True
                 if new_x_max < can_x_min:
-                    gap[y, new_x_max:can_x_min] = True
+                    if (seps is None or
+                        not seps[y, new_x_max:can_x_min].any()):
+                        gap[y, new_x_max:can_x_min] = True
+            if not gap.any() or gap.max(axis=1).sum() / len(shared_y) < 0.1:
+                LOG.debug('ignoring h-overlap between %d and %d (blocked by seps)', label, label2)
+                continue
             # find y with shortest gap
             gapwidth = gap.sum(axis=1)
             gapwidth[gapwidth==0] = seed.shape[1]
@@ -957,7 +957,15 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
             mingap = mingap.nonzero()[0]
             gap[0:mingap[0]] = False
             gap[mingap[-1]:] = False
+            LOG.debug('hmerging %d with %d', label2, label)
+            # fill the horizontal background between both regions:
             seeds[gap] = label
+            # the new label could have been relabelled already:
+            new_label = relabel[label]
+            # assign candidate to (new assignment for) label:
+            relabel[label2] = new_label
+            # re-assign labels already relabelled to candidate:
+            relabel[relabel == label2] = new_label
     # apply re-assignments:
     seeds = relabel[seeds]
     DSAVE("hmerge5_connected", seeds)
@@ -1096,7 +1104,7 @@ def compute_segmentation(binary,
         seeds = relabel[seeds]
         DSAVE("lineseeds_filtered", [seeds,binary])
     else:
-        seeds = hmerge_line_seeds(binary, seeds, scale)
+        seeds = hmerge_line_seeds(binary, seeds, scale, seps=sepmask)
 
     LOG.debug('spreading seed labels')
     # spread labels from seeds to bg, but watch fg,

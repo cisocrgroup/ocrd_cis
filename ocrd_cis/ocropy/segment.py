@@ -560,7 +560,7 @@ class OcropySegment(Processor):
                 order[np.setdiff1d(region_line_labels0, element_bin * region_line_labels)] = 0
                 region_line_labels = order[region_line_labels]
                 # avoid horizontal gaps
-                region_line_labels = hmerge_line_seeds(element_bin, region_line_labels, scale)
+                region_line_labels = hmerge_line_seeds(element_bin, region_line_labels, scale, seps=sepmask)
                 # find contours for region (can be non-contiguous)
                 regions, _ = masks2polygons(region_mask * region_label, element_bin,
                                             '%s "%s"' % (element_name, element_id),
