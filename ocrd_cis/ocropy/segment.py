@@ -424,6 +424,9 @@ class OcropySegment(Processor):
         newly detected separators to guide region segmentation.
         """
         LOG = getLogger('processor.OcropySegment')
+        if not image.width or not image.height:
+            LOG.warning("Skipping '%s' with zero size", element_id)
+            return
         element_array = pil2array(image)
         element_bin = np.array(element_array <= midrange(element_array), np.bool)
         sep_bin = np.zeros_like(element_bin, np.bool)
