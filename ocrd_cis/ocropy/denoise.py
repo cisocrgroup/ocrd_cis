@@ -119,6 +119,9 @@ class OcropyDenoise(Processor):
 
     def process_segment(self, segment, segment_image, segment_xywh, zoom, page_id, file_id):
         LOG = getLogger('processor.OcropyDenoise')
+        if not segment_image.width or not segment_image.height:
+            LOG.warning("Skipping '%s' with zero size", file_id)
+            return
         LOG.info("About to despeckle '%s'", file_id)
         bin_image = remove_noise(segment_image,
                                  maxsize=self.parameter['noise_maxsize']/zoom*300/72) # in pt
