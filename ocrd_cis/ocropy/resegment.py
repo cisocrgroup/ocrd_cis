@@ -334,9 +334,13 @@ class OcropyResegment(Processor):
 def join_polygons(polygons, contract=2):
     # construct convex hull
     jointp = unary_union(polygons).convex_hull
-    # make hull slightly concave by dilation and reconstruction
     # FIXME: calculate true alpha shape
-    jointp = jointp.buffer(-contract)
+    # make hull slightly concave by dilation and reconstruction
+    for step in range(int(contract)+1):
+        nextp = jointp.buffer(-1)
+        if nextp.type == 'MultiPolygon':
+            break
+        jointp = nextp
     jointp = unary_union(polygons + [jointp])
     if jointp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
