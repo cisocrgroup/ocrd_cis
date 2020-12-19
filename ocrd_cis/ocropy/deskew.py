@@ -84,7 +84,7 @@ class OcropyDeskew(Processor):
                 if level == 'table':
                     regions = page.get_TableRegion()
                 else: # region
-                    regions = page.get_AllRegions(classes=['Text'])
+                    regions = page.get_AllRegions(classes=['Text'], order='reading-order')
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:

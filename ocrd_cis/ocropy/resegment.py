@@ -127,7 +127,7 @@ class OcropyResegment(Processor):
                       page.get_SeparatorRegion() +
                       page.get_UnknownRegion() +
                       page.get_CustomRegion())
-            regions = page.get_AllRegions(classes=['Text'])
+            regions = page.get_AllRegions(classes=['Text'], order='reading-order')
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
             elif level == 'page':

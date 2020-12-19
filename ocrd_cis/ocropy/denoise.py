@@ -82,7 +82,7 @@ class OcropyDenoise(Processor):
                 self.process_segment(page, page_image, page_xywh, zoom,
                                      input_file.pageId, file_id)
             else:
-                regions = page.get_AllRegions(classes=['Text'])
+                regions = page.get_AllRegions(classes=['Text'], order='reading-order')
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:

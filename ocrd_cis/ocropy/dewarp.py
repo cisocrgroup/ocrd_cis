@@ -135,7 +135,7 @@ class OcropyDewarp(Processor):
             else:
                 zoom = 1
 
-            regions = page.get_AllRegions(classes=['Text'])
+            regions = page.get_AllRegions(classes=['Text'], order='reading-order')
             if not regions:
                 self.logger.warning('Page "%s" contains no text regions', page_id)
             for region in regions:
