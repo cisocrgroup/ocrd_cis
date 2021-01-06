@@ -97,14 +97,14 @@ class Aligner(Processor):
                 te = TextEquivType(
                     Unicode=get_textequiv_unicode(line.region),
                     conf=get_textequiv_conf(line.region),
-                    dataType="ocrd-cis-line-alignment",
-                    dataTypeDetails=ddt)
+                    dataType="other",
+                    dataTypeDetails="ocrd-cis-line-alignment:" + ddt)
                 lines[0].region.add_TextEquiv(te)
             else:
                 self.log.debug("len: %i, i: %i", len(lines[0].region.get_TextEquiv()), i)
-                lines[0].region.get_TextEquiv()[i].set_dataType(
-                    "ocrd-cis-line-alignment-master-ocr")
-            lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(ddt)
+                lines[0].region.get_TextEquiv()[i].set_dataType("other")
+                lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(
+                    "ocrd-cis-line-alignment-master-ocr:" + ddt)
             lines[0].region.get_TextEquiv()[i].set_index(i+1)
         self.align_words(lines)
 
@@ -146,8 +146,8 @@ class Aligner(Processor):
                 ifg = word.input_file.input_file_group
                 self.log.debug("(empty) word alignment: [%s]", ifg)
                 te = TextEquivType(
-                    dataType="ocrd-cis-empty-word-alginment",
-                    dataTypeDetails=ifg)
+                    dataType="other",
+                    dataTypeDetails="ocrd-cis-empty-word-alignment:" + ifg)
                 words[0].region[0].add_TextEquiv(te)
                 words[0].region[0].get_TextEquiv()[i].set_index(i+1)
                 continue
@@ -162,13 +162,13 @@ class Aligner(Processor):
                 te = TextEquivType(
                     Unicode=_str,
                     conf=conf,
-                    dataType="ocrd-cis-word-alignment",
-                    dataTypeDetails=ddt)
+                    dataType="other",
+                    dataTypeDetails="ocrd-cis-word-alignment:" + ddt)
                 words[0].region[0].add_TextEquiv(te)
             else:
-                words[0].region[0].get_TextEquiv()[i].set_dataType(
-                    'ocrd-cis-word-alignment-master-ocr')
-                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(ddt)
+                words[0].region[0].get_TextEquiv()[i].set_dataType("other")
+                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(
+                    "ocrd-cis-word-alignment-master-ocr:" + ddt)
             words[0].region[0].get_TextEquiv()[i].set_index(i+1)
 
     def find_word(self, tokens, regions, t="other"):
