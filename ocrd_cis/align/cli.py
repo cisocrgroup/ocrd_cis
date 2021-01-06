@@ -8,6 +8,7 @@ from ocrd.decorators import ocrd_cli_options
 from ocrd.decorators import ocrd_cli_wrap_processor
 from ocrd_utils import MIMETYPE_PAGE
 from ocrd_utils import getLogger
+from ocrd_utils import getLevelName
 from ocrd_utils import make_file_id
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml
@@ -15,18 +16,12 @@ from ocrd_models.ocrd_page_generateds import TextEquivType
 from ocrd_cis import JavaAligner
 from ocrd_cis import get_ocrd_tool
 
-LOG_LEVEL = 'INFO'
-
 @click.command()
 @ocrd_cli_options
 def ocrd_cis_align(*args, **kwargs):
-    if 'log_level' in kwargs and kwargs['log_level']:
-        global LOG_LEVEL
-        LOG_LEVEL = kwargs['log_level']
     return ocrd_cli_wrap_processor(Aligner, *args, **kwargs)
 
 class Aligner(Processor):
-    LOG_LEVEL = 'INFO'
     def __init__(self, *args, **kwargs):
         ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
@@ -294,7 +289,7 @@ class Aligner(Processor):
             self.log.debug("input line: %s", i)
         n = len(ifs)
         self.log.debug("starting java client")
-        p = JavaAligner(n, LOG_LEVEL or 'INFO')
+        p = JavaAligner(n, getLevelName(self.log.getEffectiveLevel()))
         return p.run("\n".join(_input))
 
 class FileAlignment:
