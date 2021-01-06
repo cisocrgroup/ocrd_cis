@@ -32,7 +32,9 @@ class Aligner(Processor):
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
         kwargs['version'] = ocrd_tool['version']
         super(Aligner, self).__init__(*args, **kwargs)
-        self.log = getLogger('cis.Processor.Aligner')
+
+        if hasattr(self, 'workspace'):
+            self.log = getLogger('cis.Processor.Aligner')
 
     def process(self):
         ifgs = self.input_file_grp.split(",")  # input file groups
