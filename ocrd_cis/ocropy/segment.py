@@ -855,8 +855,8 @@ def page_subgroup_in_reading_order(roelem):
                            UnorderedGroupIndexedType,
                            RegionRefIndexedType)):
         getattr(roelem.parent_object_, {
-            OrderedGroupIndexedType: 'get_OrderedIndexedGroup',
-            UnorderedGroupIndexedType: 'get_UnorderedIndexedGroup',
+            OrderedGroupIndexedType: 'get_OrderedGroupIndexed',
+            UnorderedGroupIndexedType: 'get_UnorderedGroupIndexed',
             RegionRefIndexedType: 'get_RegionRefIndexed'
         }.get(roelem.__class__))().remove(roelem)
         roelem2 = OrderedGroupIndexedType(id=roelem.regionRef + '_group',
