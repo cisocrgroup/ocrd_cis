@@ -850,6 +850,7 @@ def page_subgroup_in_reading_order(roelem):
         roelem2 = OrderedGroupType(id=roelem.regionRef + '_group',
                                    regionRef=roelem.regionRef)
         roelem.parent_object_.add_OrderedGroup(roelem2)
+        roelem2.parent_object_ = roelem.parent_object_
         return roelem2
     if isinstance(roelem, (OrderedGroupIndexedType,
                            UnorderedGroupIndexedType,
@@ -863,5 +864,6 @@ def page_subgroup_in_reading_order(roelem):
                                           index=roelem.index,
                                           regionRef=roelem.regionRef)
         roelem.parent_object_.add_OrderedGroupIndexed(roelem2)
+        roelem2.parent_object_ = roelem.parent_object_
         return roelem2
     return None
