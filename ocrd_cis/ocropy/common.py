@@ -1114,6 +1114,12 @@ def compute_segmentation(binary,
     llabels2 = morph.propagate_labels(binary, seeds, conflict=0)
     conflicts = llabels > llabels2
     llabels = np.where(conflicts, seeds, llabels)
+    # capture diacritics (isolated components above seeds)
+    seeds2 = interpolation.shift(seeds, (-scale, 0), order=0, prefilter=False)
+    seeds2 = np.where(seeds, seeds, seeds2)
+    DSAVE('lineseeds_cap', [seeds2,binary])
+    llabels2 = morph.propagate_labels_simple(binary, seeds2)
+    llabels = np.where(llabels, llabels, llabels2)
     # (protect sepmask as a temporary label)
     seplabel = np.max(seeds)+1
     llabels[sepmask>0] = seplabel
