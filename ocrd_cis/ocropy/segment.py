@@ -552,7 +552,7 @@ class OcropySegment(Processor):
                         "region label %d has both existing regions and new lines (%s)" % (
                             region_label, str(region_line_labels0))
                     region = ignore[region_line_labels0[0] - 1]
-                    if rogroup and not isinstance(region, SeparatorRegionType):
+                    if rogroup and region.parent_object_ == element and not isinstance(region, SeparatorRegionType):
                         index = page_add_to_reading_order(rogroup, region.id, index)
                     LOG.debug('Region label %d is for ignored region "%s"',
                               region_label, region.id)
