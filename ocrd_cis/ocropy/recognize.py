@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+import sys
 import os.path
 import numpy as np
 from PIL import Image
@@ -102,19 +103,24 @@ class OcropyRecognize(Processor):
                 x.allocate(5000)
 
     def get_model(self):
-        """Search for the model file.  First checks if
-        parameter['model'] is a valid readeable file and returns it.
-        If not, it checks if the model can be found in the
+        """Search for the model file.  First checks if parameter['model'] can
+        be resolved with OcrdResourceManager to a valid readeable file and
+        returns it.  If not, it checks if the model can be found in the
         dirname(__file__)/models/ directory."""
         canread = lambda p: os.path.isfile(p) and os.access(p, os.R_OK)
-        model = self.parameter['model']
-        if canread(model):
-            return model
-        ocropydir = os.path.dirname(os.path.abspath(__file__))
-        path = os.path.join(ocropydir, 'models', model)
-        if canread(path):
-            return path
-        return model
+        try:
+            model = self.resolve_resource(self.parameter['model'])
+            if canread(model):
+                return model
+        except SystemExit:
+            ocropydir = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(ocropydir, 'models', self.parameter['model'])
+            self.logger.info("Failed to resolve model with OCR-D/core mechanism, trying %s", path)
+            if canread(path):
+                return path
+        self.logger.error("Could not find model %s. Try 'ocrd resmgr download ocrd-cis-ocropy-recognize %s",
+                self.parameter['model'], self.parameter['model'])
+        sys.exit(1)
 
     def process(self):
         """Recognize lines / words / glyphs of the workspace.
