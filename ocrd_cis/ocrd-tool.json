@@ -26,7 +26,13 @@
 			"parameters": {
 				"method": {
 					"type": "string",
-					"enum": ["none", "global", "otsu", "gauss-otsu", "ocropy"],
+					"enum": [
+						"none",
+						"global",
+						"otsu",
+						"gauss-otsu",
+						"ocropy"
+					],
 					"description": "binarization method to use (only 'ocropy' will include deskewing and denoising)",
 					"default": "ocropy"
 				},
@@ -61,7 +67,12 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "table", "region", "line"],
+					"enum": [
+						"page",
+						"table",
+						"region",
+						"line"
+					],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "page"
 				}
@@ -92,7 +103,11 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "table", "region"],
+					"enum": [
+						"page",
+						"table",
+						"region"
+					],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "region"
 				}
@@ -132,7 +147,11 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "region", "line"],
+					"enum": [
+						"page",
+						"region",
+						"line"
+					],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "page"
 				}
@@ -159,7 +178,10 @@
 			"parameters": {
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["region", "line"],
+					"enum": [
+						"region",
+						"line"
+					],
 					"description": "PAGE XML hierarchy level granularity to annotate images for",
 					"default": "region"
 				},
@@ -269,7 +291,11 @@
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
-					"enum": ["line", "word", "glyph"],
+					"enum": [
+						"line",
+						"word",
+						"glyph"
+					],
 					"description": "PAGE XML hierarchy level granularity to add the TextEquiv results to",
 					"default": "line"
 				},
@@ -325,7 +351,11 @@
 				},
 				"level-of-operation": {
 					"type": "string",
-					"enum": ["page", "table", "region"],
+					"enum": [
+						"page",
+						"table",
+						"region"
+					],
 					"description": "PAGE XML hierarchy level to read images from and add elements to",
 					"default": "region"
 				},
@@ -399,42 +429,6 @@
 				}
 			}
 		},
-		"ocrd-cis-ocropy-train": {
-			"executable": "ocrd-cis-ocropy-train",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"recognition/text-recognition"
-			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"description": "train model with ground truth from mets data",
-			"parameters": {
-				"textequiv_level": {
-					"type": "string",
-					"description": "PAGE XML hierarchy level granularity",
-					"enum": ["line", "word", "glyph"],
-					"default": "line"
-				},
-				"model": {
-					"type": "string",
-					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
-				},
-				"ntrain": {
-					"type": "number",
-					"format": "integer",
-					"description": "lines to train before stopping",
-					"default": 1000000
-				},
-				"outputpath": {
-					"type": "string",
-					"description": "(existing) path for the trained model"
-				}
-			}
-		},
 		"ocrd-cis-align": {
 			"executable": "ocrd-cis-align",
 			"categories": [
@@ -445,16 +439,15 @@
 			],
 			"input_file_grp": [
 				"OCR-D-OCR-1",
-				"OCR-D-OCR-2",
-				"OCR-D-OCR-N"
+				"OCR-D-OCR-2"
 			],
 			"output_file_grp": [
 				"OCR-D-ALIGNED"
 			],
 			"description": "Align multiple OCRs and/or GTs"
 		},
-		"ocrd-cis-postcorrect": {
-			"executable": "ocrd-cis-postcorrect",
+		"ocrd-cis-post-correct": {
+			"executable": "ocrd-cis-post-correct",
 			"categories": [
 				"Text recognition and optimization"
 			],
@@ -469,13 +462,7 @@
 				"OCR-D-POST-CORRECTED"
 			],
 			"parameters": {
-				"maxCandidates": {
-					"description": "Maximum number of considered correction candidates per suspicious token",
-					"type": "number",
-					"format": "integer",
-					"default": 10
-				},
-				"profilerPath": {
+				"profilerBin": {
 					"description": "Path to the profiler executable",
 					"required": true,
 					"type": "string"
@@ -490,15 +477,20 @@
 					"type": "string",
 					"required": true
 				},
-				"nOCR": {
+				"nocr": {
 					"description": "Number of parallel OCR's to use for the post correction",
 					"type": "number",
 					"format": "integer",
 					"default": 1
 				},
-				"runLE": {
-					"description": "Do run the lexicon extension step for the post correction",
-  					"type": "boolean",
+				"cache": {
+					"description": "Enable caching of profiles",
+					"type": "boolean",
+					"default": false
+				},
+				"gt": {
+					"description": "Enable additonal ground-truth data for the evaluation",
+					"type": "boolean",
 					"default": false
 				}
 			}

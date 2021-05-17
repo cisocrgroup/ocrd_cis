@@ -103,11 +103,10 @@ The [ocrd-tool.json](ocrd_cis/ocrd-tool.json) contains a formal
 description of all the processors along with the parameter config file
 accepted by their `--parameter` argument.
 
-### ocrd-cis-postcorrect
+### ocrd-cis-post-correct
 This processor runs the post correction using a pre-trained model.  If
 additional support OCRs should be used, models for these OCR steps are
-required and must be executed and aligned beforehand (see [the test
-script](tests/run_postcorrection_test.bash) for an example).
+required and must be executed and aligned beforehand. 
 
 There is a basic model trained on the OCR-D ground truth.  It gets
 installed allongside this module.  You can get the model's install
@@ -129,15 +128,14 @@ Arguments:
 As mentioned above in order to use the postcorrection with input from
 multiple OCR's, some preprocessing steps are needed: firstly the
 additional OCR recognition has to be done and secondly the multiple
-OCR's have to be aligned (you can also take a look to the function
-`ocrd_cis_align` in the [tests](tests/test_lib.bash)).  Assuming an
-original recognition as file group `OCR1` on the segmented document of
-file group `SEG`, the folloing commands can be used:
+OCR's have to be aligned.  Assuming an original recognition as file group 
+`OCR1` on the segmented document of file group `SEG`, the folloing 
+commands can be used:
 
 ```sh
 ocrd-ocropus-recognize -I SEG -O OCR2 ... # additional OCR
-ocrd-cis-align -I OCR1,OCR2 -O ALGN ... # align OCR1 and OCR2
-ocrd-cis-postcorrect -I ALGN -O PC ... # post correction
+ocrd-cis-align -I OCR1,OCR2 -O ALGN ... # align OCR1 and OCR2 to ALGN 
+ocrd-cis-postcorrect -I ALGN -O PC ... # post correction to PC
 ```
 
 ### ocrd-cis-align
@@ -157,18 +155,23 @@ Arguments:
 
 ### ocrd-cis-data
 Helper tool to get the path of the installed data files. Usage:
-`ocrd-cis-data [-h|-jar|-3gs|-model|-config]` to get the path of the
-jar library, the pre-trained post correction model, the path to the
-default 3-grams language model file or the default training
-configuration file.  This tool does not follow the OCR-D conventions.
+`ocrd-cis-data [-help|-exe|-config|-pre19th|-19th]` to get help, 
+the path of the executable file, the path of the configuration file,
+the path of the pre-19th-century model or the path of the 19th-century
+model.  This tool does not follow the OCR-D conventions.
 
-### Training
+### ocrd-cis-apoco
+Helper tool that wraps the apoco command line client. Usage:
+`ocrd-cis-apoco [SUBCOMMANDS]... [OPTIONS]... [ARGS]...`. 
+This tool does not follow the OCR-D conventions.
+### Training of the post-corretion
 There is no dedicated training script provided. Models are trained
-using the java implementation directly (check out the [training test
-script](tests/run_training_test.bash) for an example).  Training a
+using the ocrd-cis-apoco tool.  Training a
 model requires a workspace containing one or more file groups
 consisting of aligned OCR and ground-truth documents (the last file
 group has to be the ground truth).
+Training of the re-ranker: `ocrd-cis-apoco train rr`
+Training of the decision maker: `ocrd-cis-apoco train dm`
 
 Arguments:
  * `--parameter` path to configuration file
@@ -177,6 +180,8 @@ Arguments:
    is stored
  * `--log-level` set log level
  * `--mets` path to METS file in the workspace
+ * `--nocr` number of parallel OCRs to train the model on
+ * `--model` path to the model
 
 ### ocrd-cis-ocropy-train
 The [ocropy-train](ocrd_cis/ocropy/train.py) tool can be used to train LSTM models.

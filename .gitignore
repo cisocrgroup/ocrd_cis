@@ -10,3 +10,4 @@ env-dir/*
 /venv*
 /build
 /dist
+.vscode/*

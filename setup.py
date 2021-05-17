@@ -52,14 +52,28 @@ setup(
     extras_require={
         'debug': ['matplotlib>3.0.0'],
     },
+    package_dir={
+        'ocrd_cis': 'ocrd_cis',
+    },
     package_data={
         '': ['*.json', '*.yml', '*.yaml', '*.csv.gz', '*.jar', '*.zip'],
+        'ocrd_cis': [
+            'data/apoco.exe',
+            'data/apoco.darwin',
+            'data/apoco.linux',
+            'data/config.json',
+            'data/pre19th.bin',
+            'data/19th.bin',
+            'ocrd-tool.json',
+        ],
     },
     entry_points={
         'console_scripts': [
-            'ocrd-cis-align=ocrd_cis.align.cli:ocrd_cis_align',
-            'ocrd-cis-postcorrect=ocrd_cis.postcorrect.cli:ocrd_cis_postcorrect',
-            'ocrd-cis-data=ocrd_cis.data.__main__:main',
+            'ocrd-cis-post-correct=ocrd_cis.correct:correct',
+            'ocrd-cis-align=ocrd_cis.align:align',
+            'ocrd-cis-data=ocrd_cis.data:data',
+            'ocrd-cis-apoco=ocrd_cis.apoco:apoco',
+
             'ocrd-cis-ocropy-binarize=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_binarize',
             'ocrd-cis-ocropy-clip=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_clip',
             'ocrd-cis-ocropy-denoise=ocrd_cis.ocropy.cli:ocrd_cis_ocropy_denoise',

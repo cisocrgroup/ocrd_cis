@@ -15,7 +15,7 @@ docker-build: Dockerfile
 docker-push: docker-build
 	docker push flobar/ocrd_cis:latest
 
-TEST_SCRIPTS=$(sort $(wildcard tests/run_*.bash))
+TEST_SCRIPTS=$(sort $(wildcard testdata/test_*.bash))
 .PHONY: $(TEST_SCRIPTS)
 $(TEST_SCRIPTS):
 	bash $@ $V
