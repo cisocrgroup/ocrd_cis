@@ -731,11 +731,17 @@ def polygon_for_parent(polygon, parent):
     # (this can happen when shapes valid in floating point are rounded)
     childp = make_valid(childp)
     parentp = make_valid(parentp)
+    if not childp.is_valid:
+        return None
+    if not parentp.is_valid:
+        return None
     # check if clipping is necessary
     if childp.within(parentp):
         return childp.exterior.coords[:-1]
     # clip to parent
     interp = make_intersection(childp, parentp)
+    if not interp:
+        return None
     return interp.exterior.coords[:-1] # keep open
 
 def make_intersection(poly1, poly2):
