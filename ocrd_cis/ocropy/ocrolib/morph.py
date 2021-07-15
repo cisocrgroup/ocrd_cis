@@ -293,7 +293,7 @@ def select_regions(binary,f,min=0,nbest=100000):
     if binary.max() == 1:
         labels,_ = label(binary)
     else:
-        labels = binary
+        labels = binary.astype(uint8)
     objects = find_objects(labels)
     scores = [f(o) for o in objects]
     best = argsort(scores)
