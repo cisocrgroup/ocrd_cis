@@ -521,7 +521,7 @@ class OcropySegment(Processor):
                          element_name, element_id)
             except Exception as err:
                 LOG.error('Cannot region-segment %s "%s": %s',
-                            element_name, element_id, err)
+                          element_name, element_id, err)
                 region_labels = np.where(line_labels > len(ignore), 1 + len(ignore), line_labels)
             
             # prepare reading order group index
@@ -563,7 +563,9 @@ class OcropySegment(Processor):
                 order[np.setdiff1d(region_line_labels0, element_bin * region_line_labels)] = 0
                 region_line_labels = order[region_line_labels]
                 # avoid horizontal gaps
-                region_line_labels = hmerge_line_seeds(element_bin, region_line_labels, scale, seps=sepmask)
+                region_line_labels = hmerge_line_seeds(element_bin, region_line_labels, scale,
+                                                       seps=np.maximum(sepmask, colseps))
+                region_mask |= region_line_labels > 0
                 # find contours for region (can be non-contiguous)
                 regions, _ = masks2polygons(region_mask * region_label, element_bin,
                                             '%s "%s"' % (element_name, element_id),
