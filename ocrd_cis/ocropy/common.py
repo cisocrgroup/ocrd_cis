@@ -1273,7 +1273,12 @@ def lines2regions(binary, llabels,
         sepmask = 1-morph.keep_marked(1-sepmask, lbinary>0)
         DSAVE('sepmask', [sepmask,binary])
     objects = [None] + morph.find_objects(llabels)
-    #centers = measurements.center_of_mass(binary, llabels)
+    #centers = measurements.center_of_mass(binary, llabels, np.unique(llabels))
+    def center(obj):
+        if morph.sl.empty(obj):
+            return [0,0]
+        return morph.sl.center(obj)
+    centers = list(map(center, objects[1:]))
     if scale is None:
         scale = psegutils.estimate_scale(binary, zoom)
     bincounts = np.bincount(lbinary.flatten())
@@ -1419,11 +1424,108 @@ def lines2regions(binary, llabels,
                     npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
                     new_partition_type = 'splitmask'
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
+            if partition_type != 'topological':
+                # try to partition spanning lines against separator-split lines
+                # get current slice's line labels
+                def find_topological():
+                    # run only if needed (no other partition/slicing possible)
+                    nonlocal partitions, npartitions, new_partition_type
+                    llab = sl.cut(llabels, box)
+                    if isinstance(mask, np.ndarray):
+                        llab = np.where(mask, llab, 0)
+                    obj = [sl.intersect(o, box) for o in objects]
+                    # get current slice's foreground
+                    bin = sl.cut(binary, box)
+                    if isinstance(mask, np.ndarray):
+                        bin = np.where(mask, bin, 0)
+                    # get current slice's separator labels
+                    seplab, nseps = morph.label(sepm)
+                    if nseps == 0:
+                        return
+                    sepind = np.unique(seplab)
+                    # (but keep only those with large fg i.e. ignore white-space seps)
+                    seplabs, counts = np.unique(seplab * bin, return_counts=True)
+                    kept = np.in1d(seplab.ravel(), seplabs[counts > scale * min_line])
+                    seplab = seplab * kept.reshape(*seplab.shape)
+                    DSAVE('seplab', seplab)
+                    sepobj = morph.find_objects(seplab)
+                    if not len(sepobj):
+                        return
+                    # get current slice's line labels
+                    # (but keep only those with foreground)
+                    linelabels = np.setdiff1d(np.unique(lbin), [0])
+                    nlines = linelabels.max() + 1
+                    # find pairs of lines above each other with a separator next to them
+                    leftseps = np.zeros((nlines, nseps), np.bool)
+                    rghtseps = np.zeros((nlines, nseps), np.bool)
+                    for line in linelabels:
+                        for i, sep in enumerate(sepobj):
+                            if sep is None:
+                                continue
+                            if sl.yoverlap(sep, obj[line]) / sl.height(obj[line]) <= 0.75:
+                                continue
+                            sepx = np.nonzero(seplab[obj[line][0]] == i + 1)[1]
+                            binx = np.nonzero(lbin[obj[line][0]] == line)[1]
+                            if not binx.size:
+                                continue
+                            # more robust to noise: 95% instead of max(), 5% instead of min()
+                            if sepx.max() <= np.percentile(binx, 5):
+                                leftseps[line, i] = True
+                            if sepx.min() >= np.percentile(binx, 95):
+                                rghtseps[line, i] = True
+                    # true separators have some lines on either side
+                    trueseps = leftseps.max(axis=0) & rghtseps.max(axis=0)
+                    if not np.any(trueseps):
+                        return
+                    if debug: LOG.debug("trueseps: %s", str(trueseps))
+                    neighbours = np.zeros((nlines, nlines), np.bool)
+                    for i in linelabels:
+                        for j in linelabels[i+1:]:
+                            if sl.yoverlap_rel(obj[i], obj[j]) > 0.5:
+                                continue
+                            # pair must have common separator on one side,
+                            # which must also have some line on the other side
+                            if (np.any(leftseps[i] & leftseps[j] & trueseps) or
+                                np.any(rghtseps[i] & rghtseps[j] & trueseps)):
+                                if debug: LOG.debug("neighbours: %d/%d", i, j)
+                                neighbours[i,j] = True
+                    if not np.any(neighbours):
+                        return
+                    # group neighbours by adjacency (i.e. put any contiguous pairs
+                    # of such line labels into the same group)
+                    nlabels = llab.max() + 1
+                    splitmap = np.zeros(nlabels, dtype=np.int)
+                    for i, j in zip(*neighbours.nonzero()):
+                        if splitmap[i] > 0:
+                            splitmap[j] = splitmap[i]
+                        elif splitmap[j] > 0:
+                            splitmap[i] = splitmap[j]
+                        else:
+                            splitmap[i] = i
+                            splitmap[j] = i
+                    nsplits = splitmap.max()
+                    # group non-neighbours by adjacency (i.e. put any other contiguous
+                    # non-empty line labels into the same group)
+                    nonneighbours = (splitmap==0)[llab] * (llab > 0) * (sepm == 0)
+                    nonneighbours, _ = morph.label(nonneighbours)
+                    for i, j in morph.correspondences(nonneighbours, llab, False).T:
+                        if i > 0 and j > 0:
+                            splitmap[j] = i + nsplits
+                    if debug: LOG.debug('  groups of adjacent lines: %s', str(splitmap))
+                    partitions = splitmap[llab]
+                    DSAVE('partitions', partitions)
+                    npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
                     if npartitions > 1:
-                        # sort partitions in reading order
-                        order = morph.reading_order(partitions,rl,bt)
-                        partitions = order[partitions]
-                        #lpartitions = order[lpartitions]
+                        if debug: LOG.debug("  found %d spanning partitions", npartitions)
+                        # re-assign background to nearest partition
+                        partitions = morph.spread_labels(np.where(llab, partitions, 0))
+                        # re-assert mask, if any
+                        if isinstance(mask, np.ndarray):
+                            partitions = np.where(mask, partitions, 0)
+                        new_partition_type = 'topological'
+            else:
+                def find_topological():
+                    return
         
         # try cuts via h/v projection profiles
         y = np.mean(lbin>0, axis=1)
@@ -1617,6 +1719,11 @@ def lines2regions(binary, llabels,
             partitionscores = y_partitionscores
             lim = len(y)
 
+        if not np.any(gaps) and npartitions == 1:
+            # no slices and no partitions, but separators exist
+            # so try to fall back to more elaborate partitioning
+            find_topological() # partitions, npartitions, new_partition_type
+
         # now that we have a decision on direction (x/y)
         # as well as scores for its gaps, decide whether
         # to prefer cuts at annotated separators (partitions) instead
@@ -1630,7 +1737,9 @@ def lines2regions(binary, llabels,
                 sum(map(sl.height if prefer_vertical else sl.width,
                         (morph.find_objects(partitions)))) > np.max(
                             partitionscores, initial=0))):
-            # continue on each partition by suppressing the others
+            # continue on each partition by suppressing the others, respectively
+            order = morph.reading_order(partitions,rl,bt)
+            partitions = order[partitions]
             LOG.debug('cutting by %d partitions on %s', npartitions, box)
             if debug:
                 # show current cut/box inside full image
