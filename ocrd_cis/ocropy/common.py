@@ -1317,7 +1317,9 @@ def lines2regions(binary, llabels,
                     LOG.debug('new region %d for %d lines', num_regions, len(linelabels))
                 relabel[linelabels] = num_regions
             else:
-                # (partial) initial segmentation exists - order existing and non-existing groups
+                # (partial) initial segmentation exists - order existing groups against rest,
+                # this must be done on full labels (bg+fg), so we first need to reconstruct
+                # this slice's llab/rlab
                 rlab = sl.cut(rlabels, box)
                 if isinstance(mask, np.ndarray):
                     rlab = np.where(mask, rlab, 0)
@@ -1329,11 +1331,21 @@ def lines2regions(binary, llabels,
                 llab *= linelabels0[llab]
                 newregion = rlab.max()+1
                 rlab = np.where(llab, np.where(rlab, rlab, newregion), 0)
-                order = np.argsort(morph.reading_order(rlab,rl,bt))
+                order = np.argsort(morph.reading_order((lbin>0) * rlab, rl, bt))
+                # get region label with highest share for each line,
+                # then assign it to that region
+                llab2rlab, llabcount = dict(), dict()
+                for line, region, count in morph.correspondences(llab, rlab).T:
+                    if line > 0 and region > 0 and count > llabcount.get(line, 0):
+                        llabcount[line] = count
+                        llab2rlab[line] = region
+                rlab2llab = dict()
+                for line, region in llab2rlab.items():
+                    rlab2llab.setdefault(region, list()).append(line)
                 for region in order:
-                    lines = np.setdiff1d(np.unique(llab * (rlab == region)), [0])
-                    if not lines.any():
+                    if not region in rlab2llab:
                         continue
+                    lines = rlab2llab[region]
                     num_regions += 1
                     if region == newregion:
                         if debug:
