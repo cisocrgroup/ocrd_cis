@@ -536,8 +536,8 @@ def compute_hlines(binary, scale,
     ## with zero horizontal dilation, hlines would need
     ## to be perfectly contiguous (i.e. without noise
     ## from binarization):
-    d1 = odd(max(1,scale/8))
-    d0 = odd(max(1,scale/4))
+    d0 = odd(max(1,scale/8))
+    d1 = odd(max(1,scale/4))
     # TODO This does not cope well with slightly sloped or heavily fragmented lines
     horiz = binary
     # 1- close horizontally a little to make warped or
