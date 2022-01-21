@@ -1281,13 +1281,13 @@ def lines2regions(binary, llabels,
     LOG.debug('combining lines to regions')
     relabel = np.zeros(np.amax(llabels)+1, np.int)
     num_regions = 0
-    def recursive_x_y_cut(box, mask=None, is_partition=False, debug=False):
+    def recursive_x_y_cut(box, mask=None, partition_type=None, debug=False):
         """Split lbinary at horizontal or vertical gaps recursively.
         
         - ``box`` current slice
         - ``mask`` (optional) binary mask for current box to focus
           line labels on (passed+sliced down recursively)
-        - ``is_partition`` whether ``mask`` was created by partitioning
+        - ``partition_type`` whether ``mask`` was created by partitioning
           immediately before (without any intermediate cuts), and thus
           must not be repeated in the current iteration
         
@@ -1366,55 +1366,58 @@ def lines2regions(binary, llabels,
             finalize()
             return
         
-        # try cuts via annotated separators (strong integration)
+        # try split via annotated separators (strong integration)
         # i.e. does current slice of sepmask contain true partitions?
-        # (at least 2 partitions which contain at least 1 significant line label each)
+        # (at least 2 partitions which contain at least 1 line label each,
+        #  where each line label in that partition in the current slice
+        #  must cover a significant part of that line label in the full image)
         partitions, npartitions = None, 0
         if (isinstance(sepmask, np.ndarray) and
             np.count_nonzero(sepmask)):
             sepm = sl.cut(sepmask, box)
             if isinstance(mask, np.ndarray):
                 sepm = np.where(mask, sepm, 1)
-            if is_partition:
-                # sepmask already applied in current X-Y branch:
-                # don't try again, but provide `partitions` for next step
-                partitions, npartitions = 1-sepm, 1
-            else:
-                # sepmask already applied in higher X-Y branch:
-                # apply again in this cut like another separator
+            if isinstance(rlabels, np.ndarray):
+                # treat existing regions like separators
+                rlab = sl.cut(rlabels, box)
+                if isinstance(mask, np.ndarray):
+                    rlab = np.where(mask, rlab, 0)
+                sepm = np.where(rlab, 1, sepm)
+            # provide `partitions` for next step
+            partitions, npartitions = 1-sepm, 1
+            new_partition_type = None
+            # try to find `partitions` in current step
+            if partition_type != 'splitmask':
+                # sepmask not applied yet, or already applied in higher X-Y branch:
+                # try to apply in this cut like another separator
                 partitions, npartitions = morph.label(1-sepm)
                 if npartitions > 1:
-                    # delete partitions that have no significant line labels
-                    lpartitions = [None]
+                    # first, delete partitions that have no significant line labels
+                    splitmap = np.zeros(len(objects)+1, dtype=np.int)
                     for label in range(1, npartitions+1):
-                        linelabels = np.bincount(lbin[partitions==label], minlength=len(objects))
-                        linelabels[0] = 0 # without bg
+                        linecounts = np.bincount(lbin[partitions==label], minlength=len(objects))
+                        linecounts[0] = 0 # without bg
                         # get significant line labels for this partition
-                        # (but keep insignificant non-empty labels when complete)
-                        linelabels = np.nonzero(linelabels >= min(max(1, bincounts.max()),
-                                                                  min_line * scale))[0]
-                        if np.any(linelabels):
-                            lpartitions.append(linelabels)
+                        # (but keep insignificant non-empty labels if complete)
+                        mincounts = np.minimum(min_line * scale, np.maximum(1, bincounts))
+                        linelabels = np.nonzero(linecounts >= mincounts)[0]
+                        if linelabels.size:
+                            splitmap[linelabels] = label
                             if debug: LOG.debug('  sepmask partition %d: %s', label, str(linelabels))
                         else:
-                            lpartitions.append(None)
                             partitions[partitions==label] = 0
-                    # merge partitions that share any significant line labels
+                    # second, merge partitions that share any significant line labels
                     for label1 in range(1, npartitions+1):
-                        if lpartitions[label1] is None:
+                        if not np.any(splitmap == label1):
                             continue
                         for label2 in range(label1+1, npartitions+1):
-                            if lpartitions[label2] is None:
+                            if not np.any(splitmap == label2):
                                 continue
-                            if np.any(np.intersect1d(lpartitions[label1],
-                                                     lpartitions[label2])):
+                            if np.any((splitmap == label1) & (splitmap == label2)):
+                                splitmap[splitmap == label2] = label1
                                 partitions[partitions==label2] = label1
-                                lpartitions[label1] = np.union1d(lpartitions[label1],
-                                                                 lpartitions[label2])
-                                lpartitions[label2] = [0]
-                    # re-label and re-order surviving partitions
-                    lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
-                    npartitions = len(lpartitions)
+                    npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
+                    new_partition_type = 'splitmask'
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
                     if npartitions > 1:
                         # sort partitions in reading order
@@ -1442,7 +1445,7 @@ def lines2regions(binary, llabels,
                 llab[box[0],box[1].stop-1-i] = -10*np.log(y+1e-9)
                 llab[box[0].start+i,box[1]] = -10*np.log(x+1e-9)
                 llab[box[0].stop-1-i,box[1]] = -10*np.log(x+1e-9)
-            DSAVE('recursive_x_y_cut' + ('_masked' if is_partition else ''), llab)
+            DSAVE('recursive_x_y_cut_' + (partition_type or 'sliced'), llab)
         gap_weights = list()
         for is_horizontal, profile in enumerate([y, x]):
             # find gaps in projection profiles
@@ -1640,7 +1643,7 @@ def lines2regions(binary, llabels,
                 DSAVE('recursive_x_y_cut_partitions', llab2)
             for label in range(1, npartitions+1):
                 LOG.debug('next partition %d on %s', label, box)
-                recursive_x_y_cut(box, mask=partitions==label, is_partition=True)
+                recursive_x_y_cut(box, mask=partitions==label, partition_type=new_partition_type)
             return
         
         if not np.any(gaps):
