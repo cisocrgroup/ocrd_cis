@@ -226,7 +226,7 @@ def remove_marked(image,markers):
     return image*(marked==0)
 
 @checks(SEGMENTATION,SEGMENTATION)
-def correspondences(labels1,labels2):
+def correspondences(labels1,labels2,return_counts=True):
     """Given two labeled images, compute an array giving the correspondences
     between labels in the two images (as tuples of label in `labels1`,
     label in `labels2`, and pixel count)."""
@@ -234,8 +234,12 @@ def correspondences(labels1,labels2):
     assert amin(labels1)>=0 and amin(labels2)>=0
     assert amax(labels2)<q
     combo = labels1*q+labels2
-    result, counts = unique(combo, return_counts=True)
-    result = array([result//q,result%q,counts])
+    result = unique(combo, return_counts=return_counts)
+    if return_counts:
+        result, counts = result
+        result = array([result//q,result%q,counts])
+    else:
+        result = array([result//q,result%q])
     return result
 
 @checks(ABINARY2,SEGMENTATION)
@@ -243,9 +247,9 @@ def propagate_labels_simple(regions,labels):
     """Given an image and a set of labels, apply the labels
     to all the connected components in the image that overlap a label."""
     rlabels,_ = label(regions)
-    cors = correspondences(rlabels,labels)
+    cors = correspondences(rlabels,labels,False)
     outputs = zeros(amax(rlabels)+1,'i')
-    for o,i,_ in cors.T: outputs[o] = i
+    for o,i in cors.T: outputs[o] = i
     outputs[0] = 0
     return outputs[rlabels]
 
@@ -275,10 +279,10 @@ def propagate_labels(image,labels,conflict=0):
     to all the connected components in the image that overlap a label.
     Assign the value `conflict` to any components that have a conflict."""
     rlabels,_ = label(image)
-    cors = correspondences(rlabels,labels)
+    cors = correspondences(rlabels,labels,False)
     outputs = zeros(amax(rlabels)+1,'i')
     oops = -(1<<30)
-    for o,i,_ in cors.T:
+    for o,i in cors.T:
         if outputs[o]!=0: outputs[o] = oops
         else: outputs[o] = i
     outputs[outputs==oops] = conflict
