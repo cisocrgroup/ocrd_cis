@@ -546,7 +546,7 @@ def compute_hlines(binary, scale,
     DSAVE('hlines1_h-closed', horiz+0.6*binary)
     # 2- open horizontally to remove everything
     #    that is horizontally non-contiguous:
-    opened = morph.rb_opening(horiz, (1,hlminwidth*scale))
+    opened = morph.rb_opening(horiz, (1, hlminwidth*scale//2))
     DSAVE('hlines2_h-opened', opened+0.6*binary)
     # 3- reconstruct the losses up to a certain distance
     #    to avoid creeping into overlapping glyphs but still
@@ -615,7 +615,7 @@ def compute_separators_morph(binary, scale,
     DSAVE('colseps1_v-closed', vert+0.6*binary)
     # 2- open vertically to remove everything that
     #    is vertically non-contiguous:
-    opened = morph.rb_opening(vert, (csminheight*scale,1))
+    opened = morph.rb_opening(vert, (csminheight*scale//2, 1))
     DSAVE('colseps2_v-opened', opened+0.6*binary)
     # 3- reconstruct the losses up to a certain distance
     #    to avoid creeping into overlapping glyphs but still
