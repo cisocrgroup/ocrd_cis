@@ -488,6 +488,11 @@
 					"type": "boolean",
 					"default": false
 				},
+				"alignLev": {
+				        "description": "Enable full Levenshtein alignment (slower)",
+					"type": "boolean",
+					"default": false
+				},
 				"gt": {
 					"description": "Enable additonal ground-truth data for the evaluation",
 					"type": "boolean",

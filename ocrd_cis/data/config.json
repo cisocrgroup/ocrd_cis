@@ -1,7 +1,8 @@
 {
+    "alignLev": true,
+    "cache": false,
     "nocr": 2,
     "model": "/path/to/model",
-    "cache": false,
     "profilerBin": "/path/to/profiler",
     "profilerConfig": "/path/to/profiler/config/file"
 }
