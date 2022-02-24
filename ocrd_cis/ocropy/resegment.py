@@ -180,16 +180,19 @@ class OcropyResegment(Processor):
         try:
             if report:
                 raise Exception(report)
-            # draw.polygon: If any segment_polygon lies outside of parent
-            # (causing negative/above-max indices), either fully or partially,
-            # then this will silently ignore them. The caller does not need
-            # to concern herself with this.
             # get existing line labels:
             line_labels = np.zeros_like(parent_bin, np.bool)
             line_labels = np.tile(np.expand_dims(line_labels, -1), (1,1,len(lines)))
+            line_polygons = []
             for i, segment in enumerate(lines):
                 segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
-                segment_polygon = np.array(make_valid(Polygon(segment_polygon)).buffer(margin).exterior, np.int)[:-1]
+                segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
+                line_polygons.append(prep(segment_polygon))
+                segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
+                # draw.polygon: If any segment_polygon lies outside of parent
+                # (causing negative/above-max indices), either fully or partially,
+                # then this will silently ignore them. The caller does not need
+                # to concern herself with this.
                 segment_y, segment_x = draw.polygon(segment_polygon[:, 1],
                                                     segment_polygon[:, 0],
                                                     parent_bin.shape)
@@ -230,9 +233,6 @@ class OcropyResegment(Processor):
         # DSAVE('new_line_labels', [new_line_labels, parent_bin], disabled=False)
         new_line_polygons = [make_valid(Polygon(line_poly))
                              for line_label, line_poly in new_line_polygons]
-        line_polygons = [prep(make_valid(Polygon(coordinates_of_segment(
-            line, parent_image, parent_coords))).buffer(margin))
-                         for line in lines]
         # polygons for intersecting pairs
         intersections = dict()
         # ratio of overlap between intersection and new line
@@ -292,6 +292,7 @@ class OcropyResegment(Processor):
                       line.id, center.distance(new_center))
             assignments[i] = j
         # validate assignments retain enough area and do not loose unassigned matches
+        line_polygons = [poly.context.buffer(-margin) for poly in line_polygons]
         for j, line in enumerate(lines):
             new_lines = np.nonzero(assignments == j)[0]
             if not np.prod(new_lines.shape):
@@ -322,6 +323,7 @@ class OcropyResegment(Processor):
                 LOG.debug("joining %d new line polygons for '%s'", len(new_lines), line.id)
             new_polygon = join_polygons([intersections[(i, j)] for i in new_lines],
                                         contract=scale//2)
+            line_polygons[j] = new_polygon
             # convert back to absolute (page) coordinates:
             line_polygon = coordinates_for_segment(new_polygon.exterior.coords[:-1],
                                                    parent_image, parent_coords)
@@ -331,6 +333,31 @@ class OcropyResegment(Processor):
                 return
             # annotate result:
             line.get_Coords().set_points(points_from_polygon(line_polygon))
+            # now also ensure the assigned lines do not overlap other existing lines
+            for i in new_lines:
+                for otherj in np.nonzero(fits_fg[i] > 0.1)[0]:
+                    if j == otherj:
+                        continue
+                    otherline = lines[otherj]
+                    LOG.debug("subtracting new '%s' from overlapping '%s'", line.id, otherline.id)
+                    other_polygon = diff_polygons(line_polygons[otherj], new_polygon)
+                    # convert back to absolute (page) coordinates:
+                    other_polygon = coordinates_for_segment(other_polygon.exterior.coords[:-1],
+                                                            parent_image, parent_coords)
+                    other_polygon = polygon_for_parent(other_polygon, otherline.parent_object_)
+                    if other_polygon is None:
+                        LOG.warning("Ignoring extant new polygon for line '%s'", otherline.id)
+                        continue
+                    otherline.get_Coords().set_points(points_from_polygon(other_polygon))
+
+def diff_polygons(poly1, poly2):
+    poly = poly1.difference(poly2)
+    if poly.type == 'MultiPolygon':
+        poly = poly.convex_hull
+    if poly.minimum_clearance < 1.0:
+        poly = asPolygon(np.round(poly.exterior.coords))
+    poly = make_valid(poly)
+    return poly
 
 def join_polygons(polygons, contract=2):
     # construct convex hull
