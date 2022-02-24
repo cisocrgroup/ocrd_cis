@@ -214,7 +214,7 @@ class OcropyResegment(Processor):
                                         parent_bin.shape)] = True
             new_line_labels, _, _, _, _, scale = compute_segmentation(
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
-                maxseps=0, maxcolseps=0, maximages=0)
+                maxseps=0, maxcolseps=len(ignore), maximages=0)
         except Exception as err:
             LOG.warning('Cannot line-segment %s "%s": %s',
                         tag, page_id if fullpage else parent.id, err)
