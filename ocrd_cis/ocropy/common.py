@@ -460,6 +460,8 @@ def compute_images(binary, scale, maximages=5):
     
     Returns a same-size bool array as a mask image.
     """
+    if maximages == 0:
+        return binary == -1
     images = binary
     # d0 = odd(max(2,scale/5))
     # d1 = odd(max(2,scale/8))
@@ -599,6 +601,8 @@ def compute_separators_morph(binary, scale,
     
     Returns a same-size bool array as separator mask.
     """
+    if maxseps == 0:
+        return binary == -1
     LOG.debug("considering at most %g black column separators", maxseps)
     ## no large vertical dilation here, because
     ## that would turn letters into lines; but
@@ -663,6 +667,8 @@ def compute_colseps_conv(binary, scale=1.0, csminheight=10, maxcolseps=2):
     
     Returns a same-size bool array as separator mask.
     """
+    if maxcolseps == 0:
+        return binary == -1
     LOG.debug("considering at most %g whitespace column separators", maxcolseps)
     # find vertical whitespace by thresholding
     smoothed = filters.gaussian_filter(1.0*binary,(scale,scale*0.5))
