@@ -92,13 +92,13 @@ class OcropyResegment(Processor):
         assert_file_grp_cardinality(self.input_file_grp, 1)
         assert_file_grp_cardinality(self.output_file_grp, 1)
 
-        for (n, input_file) in enumerate(self.input_files):
+        for n, input_file in enumerate(self.input_files):
             LOG.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
             file_id = make_file_id(input_file, self.output_file_grp)
 
             pcgts = page_from_file(self.workspace.download_file(input_file))
             self.add_metadata(pcgts)
-            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID
             page = pcgts.get_Page()
             
             page_image, page_coords, page_image_info = self.workspace.image_from_page(
@@ -127,7 +127,7 @@ class OcropyResegment(Processor):
                       page.get_SeparatorRegion() +
                       page.get_UnknownRegion() +
                       page.get_CustomRegion())
-            regions = page.get_AllRegions(classes=['Text'], order='reading-order')
+            regions = page.get_AllRegions(classes=['Text'])
             if not regions:
                 LOG.warning('Page "%s" contains no text regions', page_id)
             elif level == 'page':
@@ -199,6 +199,8 @@ class OcropyResegment(Processor):
                 LOG.debug('unmasking area of text region "%s" for "%s"',
                           segment.id, page_id)
                 segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+                segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
+                segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
                 ignore_bin[draw.polygon(segment_polygon[:, 1],
                                         segment_polygon[:, 0],
                                         parent_bin.shape)] = False
@@ -275,9 +277,8 @@ class OcropyResegment(Processor):
             fits = (fits_bg[i] > 0.6) & (fits_fg[i] > 0.9)
             if not fits.any():
                 j = np.argmax(fits_bg[i] * fits_fg[i])
-                LOG.debug("best fit '%s' for new line %d covers only %.1f%% bg / %.1f%% fg",
-                          lines[j].id,
-                          i, fits_bg[i,j] * 100, fits_fg[i,j] * 100)
+                LOG.debug("best fit '%s' for new line %d fits only %.1f%% bg / %.1f%% fg",
+                          lines[j].id, i, fits_bg[i,j] * 100, fits_fg[i,j] * 100)
                 continue
             covers = covers_bg[i] * covers_fg[i] * fits
             j = np.argmax(covers)
