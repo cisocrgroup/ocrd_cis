@@ -19,7 +19,9 @@ def label(image,**kw):
     - same-size Numpy array with integer labels for fg components
     - number of components (eq. largest label)
     """
-    n, labels = cv2.connectedComponents(image.astype(uint8))
+    # default connectivity in OpenCV: 8 (which is equivalent to...)
+    # default connectivity in scikit-image: 2
+    n, labels = cv2.connectedComponents(image.astype(uint8), connectivity=4)
     #n, labels = cv2.connectedComponentsWithAlgorithm(image.astype(uint8), connectivity=4, ltype=2, ccltype=cv2.CCL_DEFAULT)
     return labels, n-1
     # try: return measurements.label(image,**kw)
