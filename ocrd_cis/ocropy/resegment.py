@@ -24,9 +24,10 @@ from ocrd_utils import (
 )
 
 from .. import get_ocrd_tool
-from .ocrolib import midrange
+from .ocrolib import midrange, morph
 from .common import (
     pil2array,
+    odd,
     # DSAVE,
     # binarize,
     check_page,
@@ -165,6 +166,7 @@ class OcropyResegment(Processor):
         LOG = getLogger('processor.OcropyResegment')
         threshold = self.parameter['min_fraction']
         margin = self.parameter['extend_margins']
+        method = self.parameter['method']
         # prepare line segmentation
         parent_array = pil2array(parent_image)
         #parent_array, _ = common.binarize(parent_array, maxskew=0) # just in case still raw
@@ -216,6 +218,28 @@ class OcropyResegment(Processor):
             ignore_bin[draw.polygon(segment_polygon[:, 1],
                                     segment_polygon[:, 0],
                                     parent_bin.shape)] = True
+        if method != 'lineest':
+            LOG.debug('calculating connected component and distance transforms for "%s"', parent.id)
+            bin = parent_bin & ~ ignore_bin
+            components, _ = morph.label(bin)
+            labels = np.insert(line_labels, 0, ignore_bin, axis=0)
+            distances = np.zeros_like(labels, np.uint8)
+            for i, label in enumerate(labels):
+                distances[i] = morph.dist_labels(label.astype(np.uint8))
+                # normalize the distances of all lines so larger ones do not displace smaller ones
+                distances[i] = distances[i] / distances[i].max() * 255
+            # estimate glyph scale (roughly)
+            _, counts = np.unique(components, return_counts=True)
+            if counts.shape[0] > 1:
+                counts = np.sqrt(3 * counts)
+                scale = int(np.median(counts[(5/zoom < counts) & (counts < 100/zoom)]))
+                components *= (counts > 15/zoom)[components]
+                LOG.debug("estimated scale: %d", scale)
+            else:
+                scale = 43
+            spread_dist(lines, line_labels, distances, parent_bin, components, parent_coords,
+                        scale=scale, loc=parent.id, threshold=threshold)
+            return
         try:
             new_line_labels, _, _, _, _, scale = compute_segmentation(
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
@@ -350,6 +374,61 @@ class OcropyResegment(Processor):
                         LOG.warning("Ignoring extant new polygon for line '%s'", otherline.id)
                         continue
                     otherline.get_Coords().set_points(points_from_polygon(other_polygon))
+
+def spread_dist(lines, labels, distances, binarized, components, coords,
+                scale=43, loc='', threshold=0.9):
+    """redefine line coordinates by contourizing spread of connected components with max-distance of existing labels
+    """
+    LOG = getLogger('processor.OcropyResegment')
+    # use depth to flatten overlapping lines as seed labels
+    max_labels = np.argmax(distances, axis=0)
+    # allocate to connected components consistently (by majority,
+    # ignoring smallest components like punctuation)
+    #max_ccomps = morph.propagate_labels_majority(binarized, max_labels)
+    max_ccomps = morph.propagate_labels_majority(components > 0, max_labels)
+    # dilate/grow labels from connected components against each other and bg
+    max_ccomps = morph.spread_labels(max_ccomps, maxdist=scale/2)
+    # find polygon hull and modify line coords
+    for i, line in enumerate(lines):
+        mask = max_ccomps == i + 1
+        label = labels[i]
+        count = np.count_nonzero(label)
+        if not count:
+            LOG.warning("skipping zero-area line '%s'", line.id)
+            continue
+        covers = np.count_nonzero(mask) / count
+        if covers < threshold / 3:
+            LOG.debug("new line for '%s' only covers %.1f%% bg",
+                      line.id, covers * 100)
+            continue
+        count = np.count_nonzero(label * binarized)
+        if not count:
+            LOG.warning("skipping binarizy-empty line '%s'", line.id)
+            continue
+        covers = np.count_nonzero(mask * binarized) / count
+        if covers < threshold:
+            LOG.debug("new line for '%s' only covers %.1f%% fg",
+                      line.id, covers * 100)
+            continue
+        LOG.debug('Black pixels before/after resegment of line "%s": %d/%d',
+                  line.id, count, covers * count)
+        contours = [contour[:,::-1] # get x,y order again
+                    for contour, area in morph.find_contours(mask)]
+        #LOG.debug("joining %d subsegments for %s", len(contours), line.id)
+        if len(contours) == 0:
+            LOG.warning("no contours for %s - keeping", line.id)
+            continue
+        else:
+            # get alpha shape
+            poly = join_polygons([make_valid(Polygon(contour))
+                                  for contour in contours], loc=loc)
+        poly = poly.exterior.coords[:-1]
+        polygon = coordinates_for_segment(poly, None, coords)
+        polygon = polygon_for_parent(polygon, line.parent_object_)
+        if polygon is None:
+            LOG.warning("Ignoring extant line for %s", line.id)
+            continue
+        line.get_Coords().set_points(points_from_polygon(polygon))
 
 def diff_polygons(poly1, poly2):
     poly = poly1.difference(poly2)

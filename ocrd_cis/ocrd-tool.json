@@ -191,13 +191,19 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
+			"description": "Resegment text lines",
 			"parameters": {
 				"level-of-operation": {
 					"type": "string",
 					"enum": ["page", "region"],
-					"description": "PAGE XML hierarchy level granularity to segment lines in",
+					"description": "PAGE XML hierarchy level to segment textlines in ('region' abides by existing text region boundaries, 'page' optimises lines in the whole page once",
 					"default": "page"
+				},
+				"method": {
+					"type": "string",
+					"enum": ["lineest", "baseline", "ccomps"],
+					"description": "source for new line polygon candidates ('lineest' for line estimation, i.e. how Ocropy would have segmented text lines; 'baseline' tries to re-polygonize from the baseline annotation; 'ccomps' avoids crossing connected components by majority rule)",
+					"default": "lineest"
 				},
 				"dpi": {
 					"type": "number",
@@ -208,13 +214,13 @@
 				"min_fraction": {
 					"type": "number",
 					"format": "float",
-					"description": "share of foreground pixels that must be retained by the largest label",
+					"description": "share of foreground pixels that must be retained by the output polygons",
 					"default": 0.75
 				},
 				"extend_margins": {
 					"type": "number",
 					"format": "integer",
-					"description": "number of pixels to extend the input polygons horizontally and vertically before intersecting",
+					"description": "number of pixels to extend the input polygons in all directions",
 					"default": 3
 				}
 			}
