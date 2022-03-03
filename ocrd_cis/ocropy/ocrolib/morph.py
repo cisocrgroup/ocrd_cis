@@ -2,8 +2,6 @@
 ### various add-ons to the SciPy morphology package
 ################################################################
 
-
-
 from numpy import *
 #from scipy.ndimage import morphology,measurements,filters
 from scipy.ndimage import measurements
@@ -68,36 +66,40 @@ def check_binary(image):
     assert amin(image)>=0 and amax(image)<=1,\
         "array should be binary, has values %g to %g"%(amin(image),amax(image))
 
+@checks(uintpair)
+def brick(size):
+    return ones(size, uint8)
+
 @checks(ABINARY2,uintpair)
 def r_dilation(image,size,origin=0):
     """Dilation with rectangular structuring element using fast OpenCV.dilate."""
-    return cv2.dilate(image.astype(uint8), ones(size, uint8))
+    return cv2.dilate(image.astype(uint8), brick(size))
     # return filters.maximum_filter(image,size,origin=(size[0]%2-1,size[1]%2-1))
 
 @checks(ABINARY2,uintpair)
 def r_erosion(image,size,origin=-1):
     """Erosion with rectangular structuring element using fast OpenCV.erode."""
-    return cv2.erode(image.astype(uint8), ones(size, uint8))
+    return cv2.erode(image.astype(uint8), brick(size))
     # return filters.minimum_filter(image,size,origin=0, mode='constant', cval=1)
 
 @checks(ABINARY2,uintpair)
 def r_opening(image,size,origin=0):
     """Opening with rectangular structuring element using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, brick(size))
     # image = r_erosion(image,size,origin=0)
     # return r_dilation(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def r_closing(image,size,origin=0):
     """Closing with rectangular structuring element using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, brick(size))
     # image = r_dilation(image,size,origin=0)
     # return r_erosion(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def rb_dilation(image,size,origin=0):
     """Binary dilation using linear filters."""
-    return cv2.dilate(image.astype(uint8), ones(size, uint8))
+    return cv2.dilate(image.astype(uint8), brick(size))
     # output = zeros(image.shape,'f')
     # filters.uniform_filter(image,size,output=output,origin=(size[0]%2-1,size[1]%2-1))
     # # 0 creates rounding artifacts
@@ -106,7 +108,7 @@ def rb_dilation(image,size,origin=0):
 @checks(ABINARY2,uintpair)
 def rb_erosion(image,size,origin=-1):
     """Binary erosion using linear filters."""
-    return cv2.erode(image.astype(uint8), ones(size, uint8))
+    return cv2.erode(image.astype(uint8), brick(size))
     # output = zeros(image.shape,'f')
     # filters.uniform_filter(image,size,output=output,origin=0, mode='constant', cval=1)
     # return array(output==1,'i')
@@ -114,14 +116,14 @@ def rb_erosion(image,size,origin=-1):
 @checks(ABINARY2,uintpair)
 def rb_opening(image,size,origin=0):
     """Binary opening using linear filters."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, brick(size))
     # image = rb_erosion(image,size,origin=0)
     # return rb_dilation(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def rb_closing(image,size,origin=0):
     """Binary closing using linear filters."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, brick(size))
     # image = rb_dilation(image,size,origin=0)
     # return rb_erosion(image,size,origin=-1)
 
@@ -142,26 +144,26 @@ def rb_reconstruction(image,mask,step=1,maxsteps=None):
 @checks(GRAYSCALE,uintpair)
 def rg_dilation(image,size,origin=0):
     """Grayscale dilation using fast OpenCV.dilate."""
-    return cv2.dilate(image, ones(size, uint8))
+    return cv2.dilate(image, brick(size))
     # return filters.maximum_filter(image,size,origin=origin)
 
 @checks(GRAYSCALE,uintpair)
 def rg_erosion(image,size,origin=0):
     """Grayscale erosion using fast OpenCV.erode."""
-    return cv2.erode(image, ones(size, uint8))
+    return cv2.erode(image, brick(size))
     # return filters.minimum_filter(image,size,origin=origin, mode='constant', cval=1)
 
 @checks(GRAYSCALE,uintpair)
 def rg_opening(image,size,origin=0):
     """Grayscale opening using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image, cv2.MORPH_OPEN, ones(size, uint8))
+    return cv2.morphologyEx(image, cv2.MORPH_OPEN, brick(size))
     # image = r_erosion(image,size,origin=origin)
     # return r_dilation(image,size,origin=origin)
 
 @checks(GRAYSCALE,uintpair)
 def rg_closing(image,size,origin=0):
     """Grayscale closing using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image, cv2.MORPH_CLOSE, ones(size, uint8))
+    return cv2.morphologyEx(image, cv2.MORPH_CLOSE, brick(size))
     # image = r_dilation(image,size,origin=0)
     # return r_erosion(image,size,origin=-1)
 
@@ -196,7 +198,7 @@ def find_label_contours(labels):
         contours[label] = find_contours(labels==label)
     return contours
 
-@checks(SEGMENTATION)
+@checks(ALL(SEGMENTATION,ANONNEG))
 def spread_labels(labels,maxdist=9999999):
     """Spread the given labels to the background."""
     #distances,features = morphology.distance_transform_edt(labels==0,return_distances=1,return_indices=1)
@@ -206,8 +208,20 @@ def spread_labels(labels,maxdist=9999999):
         return labels
     distances,indexes = cv2.distanceTransformWithLabels(array(labels==0,uint8),cv2.DIST_L2,cv2.DIST_MASK_PRECISE,labelType=cv2.DIST_LABEL_PIXEL)
     spread = labels[where(labels>0)][indexes-1]
+    if maxdist is None:
+        return spread, distances
     spread *= (distances<maxdist)
     return spread
+
+@checks(SEGMENTATION)
+def dist_labels(labels):
+    """Get the distance transformation of the segments."""
+    if not labels.any():
+        return labels
+    return cv2.distanceTransform(labels,
+                                 distanceType=cv2.DIST_L1,
+                                 maskSize=3,
+                                 dstType=cv2.CV_8U)
 
 @checks(ABINARY2,ABINARY2)
 def keep_marked(image,markers):
