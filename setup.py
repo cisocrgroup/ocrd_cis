@@ -38,13 +38,14 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'ocrd>=2.13',
+        'ocrd>=2.30',
         'click',
         'scipy',
         'numpy>=1.17.0',
         'pillow>=7.1.2',
-        'shapely>=1.7.1',
+        'shapely>=1.7.1,<1.8',
         'scikit-image',
+        'alphashape',
         'opencv-python-headless',
         'python-Levenshtein',
         'calamari_ocr == 0.3.5'

@@ -6,6 +6,7 @@ from skimage import draw
 from shapely.geometry import Polygon, asPolygon
 from shapely.prepared import prep
 from shapely.ops import unary_union
+import alphashape
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -177,59 +178,58 @@ class OcropyResegment(Processor):
             tag = 'region'
             fullpage = False
             report = check_region(parent_bin, zoom)
+        if report:
+            LOG.warning('Invalid %s "%s": %s', tag, parent.id, report)
+            return
+        # get existing line labels:
+        line_labels = np.zeros_like(parent_bin, np.bool)
+        line_labels = np.tile(line_labels[np.newaxis], (len(lines), 1, 1))
+        line_polygons = []
+        for i, segment in enumerate(lines):
+            segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+            segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
+            line_polygons.append(prep(segment_polygon))
+            segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
+            # draw.polygon: If any segment_polygon lies outside of parent
+            # (causing negative/above-max indices), either fully or partially,
+            # then this will silently ignore them. The caller does not need
+            # to concern herself with this.
+            segment_y, segment_x = draw.polygon(segment_polygon[:, 1],
+                                                segment_polygon[:, 0],
+                                                parent_bin.shape)
+            line_labels[i, segment_y, segment_x] = True
+        # only text region(s) may contain new text lines
+        for i, segment in enumerate(set(line.parent_object_ for line in lines)):
+            LOG.debug('unmasking area of text region "%s" for "%s"',
+                      segment.id, parent.id)
+            segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+            segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
+            segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
+            ignore_bin[draw.polygon(segment_polygon[:, 1],
+                                    segment_polygon[:, 0],
+                                    parent_bin.shape)] = False
+        # mask/ignore overlapping neighbours
+        for i, segment in enumerate(ignore):
+            LOG.debug('masking area of %s "%s" for "%s"',
+                      type(segment).__name__[:-4], segment.id, parent.id)
+            segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+            ignore_bin[draw.polygon(segment_polygon[:, 1],
+                                    segment_polygon[:, 0],
+                                    parent_bin.shape)] = True
         try:
-            if report:
-                raise Exception(report)
-            # get existing line labels:
-            line_labels = np.zeros_like(parent_bin, np.bool)
-            line_labels = np.tile(np.expand_dims(line_labels, -1), (1,1,len(lines)))
-            line_polygons = []
-            for i, segment in enumerate(lines):
-                segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
-                segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
-                line_polygons.append(prep(segment_polygon))
-                segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
-                # draw.polygon: If any segment_polygon lies outside of parent
-                # (causing negative/above-max indices), either fully or partially,
-                # then this will silently ignore them. The caller does not need
-                # to concern herself with this.
-                segment_y, segment_x = draw.polygon(segment_polygon[:, 1],
-                                                    segment_polygon[:, 0],
-                                                    parent_bin.shape)
-                line_labels[segment_y, segment_x, i] = True
-            # only text region(s) may contain new text lines
-            for i, segment in enumerate(set(line.parent_object_ for line in lines)):
-                LOG.debug('unmasking area of text region "%s" for "%s"',
-                          segment.id, page_id)
-                segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
-                segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
-                segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
-                ignore_bin[draw.polygon(segment_polygon[:, 1],
-                                        segment_polygon[:, 0],
-                                        parent_bin.shape)] = False
-            # mask/ignore overlapping neighbours
-            for i, segment in enumerate(ignore):
-                LOG.debug('masking area of %s "%s" for "%s"',
-                          type(segment).__name__[:-4], segment.id, page_id)
-                segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
-                ignore_bin[draw.polygon(segment_polygon[:, 1],
-                                        segment_polygon[:, 0],
-                                        parent_bin.shape)] = True
             new_line_labels, _, _, _, _, scale = compute_segmentation(
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
                 maxseps=0, maxcolseps=len(ignore), maximages=0)
         except Exception as err:
-            LOG.warning('Cannot line-segment %s "%s": %s',
-                        tag, page_id if fullpage else parent.id, err)
+            LOG.warning('Cannot line-segment %s "%s": %s', tag, parent.id, err)
             return
         LOG.info("Found %d new line labels for %d existing lines on %s '%s'",
-                 new_line_labels.max(), len(lines), tag, page_id if fullpage else parent.id)
+                 new_line_labels.max(), len(lines), tag, parent.id)
         # polygonalize and prepare comparison
         new_line_polygons, new_line_labels = masks2polygons(
-            new_line_labels, parent_bin,
-            '%s "%s"' % (tag, page_id if fullpage else parent.id),
+            new_line_labels, parent_bin, '%s "%s"' % (tag, parent.id),
             min_area=640/zoom/zoom)
-        # DSAVE('line_labels', [np.mean(line_labels, axis=2), parent_bin])
+        # DSAVE('line_labels', [np.mean(line_labels, axis=0), parent_bin])
         # DSAVE('new_line_labels', [new_line_labels, parent_bin], disabled=False)
         new_line_polygons = [make_valid(Polygon(line_poly))
                              for line_label, line_poly in new_line_polygons]
@@ -250,7 +250,7 @@ class OcropyResegment(Processor):
                     if not inter:
                         continue
                     new_line_mask = (new_line_labels == i+1) & parent_bin
-                    line_mask = line_labels[:,:,j] & parent_bin
+                    line_mask = line_labels[j] & parent_bin
                     inter_mask = new_line_mask & line_mask
                     if (not np.count_nonzero(inter_mask) or
                         not np.count_nonzero(new_line_mask) or
@@ -314,15 +314,14 @@ class OcropyResegment(Processor):
                 LOG.debug("new lines for '%s' would loose %d non-matching segments totalling %.1f%% bg",
                           line.id, np.count_nonzero(looses), covers * 100)
                 continue
-            line_count = np.count_nonzero(line_labels[:,:,j] & parent_bin)
+            line_count = np.count_nonzero(line_labels[j] & parent_bin)
             new_count = covers * line_count
             LOG.debug('Black pixels before/after resegment of line "%s": %d/%d',
                       line.id, line_count, new_count)
             # combine all assigned new lines to single outline polygon
             if len(new_lines) > 1:
                 LOG.debug("joining %d new line polygons for '%s'", len(new_lines), line.id)
-            new_polygon = join_polygons([intersections[(i, j)] for i in new_lines],
-                                        contract=scale//2)
+            new_polygon = join_polygons([intersections[(i, j)] for i in new_lines], loc=line.id)
             line_polygons[j] = new_polygon
             # convert back to absolute (page) coordinates:
             line_polygon = coordinates_for_segment(new_polygon.exterior.coords[:-1],
@@ -341,6 +340,8 @@ class OcropyResegment(Processor):
                     otherline = lines[otherj]
                     LOG.debug("subtracting new '%s' from overlapping '%s'", line.id, otherline.id)
                     other_polygon = diff_polygons(line_polygons[otherj], new_polygon)
+                    if other_polygon.is_empty:
+                        continue
                     # convert back to absolute (page) coordinates:
                     other_polygon = coordinates_for_segment(other_polygon.exterior.coords[:-1],
                                                             parent_image, parent_coords)
@@ -359,19 +360,36 @@ def diff_polygons(poly1, poly2):
     poly = make_valid(poly)
     return poly
 
-def join_polygons(polygons, contract=2):
-    # construct convex hull
-    compoundp = unary_union(polygons)
-    jointp = compoundp.convex_hull
-    # FIXME: calculate true alpha shape
-    # make hull slightly concave by dilation and reconstruction
-    for step in range(int(contract)+1):
-        nextp = jointp.buffer(-1)
-        if (nextp.type == 'MultiPolygon' or
-            nextp.union(compoundp).type == 'MultiPolygon'):
-            break
-        jointp = nextp
-    jointp = jointp.union(compoundp)
+def join_polygons(polygons, loc=''):
+    """construct concave hull (alpha shape) from input polygons"""
+    # compoundp = unary_union(polygons)
+    # jointp = compoundp.convex_hull
+    LOG = getLogger('processor.OcropyResegment')
+    if len(polygons) == 1:
+        return polygons[0]
+    # get equidistant list of points along hull
+    # (otherwise alphashape will jump across the interior)
+    points = [poly.exterior.interpolate(dist).coords[0] # .xy
+              for poly in polygons
+              for dist in np.arange(0, poly.length, 5.0)]
+    #alpha = alphashape.optimizealpha(points) # too slow
+    alpha = 0.05
+    jointp = alphashape.alphashape(points, alpha)
+    tries = 0
+    # from descartes import PolygonPatch
+    # import matplotlib.pyplot as plt
+    while jointp.type in ['MultiPolygon', 'GeometryCollection']:
+        # plt.figure()
+        # plt.gca().scatter(*zip(*points))
+        # for geom in jointp.geoms:
+        #     plt.gca().add_patch(PolygonPatch(geom, alpha=0.2))
+        # plt.show()
+        alpha *= 0.7
+        tries += 1
+        if tries > 10:
+            LOG.warning("cannot find alpha for concave hull on '%s'", loc)
+            alpha = 0
+        jointp = alphashape.alphashape(points, alpha)
     if jointp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity
