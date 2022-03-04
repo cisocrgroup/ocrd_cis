@@ -1279,12 +1279,12 @@ def lines2regions(binary, llabels,
         sepmask = 1-morph.keep_marked(1-sepmask, lbinary>0)
         DSAVE('sepmask', [sepmask,binary])
     objects = [None] + morph.find_objects(llabels)
-    #centers = measurements.center_of_mass(binary, llabels, np.unique(llabels))
-    def center(obj):
-        if morph.sl.empty(obj):
-            return [0,0]
-        return morph.sl.center(obj)
-    centers = list(map(center, objects[1:]))
+    # centers = measurements.center_of_mass(binary, llabels, np.unique(llabels))
+    # def center(obj):
+    #     if morph.sl.empty(obj):
+    #         return [0,0]
+    #     return morph.sl.center(obj)
+    # centers = list(map(center, objects[1:]))
     if scale is None:
         scale = psegutils.estimate_scale(binary, zoom)
     bincounts = np.bincount(lbinary.flatten())
@@ -1448,7 +1448,7 @@ def lines2regions(binary, llabels,
                     seplab, nseps = morph.label(sepm)
                     if nseps == 0:
                         return
-                    sepind = np.unique(seplab)
+                    # sepind = np.unique(seplab)
                     # (but keep only those with large fg i.e. ignore white-space seps)
                     seplabs, counts = np.unique(seplab * bin, return_counts=True)
                     kept = np.in1d(seplab.ravel(), seplabs[counts > scale * min_line])

@@ -52,7 +52,7 @@ class OcropyResegment(Processor):
         self.ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
         kwargs['version'] = self.ocrd_tool['version']
-        super(OcropyResegment, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def process(self):
         """Resegment lines of the workspace.
@@ -118,7 +118,7 @@ class OcropyResegment(Processor):
             self.add_metadata(pcgts)
             page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID
             page = pcgts.get_Page()
-            
+
             page_image, page_coords, page_image_info = self.workspace.image_from_page(
                 page, page_id, feature_selector='binarized')
             if self.parameter['dpi'] > 0:
@@ -266,9 +266,9 @@ class OcropyResegment(Processor):
                         continue
                     line_polygon = baseline_of_segment(line, parent_coords)
                     line_ltr = line_polygon[0,0] < line_polygon[-1,0]
-                    line_polygon = make_valid(LineString(line_polygon).buffer(
+                    line_polygon = make_valid(join_polygons(LineString(line_polygon).buffer(
                         # left-hand side if left-to-right, and vice versa
-                        scale * (-1) ** line_ltr, single_sided=True))
+                        scale * (-1) ** line_ltr, single_sided=True), loc=line.id))
                     line_polygon = np.array(line_polygon.exterior, np.int)[:-1]
                     line_y, line_x = draw.polygon(line_polygon[:, 1],
                                                   line_polygon[:, 0],
