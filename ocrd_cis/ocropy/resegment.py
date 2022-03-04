@@ -3,7 +3,7 @@ from __future__ import absolute_import
 import os.path
 import numpy as np
 from skimage import draw
-from shapely.geometry import Polygon, asPolygon
+from shapely.geometry import Polygon, asPolygon, LineString
 from shapely.prepared import prep
 from shapely.ops import unary_union
 import alphashape
@@ -20,6 +20,8 @@ from ocrd_utils import (
     coordinates_of_segment,
     coordinates_for_segment,
     points_from_polygon,
+    polygon_from_points,
+    transform_coordinates,
     MIMETYPE_PAGE
 )
 
@@ -58,25 +60,39 @@ class OcropyResegment(Processor):
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the line level.
 
-        Next, get the image according to the layout annotation (from
+        Next, get the page image according to the layout annotation (from
         the alternative image of the page, or by cropping from annotated
-        Border and rotating from annotated orientation), and compute a new
-        line segmentation for that (as a label mask, suppressing all non-text
-        regions' foreground), and polygonalize its contours.
+        Border and rotating from annotated orientation).
 
-        Then calculate overlaps between the new and existing lines, i.e.
-        which existing line polygons (or rectangles) contain most of each
-        new line polygon: Among the existing lines covering most of each
+        \b
+        If ``method`` is `lineest`, then compute a new line segmentation
+        for that image (suppressing the foreground non-text regions), and
+        polygonalize its contours. Now calculate overlaps between the new
+        and old lines, i.e. which existing polygons (or rectangles) match
+        each new line polygon: Among the existing lines covering most of each
         new line's foreground and background area, assign the one with the
         largest share of the existing line. Next, for each existing line,
-        calculate the hull polygon of all assigned new lines, and if the
-        foreground and background overlap is sufficient, and no overlapping
-        but yet unassigned lines would be lost, then annotate that polygon
-        as new coordinates.
-        Thus, at the end, all new and existing lines will have been used
+        calculate the concave hull polygon of all assigned new lines, and
+        if the foreground and background overlap is sufficient, and if no
+        overlapping but yet unassigned lines would be lost, then annotate
+        that polygon as new coordinates.
+        (Thus, at the end, all new and existing lines will have been used
         at most once, but not all existing lines might have been resegmented
-        (either because there were no matches at all, or the loss would have
-        been too large, either by fg/bg share or by unassigned line labels).
+        – either because there were no matches at all, or the loss would have
+        been too large in terms of fg/bg share.)
+
+        Otherwise, first compute a connected component analysis of that image.
+        Next, if  ``method`` is `ccomps`, then calculate a distance transform
+        of the existing (overlapping) line labels and flatten them by selecting
+        the labels with maximum distance, respectively. Else if ``method`` is
+        `baseline`, then create a flat segmentation by applying dilation on the
+        top side of the baselines. Subsequently, regardless of the ``method``,
+        propagate these new line seeds to the connected components, with conflicts
+        taking the majority label. Spread these foreground labels into the
+        background and find contour polygons for them. For each line, calculate
+        the concave hull polygon of its constituent contours. If the foreground
+        and background overlap is sufficent, then annotate that polygon as new
+        coordinates.
 
         Produce a new output file by serialising the resulting hierarchy.
         """
@@ -181,7 +197,8 @@ class OcropyResegment(Processor):
             fullpage = False
             report = check_region(parent_bin, zoom)
         if report:
-            LOG.warning('Invalid %s "%s": %s', tag, parent.id, report)
+            LOG.warning('Invalid %s "%s": %s', tag,
+                        page_id if fullpage else parent.id, report)
             return
         # get existing line labels:
         line_labels = np.zeros_like(parent_bin, np.bool)
@@ -203,7 +220,7 @@ class OcropyResegment(Processor):
         # only text region(s) may contain new text lines
         for i, segment in enumerate(set(line.parent_object_ for line in lines)):
             LOG.debug('unmasking area of text region "%s" for "%s"',
-                      segment.id, parent.id)
+                      segment.id, page_id if fullpage else parent.id)
             segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
             segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
             segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
@@ -212,8 +229,8 @@ class OcropyResegment(Processor):
                                     parent_bin.shape)] = False
         # mask/ignore overlapping neighbours
         for i, segment in enumerate(ignore):
-            LOG.debug('masking area of %s "%s" for "%s"',
-                      type(segment).__name__[:-4], segment.id, parent.id)
+            LOG.debug('masking area of %s "%s" for "%s"', type(segment).__name__[:-4],
+                      segment.id, page_id if fullpage else parent.id)
             segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
             ignore_bin[draw.polygon(segment_polygon[:, 1],
                                     segment_polygon[:, 0],
@@ -222,12 +239,6 @@ class OcropyResegment(Processor):
             LOG.debug('calculating connected component and distance transforms for "%s"', parent.id)
             bin = parent_bin & ~ ignore_bin
             components, _ = morph.label(bin)
-            labels = np.insert(line_labels, 0, ignore_bin, axis=0)
-            distances = np.zeros_like(labels, np.uint8)
-            for i, label in enumerate(labels):
-                distances[i] = morph.dist_labels(label.astype(np.uint8))
-                # normalize the distances of all lines so larger ones do not displace smaller ones
-                distances[i] = distances[i] / distances[i].max() * 255
             # estimate glyph scale (roughly)
             _, counts = np.unique(components, return_counts=True)
             if counts.shape[0] > 1:
@@ -237,7 +248,33 @@ class OcropyResegment(Processor):
                 LOG.debug("estimated scale: %d", scale)
             else:
                 scale = 43
-            spread_dist(lines, line_labels, distances, parent_bin, components, parent_coords,
+            if method == 'ccomps':
+                labels = np.insert(line_labels, 0, ignore_bin, axis=0)
+                distances = np.zeros_like(labels, np.uint8)
+                for i, label in enumerate(labels):
+                    distances[i] = morph.dist_labels(label.astype(np.uint8))
+                    # normalize the distances of all lines so larger ones do not displace smaller ones
+                    distances[i] = distances[i] / distances[i].max() * 255
+                # use depth to flatten overlapping lines as seed labels
+                new_labels = np.argmax(distances, axis=0)
+            else:
+                new_labels = np.zeros_like(parent_bin, np.uint8)
+                for i, line in enumerate(lines):
+                    if line.Baseline is None:
+                        LOG.warning("Skipping '%s' without baseline", line.id)
+                        new_labels[line_labels[i]] = i + 1
+                        continue
+                    line_polygon = baseline_of_segment(line, parent_coords)
+                    line_ltr = line_polygon[0,0] < line_polygon[-1,0]
+                    line_polygon = make_valid(LineString(line_polygon).buffer(
+                        # left-hand side if left-to-right, and vice versa
+                        scale * (-1) ** line_ltr, single_sided=True))
+                    line_polygon = np.array(line_polygon.exterior, np.int)[:-1]
+                    line_y, line_x = draw.polygon(line_polygon[:, 1],
+                                                  line_polygon[:, 0],
+                                                  parent_bin.shape)
+                    new_labels[line_y, line_x] = i + 1
+            spread_dist(lines, line_labels, new_labels, parent_bin, components, parent_coords,
                         scale=scale, loc=parent.id, threshold=threshold)
             return
         try:
@@ -245,7 +282,8 @@ class OcropyResegment(Processor):
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
                 maxseps=0, maxcolseps=len(ignore), maximages=0)
         except Exception as err:
-            LOG.warning('Cannot line-segment %s "%s": %s', tag, parent.id, err)
+            LOG.warning('Cannot line-segment %s "%s": %s',
+                        tag, page_id if fullpage else parent.id, err)
             return
         LOG.info("Found %d new line labels for %d existing lines on %s '%s'",
                  new_line_labels.max(), len(lines), tag, parent.id)
@@ -375,37 +413,36 @@ class OcropyResegment(Processor):
                         continue
                     otherline.get_Coords().set_points(points_from_polygon(other_polygon))
 
-def spread_dist(lines, labels, distances, binarized, components, coords,
+def spread_dist(lines, old_labels, new_labels, binarized, components, coords,
                 scale=43, loc='', threshold=0.9):
-    """redefine line coordinates by contourizing spread of connected components with max-distance of existing labels
-    """
+    """redefine line coordinates by contourizing spread of connected components propagated from new labels"""
     LOG = getLogger('processor.OcropyResegment')
-    # use depth to flatten overlapping lines as seed labels
-    max_labels = np.argmax(distances, axis=0)
     # allocate to connected components consistently (by majority,
     # ignoring smallest components like punctuation)
-    #max_ccomps = morph.propagate_labels_majority(binarized, max_labels)
-    max_ccomps = morph.propagate_labels_majority(components > 0, max_labels)
+    #new_labels = morph.propagate_labels_majority(binarized, new_labels)
+    new_labels = morph.propagate_labels_majority(components > 0, new_labels)
     # dilate/grow labels from connected components against each other and bg
-    max_ccomps = morph.spread_labels(max_ccomps, maxdist=scale/2)
+    new_labels = morph.spread_labels(new_labels, maxdist=scale/2)
     # find polygon hull and modify line coords
     for i, line in enumerate(lines):
-        mask = max_ccomps == i + 1
-        label = labels[i]
-        count = np.count_nonzero(label)
+        new_label = new_labels == i + 1
+        old_label = old_labels[i]
+        if np.equal(new_label, old_label).all():
+            continue
+        count = np.count_nonzero(old_label)
         if not count:
             LOG.warning("skipping zero-area line '%s'", line.id)
             continue
-        covers = np.count_nonzero(mask) / count
+        covers = np.count_nonzero(new_label) / count
         if covers < threshold / 3:
             LOG.debug("new line for '%s' only covers %.1f%% bg",
                       line.id, covers * 100)
             continue
-        count = np.count_nonzero(label * binarized)
+        count = np.count_nonzero(old_label * binarized)
         if not count:
             LOG.warning("skipping binarizy-empty line '%s'", line.id)
             continue
-        covers = np.count_nonzero(mask * binarized) / count
+        covers = np.count_nonzero(new_label * binarized) / count
         if covers < threshold:
             LOG.debug("new line for '%s' only covers %.1f%% fg",
                       line.id, covers * 100)
@@ -413,7 +450,7 @@ def spread_dist(lines, labels, distances, binarized, components, coords,
         LOG.debug('Black pixels before/after resegment of line "%s": %d/%d',
                   line.id, count, covers * count)
         contours = [contour[:,::-1] # get x,y order again
-                    for contour, area in morph.find_contours(mask)]
+                    for contour, area in morph.find_contours(new_label)]
         #LOG.debug("joining %d subsegments for %s", len(contours), line.id)
         if len(contours) == 0:
             LOG.warning("no contours for %s - keeping", line.id)
@@ -421,7 +458,7 @@ def spread_dist(lines, labels, distances, binarized, components, coords,
         else:
             # get alpha shape
             poly = join_polygons([make_valid(Polygon(contour))
-                                  for contour in contours], loc=loc)
+                                  for contour in contours], loc=line.id)
         poly = poly.exterior.coords[:-1]
         polygon = coordinates_for_segment(poly, None, coords)
         polygon = polygon_for_parent(polygon, line.parent_object_)
@@ -475,3 +512,9 @@ def join_polygons(polygons, loc=''):
         jointp = asPolygon(np.round(jointp.exterior.coords))
         jointp = make_valid(jointp)
     return jointp
+
+# zzz should go into core ocrd_utils
+def baseline_of_segment(segment, coords):
+    line = np.array(polygon_from_points(segment.get_Baseline().points))
+    line = transform_coordinates(line, coords['transform'])
+    return np.round(line).astype(np.int32)
