@@ -2,8 +2,6 @@
 ### various add-ons to the SciPy morphology package
 ################################################################
 
-
-
 from numpy import *
 #from scipy.ndimage import morphology,measurements,filters
 from scipy.ndimage import measurements
@@ -21,9 +19,11 @@ def label(image,**kw):
     - same-size Numpy array with integer labels for fg components
     - number of components (eq. largest label)
     """
-    n, labels = cv2.connectedComponents(image.astype(uint8))
+    # default connectivity in OpenCV: 8 (which is equivalent to...)
+    # default connectivity in scikit-image: 2
+    n, labels = cv2.connectedComponents(image.astype(uint8), connectivity=4)
     #n, labels = cv2.connectedComponentsWithAlgorithm(image.astype(uint8), connectivity=4, ltype=2, ccltype=cv2.CCL_DEFAULT)
-    return labels, n
+    return labels, n-1
     # try: return measurements.label(image,**kw)
     # except: pass
     # types = ["int32","uint32","int64","uint64","int16","uint16"]
@@ -68,36 +68,40 @@ def check_binary(image):
     assert amin(image)>=0 and amax(image)<=1,\
         "array should be binary, has values %g to %g"%(amin(image),amax(image))
 
+@checks(uintpair)
+def brick(size):
+    return ones(size, uint8)
+
 @checks(ABINARY2,uintpair)
 def r_dilation(image,size,origin=0):
     """Dilation with rectangular structuring element using fast OpenCV.dilate."""
-    return cv2.dilate(image.astype(uint8), ones(size, uint8))
+    return cv2.dilate(image.astype(uint8), brick(size))
     # return filters.maximum_filter(image,size,origin=(size[0]%2-1,size[1]%2-1))
 
 @checks(ABINARY2,uintpair)
 def r_erosion(image,size,origin=-1):
     """Erosion with rectangular structuring element using fast OpenCV.erode."""
-    return cv2.erode(image.astype(uint8), ones(size, uint8))
+    return cv2.erode(image.astype(uint8), brick(size))
     # return filters.minimum_filter(image,size,origin=0, mode='constant', cval=1)
 
 @checks(ABINARY2,uintpair)
 def r_opening(image,size,origin=0):
     """Opening with rectangular structuring element using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, brick(size))
     # image = r_erosion(image,size,origin=0)
     # return r_dilation(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def r_closing(image,size,origin=0):
     """Closing with rectangular structuring element using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, brick(size))
     # image = r_dilation(image,size,origin=0)
     # return r_erosion(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def rb_dilation(image,size,origin=0):
     """Binary dilation using linear filters."""
-    return cv2.dilate(image.astype(uint8), ones(size, uint8))
+    return cv2.dilate(image.astype(uint8), brick(size))
     # output = zeros(image.shape,'f')
     # filters.uniform_filter(image,size,output=output,origin=(size[0]%2-1,size[1]%2-1))
     # # 0 creates rounding artifacts
@@ -106,7 +110,7 @@ def rb_dilation(image,size,origin=0):
 @checks(ABINARY2,uintpair)
 def rb_erosion(image,size,origin=-1):
     """Binary erosion using linear filters."""
-    return cv2.erode(image.astype(uint8), ones(size, uint8))
+    return cv2.erode(image.astype(uint8), brick(size))
     # output = zeros(image.shape,'f')
     # filters.uniform_filter(image,size,output=output,origin=0, mode='constant', cval=1)
     # return array(output==1,'i')
@@ -114,40 +118,54 @@ def rb_erosion(image,size,origin=-1):
 @checks(ABINARY2,uintpair)
 def rb_opening(image,size,origin=0):
     """Binary opening using linear filters."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_OPEN, brick(size))
     # image = rb_erosion(image,size,origin=0)
     # return rb_dilation(image,size,origin=-1)
 
 @checks(ABINARY2,uintpair)
 def rb_closing(image,size,origin=0):
     """Binary closing using linear filters."""
-    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, ones(size, uint8))
+    return cv2.morphologyEx(image.astype(uint8), cv2.MORPH_CLOSE, brick(size))
     # image = rb_dilation(image,size,origin=0)
     # return rb_erosion(image,size,origin=-1)
 
+@checks(ABINARY2,ABINARY2)
+def rb_reconstruction(image,mask,step=1,maxsteps=None):
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (2*step+1,2*step+1))
+    dilated = image.astype(uint8)
+    while maxsteps is None or maxsteps > 0:
+        dilated = cv2.dilate(src=dilated, kernel=kernel)
+        cv2.bitwise_and(src1=dilated, src2=mask.astype(uint8), dst=dilated)
+        # did result change?
+        if (image == dilated).all():
+            return dilated
+        if maxsteps:
+            maxsteps -= step
+    return dilated
+    
 @checks(GRAYSCALE,uintpair)
 def rg_dilation(image,size,origin=0):
     """Grayscale dilation using fast OpenCV.dilate."""
-    return cv2.dilate(image, ones(size, uint8))
+    return cv2.dilate(image, brick(size))
     # return filters.maximum_filter(image,size,origin=origin)
 
 @checks(GRAYSCALE,uintpair)
 def rg_erosion(image,size,origin=0):
     """Grayscale erosion using fast OpenCV.erode."""
-    return cv2.erode(image, ones(size, uint8))
+    return cv2.erode(image, brick(size))
     # return filters.minimum_filter(image,size,origin=origin, mode='constant', cval=1)
 
 @checks(GRAYSCALE,uintpair)
 def rg_opening(image,size,origin=0):
     """Grayscale opening using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image, cv2.MORPH_OPEN, ones(size, uint8))
+    return cv2.morphologyEx(image, cv2.MORPH_OPEN, brick(size))
     # image = r_erosion(image,size,origin=origin)
     # return r_dilation(image,size,origin=origin)
 
 @checks(GRAYSCALE,uintpair)
 def rg_closing(image,size,origin=0):
     """Grayscale closing using fast OpenCV.morphologyEx."""
-    return cv2.morphologyEx(image, cv2.MORPH_CLOSE, ones(size, uint8))
+    return cv2.morphologyEx(image, cv2.MORPH_CLOSE, brick(size))
     # image = r_dilation(image,size,origin=0)
     # return r_erosion(image,size,origin=-1)
 
@@ -182,16 +200,30 @@ def find_label_contours(labels):
         contours[label] = find_contours(labels==label)
     return contours
 
-@checks(SEGMENTATION)
+@checks(ALL(SEGMENTATION,ANONNEG))
 def spread_labels(labels,maxdist=9999999):
     """Spread the given labels to the background."""
     #distances,features = morphology.distance_transform_edt(labels==0,return_distances=1,return_indices=1)
     #indexes = features[0]*labels.shape[1]+features[1]
     #spread = labels.ravel()[indexes.ravel()].reshape(*labels.shape)
+    if not labels.any():
+        return labels
     distances,indexes = cv2.distanceTransformWithLabels(array(labels==0,uint8),cv2.DIST_L2,cv2.DIST_MASK_PRECISE,labelType=cv2.DIST_LABEL_PIXEL)
     spread = labels[where(labels>0)][indexes-1]
+    if maxdist is None:
+        return spread, distances
     spread *= (distances<maxdist)
     return spread
+
+@checks(SEGMENTATION)
+def dist_labels(labels):
+    """Get the distance transformation of the segments."""
+    if not labels.any():
+        return labels
+    return cv2.distanceTransform(labels,
+                                 distanceType=cv2.DIST_L1,
+                                 maskSize=3,
+                                 dstType=cv2.CV_8U)
 
 @checks(ABINARY2,ABINARY2)
 def keep_marked(image,markers):
@@ -210,7 +242,7 @@ def remove_marked(image,markers):
     return image*(marked==0)
 
 @checks(SEGMENTATION,SEGMENTATION)
-def correspondences(labels1,labels2):
+def correspondences(labels1,labels2,return_counts=True):
     """Given two labeled images, compute an array giving the correspondences
     between labels in the two images (as tuples of label in `labels1`,
     label in `labels2`, and pixel count)."""
@@ -218,8 +250,12 @@ def correspondences(labels1,labels2):
     assert amin(labels1)>=0 and amin(labels2)>=0
     assert amax(labels2)<q
     combo = labels1*q+labels2
-    result, counts = unique(combo, return_counts=True)
-    result = array([result//q,result%q,counts])
+    result = unique(combo, return_counts=return_counts)
+    if return_counts:
+        result, counts = result
+        result = array([result//q,result%q,counts])
+    else:
+        result = array([result//q,result%q])
     return result
 
 @checks(ABINARY2,SEGMENTATION)
@@ -227,9 +263,9 @@ def propagate_labels_simple(regions,labels):
     """Given an image and a set of labels, apply the labels
     to all the connected components in the image that overlap a label."""
     rlabels,_ = label(regions)
-    cors = correspondences(rlabels,labels)
+    cors = correspondences(rlabels,labels,False)
     outputs = zeros(amax(rlabels)+1,'i')
-    for o,i,_ in cors.T: outputs[o] = i
+    for o,i in cors.T: outputs[o] = i
     outputs[0] = 0
     return outputs[rlabels]
 
@@ -259,10 +295,10 @@ def propagate_labels(image,labels,conflict=0):
     to all the connected components in the image that overlap a label.
     Assign the value `conflict` to any components that have a conflict."""
     rlabels,_ = label(image)
-    cors = correspondences(rlabels,labels)
+    cors = correspondences(rlabels,labels,False)
     outputs = zeros(amax(rlabels)+1,'i')
     oops = -(1<<30)
-    for o,i,_ in cors.T:
+    for o,i in cors.T:
         if outputs[o]!=0: outputs[o] = oops
         else: outputs[o] = i
     outputs[outputs==oops] = conflict
@@ -277,7 +313,7 @@ def select_regions(binary,f,min=0,nbest=100000):
     if binary.max() == 1:
         labels,_ = label(binary)
     else:
-        labels = binary
+        labels = binary.astype(uint8)
     objects = find_objects(labels)
     scores = [f(o) for o in objects]
     best = argsort(scores)

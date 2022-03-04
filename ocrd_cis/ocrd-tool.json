@@ -191,8 +191,20 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Resegment lines with ocropy (by shrinking annotated polygons)",
+			"description": "Resegment text lines",
 			"parameters": {
+				"level-of-operation": {
+					"type": "string",
+					"enum": ["page", "region"],
+					"description": "PAGE XML hierarchy level to segment textlines in ('region' abides by existing text region boundaries, 'page' optimises lines in the whole page once",
+					"default": "page"
+				},
+				"method": {
+					"type": "string",
+					"enum": ["lineest", "baseline", "ccomps"],
+					"description": "source for new line polygon candidates ('lineest' for line estimation, i.e. how Ocropy would have segmented text lines; 'baseline' tries to re-polygonize from the baseline annotation; 'ccomps' avoids crossing connected components by majority rule)",
+					"default": "lineest"
+				},
 				"dpi": {
 					"type": "number",
 					"format": "float",
@@ -202,13 +214,13 @@
 				"min_fraction": {
 					"type": "number",
 					"format": "float",
-					"description": "share of foreground pixels that must be retained by the largest label",
-					"default": 0.8
+					"description": "share of foreground pixels that must be retained by the output polygons",
+					"default": 0.75
 				},
 				"extend_margins": {
 					"type": "number",
 					"format": "integer",
-					"description": "number of pixels to extend the input polygons horizontally and vertically before intersecting",
+					"description": "number of pixels to extend the input polygons in all directions",
 					"default": 3
 				}
 			}
@@ -238,8 +250,14 @@
 				"range": {
 					"type": "number",
 					"format": "float",
-					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels)",
+					"description": "maximum vertical disposition or maximum margin (will be multiplied by mean centerline deltas to yield pixels); also the mean vertical padding",
 					"default": 4.0
+				},
+				"smoothness": {
+					"type": "number",
+					"format": "float",
+					"description": "kernel size (relative to image height) of horizontal blur applied to foreground to find the center line; the smaller the more dynamic (0.1 would be a better default)",
+					"default": 1.0
 				},
 				"max_neighbour": {
 					"type": "number",

@@ -140,7 +140,7 @@ class OcropyBinarize(Processor):
                 if level == 'table':
                     regions = page.get_TableRegion()
                 else: # region
-                    regions = page.get_AllRegions(classes=['Text'])
+                    regions = page.get_AllRegions(classes=['Text'], order='reading-order')
                 if not regions:
                     self.logger.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
@@ -175,6 +175,9 @@ class OcropyBinarize(Processor):
                              file_id, self.output_file_grp, out.local_filename)
 
     def process_page(self, page, page_image, page_xywh, zoom, page_id, file_id):
+        if not page_image.width or not page_image.height:
+            self.logger.warning("Skipping page '%s' with zero size", page_id)
+            return
         self.logger.info("About to binarize page '%s'", page_id)
         features = page_xywh['features']
         if 'angle' in page_xywh and page_xywh['angle']:
@@ -220,6 +223,9 @@ class OcropyBinarize(Processor):
             comments=features))
 
     def process_region(self, region, region_image, region_xywh, zoom, page_id, file_id):
+        if not region_image.width or not region_image.height:
+            self.logger.warning("Skipping region '%s' with zero size", region.id)
+            return
         self.logger.info("About to binarize page '%s' region '%s'", page_id, region.id)
         features = region_xywh['features']
         if 'angle' in region_xywh and region_xywh['angle']:
@@ -267,6 +273,9 @@ class OcropyBinarize(Processor):
             comments=features))
 
     def process_line(self, line, line_image, line_xywh, zoom, page_id, region_id, file_id):
+        if not line_image.width or not line_image.height:
+            self.logger.warning("Skipping line '%s' with zero size", line.id)
+            return
         self.logger.info("About to binarize page '%s' region '%s' line '%s'",
                          page_id, region_id, line.id)
         features = line_xywh['features']

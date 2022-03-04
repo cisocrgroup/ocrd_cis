@@ -6,11 +6,11 @@ from ocrd_utils import (
     getLogger,
     make_file_id,
     assert_file_grp_cardinality,
-    rotate_image,
     MIMETYPE_PAGE
 )
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
+    PageType,
     to_xml, AlternativeImageType
 )
 from ocrd import Processor
@@ -84,7 +84,7 @@ class OcropyDeskew(Processor):
                 if level == 'table':
                     regions = page.get_TableRegion()
                 else: # region
-                    regions = page.get_AllRegions(classes=['Text'])
+                    regions = page.get_AllRegions(classes=['Text'], order='reading-order')
                 if not regions:
                     LOG.warning('Page "%s" contains no text regions', page_id)
                 for region in regions:
@@ -114,6 +114,9 @@ class OcropyDeskew(Processor):
 
     def _process_segment(self, segment, segment_image, segment_coords, segment_id, page_id, file_id):
         LOG = getLogger('processor.OcropyDeskew')
+        if not segment_image.width or not segment_image.height:
+            LOG.warning("Skipping %s with zero size", segment_id)
+            return
         angle0 = segment_coords['angle'] # deskewing (w.r.t. top image) already applied to segment_image
         LOG.info("About to deskew %s", segment_id)
         angle = deskew(segment_image, maxskew=self.parameter['maxskew']) # additional angle to be applied
@@ -121,13 +124,22 @@ class OcropyDeskew(Processor):
         # whereas PIL/ndimage rotation is in mathematical direction:
         orientation = -(angle + angle0)
         orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
-        segment.set_orientation(orientation)
+        segment.set_orientation(orientation) # also removes all deskewed AlternativeImages
         LOG.info("Found angle for %s: %.1f", segment_id, angle)
-        if angle:
-            LOG.debug("Rotating segment '%s' by %.2f°",
-                      segment_id, angle)
-            segment_image = rotate_image(segment_image, angle,
-                                         fill='background', transparency=True)
+        # delegate reflection, rotation and re-cropping to core:
+        if isinstance(segment, PageType):
+            segment_image, segment_coords, _ = self.workspace.image_from_page(
+                segment, page_id,
+                fill='background', transparency=True)
+        else:
+            segment_image, segment_coords = self.workspace.image_from_segment(
+                segment, segment_image, segment_coords,
+                fill='background', transparency=True)
+        if not angle:
+            # zero rotation does not change coordinates,
+            # but assures consuming processors that the
+            # workflow had deskewing
+            segment_coords['features'] += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
             segment_image,
@@ -137,4 +149,4 @@ class OcropyDeskew(Processor):
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
-            comments=segment_coords['features'] + ',deskewed'))
+            comments=segment_coords['features']))

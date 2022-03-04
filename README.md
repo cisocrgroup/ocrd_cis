@@ -228,14 +228,25 @@ ocrd-cis-ocropy-resegment \
 
 Available parameters are:
 ```sh
-   "dpi" [number - -1]
+   "level-of-operation" [string - "page"]
+    PAGE XML hierarchy level to segment textlines in ('region' abides by
+    existing text region boundaries, 'page' optimises lines in the whole
+    page once
+    Possible values: ["page", "region"]
+   "method" [string - "lineest"]
+    source for new line polygon candidates ('lineest' for line
+    estimation, i.e. how Ocropy would have segmented text lines;
+    'baseline' tries to re-polygonize from the baseline annotation;
+    'ccomps' avoids crossing connected components by majority rule)
+    Possible values: ["lineest", "baseline", "ccomps"]
+   "dpi" [number - 0]
     pixel density in dots per inch (overrides any meta-data in the
-    images); disabled when negative
-   "min_fraction" [number - 0.8]
-    share of foreground pixels that must be retained by the largest label
+    images); disabled when zero or negative
+   "min_fraction" [number - 0.75]
+    share of foreground pixels that must be retained by the output
+    polygons
    "extend_margins" [number - 3]
-    number of pixels to extend the input polygons horizontally and
-    vertically before intersecting
+    number of pixels to extend the input polygons in all directions
 ```
 
 ### ocrd-cis-ocropy-segment

@@ -401,8 +401,9 @@ def DSAVE(title,array, interactive=False):
     from matplotlib import patches as mpatches
     from tempfile import mkstemp
     from os import close
+    import copy
     # set uniformly bright / maximally differentiating colors
-    cmap = cm.rainbow # default viridis is too dark on low end
+    cmap = copy.copy(cm.rainbow) # default viridis is too dark on low end
     # use black for bg (not in the cmap)
     cmap.set_bad(color='black') # for background (normal)
     # allow calling with extra fg as 2nd array
@@ -422,6 +423,9 @@ def DSAVE(title,array, interactive=False):
             vmax = np.amax(array) # over
             array = array.copy()
             array[array2>0] = vmax+1 # fg
+    else:
+        vmin = 0
+        vmax = np.amax(array)
     array = array.astype('float')
     array[array==0] = np.nan # bad (extra color)
     if interactive:
@@ -439,7 +443,7 @@ def DSAVE(title,array, interactive=False):
         plt.disconnect('key_press_event')
         return result
     else:
-        fd, fname = mkstemp(suffix=title+".png")
+        fd, fname = mkstemp(suffix="_" + title + ".png")
         plt.imsave(fname,array,vmin=vmin,vmax=vmax,cmap=cmap)
         close(fd)
         LOG.debug('DSAVE %s', fname)
@@ -456,6 +460,8 @@ def compute_images(binary, scale, maximages=5):
     
     Returns a same-size bool array as a mask image.
     """
+    if maximages == 0:
+        return binary == -1
     images = binary
     # d0 = odd(max(2,scale/5))
     # d1 = odd(max(2,scale/8))
@@ -466,6 +472,8 @@ def compute_images(binary, scale, maximages=5):
     # 1- filter largest connected components
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=2*maximages)
     DSAVE('images1_large', images+0.6*binary)
+    if not images.any():
+        return images > 0
     # 2- open horizontally and vertically to suppress
     #    v/h-lines; these will be detected separately,
     #    and it is dangerous to combine them into one
@@ -482,12 +490,15 @@ def compute_images(binary, scale, maximages=5):
     # 4- reconstruct the losses up to a certain distance
     #    to avoid creeping into pure h/v-lines again but still
     #    cover most of the large object
-    images = np.where(images, closed, 2)
-    images = morph.spread_labels(images, maxdist=scale) % 2 | closed
+    #images = np.where(images, closed, 2)
+    #images = morph.spread_labels(images, maxdist=scale) % 2 | closed
+    images = morph.rb_reconstruction(closed, images, step=2, maxsteps=scale)
     DSAVE('images4_reconstructed', images+0.6*binary)
     # 5- select nbest
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=maximages)
     DSAVE('images5_selected', images+0.6*binary)
+    if not images.any():
+        return images > 0
     # 6- dilate a little to get a smooth contour without gaps
     dilated = morph.r_dilation(images, (odd(scale),odd(scale)))
     images = morph.propagate_labels_majority(binary, dilated+1)
@@ -527,8 +538,8 @@ def compute_hlines(binary, scale,
     ## with zero horizontal dilation, hlines would need
     ## to be perfectly contiguous (i.e. without noise
     ## from binarization):
-    d1 = odd(max(1,scale/8))
-    d0 = odd(max(1,scale/4))
+    d0 = odd(max(1,scale/8))
+    d1 = odd(max(1,scale/4))
     # TODO This does not cope well with slightly sloped or heavily fragmented lines
     horiz = binary
     # 1- close horizontally a little to make warped or
@@ -537,16 +548,19 @@ def compute_hlines(binary, scale,
     DSAVE('hlines1_h-closed', horiz+0.6*binary)
     # 2- open horizontally to remove everything
     #    that is horizontally non-contiguous:
-    opened = morph.rb_opening(horiz, (1,hlminwidth*scale))
+    opened = morph.rb_opening(horiz, (1, hlminwidth*scale//2))
     DSAVE('hlines2_h-opened', opened+0.6*binary)
     # 3- reconstruct the losses up to a certain distance
     #    to avoid creeping into overlapping glyphs but still
     #    cover most of the line even if not perfectly horizontal
     # (it would be fantastic if we could calculate the
     #  distance transform with stronger horizontal weights)
-    horiz = np.where(horiz, opened, 2)
-    horiz = morph.spread_labels(horiz, maxdist=d1) % 2 | opened
+    #horiz = np.where(horiz, opened, 2)
+    #horiz = morph.spread_labels(horiz, maxdist=d1) % 2 | opened
+    horiz = morph.rb_reconstruction(opened, horiz, step=2, maxsteps=d1//2)
     DSAVE('hlines3_reconstructed', horiz+0.6*binary)
+    if not horiz.any():
+        return horiz > 0
     # 4- disregard parts from images; we don't want
     #    to compete/overlap with image objects too much,
     #    or waste our nbest on them
@@ -587,6 +601,8 @@ def compute_separators_morph(binary, scale,
     
     Returns a same-size bool array as separator mask.
     """
+    if maxseps == 0:
+        return binary == -1
     LOG.debug("considering at most %g black column separators", maxseps)
     ## no large vertical dilation here, because
     ## that would turn letters into lines; but
@@ -603,16 +619,19 @@ def compute_separators_morph(binary, scale,
     DSAVE('colseps1_v-closed', vert+0.6*binary)
     # 2- open vertically to remove everything that
     #    is vertically non-contiguous:
-    opened = morph.rb_opening(vert, (csminheight*scale,1))
+    opened = morph.rb_opening(vert, (csminheight*scale//2, 1))
     DSAVE('colseps2_v-opened', opened+0.6*binary)
     # 3- reconstruct the losses up to a certain distance
     #    to avoid creeping into overlapping glyphs but still
     #    cover most of the line even if not perfectly vertical
     # (it would be fantastic if we could calculate the
     #  distance transform with stronger vertical weights)
-    vert = np.where(vert, opened, 2)
-    vert = morph.spread_labels(vert, maxdist=d1) % 2 | opened
+    #vert = np.where(vert, opened, 2)
+    #vert = morph.spread_labels(vert, maxdist=d1) % 2 | opened
+    vert = morph.rb_reconstruction(opened, vert, step=2, maxsteps=d1//2)
     DSAVE('colseps3_reconstructed', vert+0.6*binary)
+    if not vert.any():
+        return vert > 0
     # 4- disregard parts from images; we don't want
     #    to compete/overlap with image objects too much,
     #    or waste our nbest on them
@@ -648,6 +667,8 @@ def compute_colseps_conv(binary, scale=1.0, csminheight=10, maxcolseps=2):
     
     Returns a same-size bool array as separator mask.
     """
+    if maxcolseps == 0:
+        return binary == -1
     LOG.debug("considering at most %g whitespace column separators", maxcolseps)
     # find vertical whitespace by thresholding
     smoothed = filters.gaussian_filter(1.0*binary,(scale,scale*0.5))
@@ -795,6 +816,7 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
         bmarked = filters.maximum_filter(bmarked,(1,odd(scale))) *(1-colseps)
     tmarked = filters.maximum_filter(tmarked,(1,odd(scale))) *(1-colseps)
     ##tmarked = filters.maximum_filter(tmarked,(1,20))
+    # why not just np.diff(bmarked-tmarked, axis=0, append=0) > 0 ?
     seeds = np.zeros(binary.shape,'i')
     delta = max(3,int(scale))
     for x in range(bmarked.shape[1]):
@@ -844,74 +866,112 @@ def compute_line_seeds(binary,bottom,top,colseps,scale,
     return seeds
 
 @checks(ABINARY2,SEGMENTATION,NUMBER)
-def hmerge_line_seeds(binary, seeds, scale, threshold=0.8):
+def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
     """Relabel line seeds such that regions of coherent vertical
     intervals get the same label, and join them morphologically."""
     # merge labels horizontally to avoid splitting lines at long whitespace
-    # (to prevent corners from becoming the largest label when spreading
-    #  into the background; and make contiguous contours possible), but
+    # (ensuring contiguous contours), but
     # ignore conflicts which affect only small fractions of either line
     # (avoiding merges for small vertical overlap):
-    relabel = np.unique(seeds)
-    labels = relabel[relabel > 0] # without background
-    objects = [(0,0)] + measurements.find_objects(seeds)
-    centers = [(0,0)] + measurements.center_of_mass(binary, seeds, labels)
+    labels = np.unique(seeds * (binary > 0)) # without empty foreground
+    labels = labels[labels > 0] # without background
+    seeds[~np.isin(seeds, labels, assume_unique=True)] = 0
+    #DSAVE("hmerge0_nonempty", seeds)
+    if len(labels) < 2:
+        return seeds
+    objects = measurements.find_objects(seeds)
+    centers = measurements.center_of_mass(binary, seeds, labels)
+    relabel = np.arange(np.max(seeds)+1, dtype=seeds.dtype)
+    # FIXME: get incidence of y overlaps to avoid full inner loops
+    LOG.debug('checking %d non-empty line seeds for overlaps', len(labels))
+    def h_compatible(obj1, obj2, center1, center2):
+        if not (obj2[0].start < center1[0] < obj2[0].stop):
+            return False
+        if not (obj1[0].start < center2[0] < obj1[0].stop):
+            return False
+        if (obj2[1].start < center1[1] < obj2[1].stop):
+            return False
+        if (obj1[1].start < center2[1] < obj1[1].stop):
+            return False
+        return True
     for label in labels:
         seed = seeds == label
-        DSAVE('hmerge1_seed', seed)
+        if not seed.any():
+            continue
+        #DSAVE('hmerge1_seed', seed)
         # close to fill holes from underestimated scale
         seed = morph.rb_closing(seed, (scale, scale))
-        DSAVE('hmerge2_closed', seed)
-        # open horizontally to remove extruding ascenders/descenders
-        seed = morph.rb_opening(seed, (1, 3*scale))
-        DSAVE('hmerge3_h-opened', seed)
-        # close horizontally to overlap with possible neighbors
-        seed = morph.rb_closing(seed, (1, 2*seeds.shape[1]))
-        DSAVE('hmerge4_h-closed', seed)
+        #DSAVE('hmerge2_closed', seed)
+        # not really necessary (seed does not contain ascenders/descenders):
+        # # open horizontally to remove extruding ascenders/descenders
+        # seed = morph.rb_opening(seed, (1, 3*scale))
+        # DSAVE('hmerge3_h-opened', seed)
+        if not seed.any():
+            continue
+        obj = measurements.find_objects(seed)[0]
+        if obj is None:
+            continue
+        seed[obj[0], 0:seed.shape[1]] = 1
+        #DSAVE('hmerge4_h-closed', seed)
         # get overlaps
-        neighbors, counts = np.unique(seeds * seed, return_counts=True)
-        for candidate, count in zip(neighbors, counts):
-            if candidate in [0, label]:
+        for label2 in labels:
+            if label == label2 or relabel[label] == label2:
                 continue
-            total = np.count_nonzero(seeds == candidate)
+            obj2 = objects[label2-1]
+            if not obj2:
+                continue
+            if not sl.yoverlaps(obj, obj2):
+                continue
+            center = centers[labels.searchsorted(label)]
+            bbox = objects[label-1]
+            if not all(h_compatible(bbox, bbox2, center, center2)
+                       for bbox2, center2 in [(objects[i-1], centers[labels.searchsorted(i)])
+                                              for i in np.nonzero(relabel == relabel[label2])[0]]):
+                LOG.debug('ignoring h-overlap between %d and %d (not mutually centric)', label, label2)
+                continue
+            seed2 = seeds == label2
+            count = np.count_nonzero(seed2 * seed)
+            total = np.count_nonzero(seed2)
             if count < threshold * total:
-                LOG.debug('ignoring h-overlap between %d and %d (only %d of %d)', label, candidate, count, total)
+                LOG.debug('ignoring h-overlap between %d and %d (only %d of %d)', label, label2, count, total)
                 continue
-            label_center = centers[label]
-            label_box = objects[label]
-            candidate_center = centers[candidate]
-            candidate_box = objects[candidate]
-            if not (candidate_box[0].start < label_center[0] < candidate_box[0].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (y center not within other)', label, candidate)
+            label1_y, label1_x = np.where(seeds == label)
+            label2_y, label2_x = np.where(seed2)
+            shared_y = np.intersect1d(label1_y, label2_y)
+            gap = np.zeros_like(seed2, np.bool)
+            for y in shared_y:
+                can_x_min = label2_x[label2_y == y][0]
+                can_x_max = label2_x[label2_y == y][-1]
+                new_x_min = label1_x[label1_y == y][0]
+                new_x_max = label1_x[label1_y == y][-1]
+                if can_x_max < new_x_min:
+                    if (seps is None or
+                        not seps[y, can_x_max:new_x_min].any()):
+                        gap[y, can_x_max:new_x_min] = True
+                if new_x_max < can_x_min:
+                    if (seps is None or
+                        not seps[y, new_x_max:can_x_min].any()):
+                        gap[y, new_x_max:can_x_min] = True
+            if not gap.any() or gap.max(axis=1).sum() / len(shared_y) < 0.1:
+                LOG.debug('ignoring h-overlap between %d and %d (blocked by seps)', label, label2)
                 continue
-            if not (label_box[0].start < candidate_center[0] < label_box[0].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (does not contain other y center)', label, candidate)
-                continue
-            if (candidate_box[1].start < label_center[1] < candidate_box[1].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (x center within other)', label, candidate)
-                continue
-            if (label_box[1].start < candidate_center[1] < label_box[1].stop):
-                LOG.debug('ignoring h-overlap between %d and %d (contains other x center)', label, candidate)
-                continue
-            LOG.debug('hmerging %d with %d', candidate, label)
+            # find y with shortest gap
+            gapwidth = gap.sum(axis=1)
+            gapwidth[gapwidth==0] = seed.shape[1]
+            mingap = gapwidth < gapwidth.min() + 4
+            # make contiguous
+            mingap = mingap.nonzero()[0]
+            gap[0:mingap[0]] = False
+            gap[mingap[-1]:] = False
+            LOG.debug('hmerging %d with %d', label2, label)
+            # fill the horizontal background between both regions:
+            seeds[gap] = label
             # the new label could have been relabelled already:
             new_label = relabel[label]
             # assign candidate to (new assignment for) label:
-            relabel[candidate] = new_label
+            relabel[label2] = new_label
             # re-assign labels already relabelled to candidate:
-            relabel[relabel == candidate] = new_label
-            # fill the horizontal background between both regions:
-            candidate_y, candidate_x = np.where(seeds == candidate)
-            new_label_y, new_label_x = np.where(seeds == new_label)
-            for y in np.intersect1d(candidate_y, new_label_y):
-                can_x_min = candidate_x[candidate_y == y][0]
-                can_x_max = candidate_x[candidate_y == y][-1]
-                new_x_min = new_label_x[new_label_y == y][0]
-                new_x_max = new_label_x[new_label_y == y][-1]
-                if can_x_max < new_x_min:
-                    seeds[y, can_x_max:new_x_min] = new_label
-                if new_x_max < can_x_min:
-                    seeds[y, new_x_max:can_x_min] = new_label
+            relabel[relabel == label2] = new_label
     # apply re-assignments:
     seeds = relabel[seeds]
     DSAVE("hmerge5_connected", seeds)
@@ -955,7 +1015,9 @@ def compute_segmentation(binary,
     Given a binarized (and inverted) image as Numpy array ``image``, compute
     a complete segmentation of it into text lines as a label array.
 
-    If ``fullpage`` is false, then avoid single-line horizontal splits.
+    If ``fullpage`` is false, then
+    - avoid single-line horizontal splits, and
+    - ignore any foreground in ``seps``.
 
     If ``fullpage`` is true, then
     - allow all horizontal splits, and search
@@ -1005,13 +1067,14 @@ def compute_segmentation(binary,
         binary = np.minimum(binary,1-hlines)
         binary = np.minimum(binary,1-vlines)
         binary = np.minimum(binary,1-images)
-        if seps is not None:
-            # suppress separators/images for line estimation
-            binary = (1-seps) * binary
     else:
         hlines = np.zeros_like(binary, np.bool)
         vlines = np.zeros_like(binary, np.bool)
         images = np.zeros_like(binary, np.bool)
+    if seps is not None and not seps.all():
+        # suppress separators/images for line estimation
+        # (unless it encompasses the full image for some reason)
+        binary = (1-seps) * binary
 
     LOG.debug('computing gradient map')
     bottom, top, boxmap = compute_gradmaps(binary, scale,
@@ -1047,8 +1110,8 @@ def compute_segmentation(binary,
         seeds = relabel[seeds]
         DSAVE("lineseeds_filtered", [seeds,binary])
     else:
-        seeds = hmerge_line_seeds(binary, seeds, scale)
-    
+        seeds = hmerge_line_seeds(binary, seeds, scale, seps=sepmask)
+
     LOG.debug('spreading seed labels')
     # spread labels from seeds to bg, but watch fg,
     # voting for majority on bg conflicts,
@@ -1057,6 +1120,12 @@ def compute_segmentation(binary,
     llabels2 = morph.propagate_labels(binary, seeds, conflict=0)
     conflicts = llabels > llabels2
     llabels = np.where(conflicts, seeds, llabels)
+    # capture diacritics (isolated components above seeds)
+    seeds2 = interpolation.shift(seeds, (-scale, 0), order=0, prefilter=False)
+    seeds2 = np.where(seeds, seeds, seeds2)
+    DSAVE('lineseeds_cap', [seeds2,binary])
+    llabels2 = morph.propagate_labels_simple(binary, seeds2)
+    llabels = np.where(llabels, llabels, llabels2)
     # (protect sepmask as a temporary label)
     seplabel = np.max(seeds)+1
     llabels[sepmask>0] = seplabel
@@ -1101,6 +1170,7 @@ def remove_noise(pil_image, maxsize=8):
 
 @checks(ABINARY2,SEGMENTATION)
 def lines2regions(binary, llabels,
+                  rlabels=None,
                   sepmask=None,
                   prefer_vertical=None,
                   rl=False, bt=False,
@@ -1115,6 +1185,10 @@ def lines2regions(binary, llabels,
       (including text lines, separators, images etc)
     - ``llabels``, a segmentation of the page into adjacent textlines
       (including locally correct reading order)
+    - (optionally) ``rlabels``, an initial solution as a (possibly partial)
+      segmentation of the page into region labels (assignment of line labels);
+      these regions will stay grouped together, but will be re-assigned labels
+      in the order of cutting/partitioning
     - (optionally) ``sepmask``, a mask array of fg or bg separators;
       it is applied before, but also during recursive X-Y cut:
       In each iteration's box, if sepmask creates enough partitions
@@ -1185,9 +1259,10 @@ def lines2regions(binary, llabels,
     cuts, as well as non-rectangular partitioning from h/v-lines and
     column separators.
     
-    Each slice which cannot be cut/partitioned further gets a new
+    Each slice which cannot be cut/partitioned any further gets a new
     region label (in the order of the call chain, which is controlled
     by ``rl`` and ``bt``), covering all the line labels inside it.
+    If ``rlabels`` is given, use this for initial regions.
     
     Afterwards, for each region label, simplify regions by using
     their convex hull polygon.
@@ -1203,22 +1278,27 @@ def lines2regions(binary, llabels,
         # add them to sepmask (to avoid adding fake partitions)
         sepmask = 1-morph.keep_marked(1-sepmask, lbinary>0)
         DSAVE('sepmask', [sepmask,binary])
-    relabel = np.zeros(np.amax(llabels)+1, np.int)
     objects = [None] + morph.find_objects(llabels)
-    #centers = measurements.center_of_mass(binary, llabels)
+    # centers = measurements.center_of_mass(binary, llabels, np.unique(llabels))
+    # def center(obj):
+    #     if morph.sl.empty(obj):
+    #         return [0,0]
+    #     return morph.sl.center(obj)
+    # centers = list(map(center, objects[1:]))
     if scale is None:
         scale = psegutils.estimate_scale(binary, zoom)
     bincounts = np.bincount(lbinary.flatten())
     
     LOG.debug('combining lines to regions')
+    relabel = np.zeros(np.amax(llabels)+1, np.int)
     num_regions = 0
-    def recursive_x_y_cut(box, mask=None, is_partition=False, debug=False):
+    def recursive_x_y_cut(box, mask=None, partition_type=None, debug=False):
         """Split lbinary at horizontal or vertical gaps recursively.
         
         - ``box`` current slice
         - ``mask`` (optional) binary mask for current box to focus
           line labels on (passed+sliced down recursively)
-        - ``is_partition`` whether ``mask`` was created by partitioning
+        - ``partition_type`` whether ``mask`` was created by partitioning
           immediately before (without any intermediate cuts), and thus
           must not be repeated in the current iteration
         
@@ -1231,7 +1311,7 @@ def lines2regions(binary, llabels,
             """Assign current line labels into new region, and re-order them inside."""
             nonlocal num_regions
             nonlocal relabel
-            linelabels = np.setdiff1d(np.unique(lbin), [0])
+            linelabels = np.setdiff1d(lbin, [0])
             if debug: LOG.debug('checking line labels %s for conflicts', str(linelabels))
             # when there is a conflict for a line label, assign (or keep) the more frequent region label
             linelabels = [label
@@ -1240,11 +1320,55 @@ def lines2regions(binary, llabels,
                               np.count_nonzero(lbin == label) > 0.5 * bincounts[label])]
             if not linelabels:
                 return
-            num_regions += 1
-            if debug: LOG.debug('new region {} for lines {}'.format(num_regions, linelabels))
+            if rlabels is None:
+                num_regions += 1
+                if debug:
+                    LOG.debug('new region {} for lines {}'.format(num_regions, linelabels))
+                else:
+                    LOG.debug('new region %d for %d lines', num_regions, len(linelabels))
+                relabel[linelabels] = num_regions
             else:
-                LOG.debug('new region %d for %d lines', num_regions, len(linelabels))
-            relabel[linelabels] = num_regions
+                # (partial) initial segmentation exists - order existing groups against rest,
+                # this must be done on full labels (bg+fg), so we first need to reconstruct
+                # this slice's llab/rlab
+                rlab = sl.cut(rlabels, box)
+                if isinstance(mask, np.ndarray):
+                    rlab = np.where(mask, rlab, 0)
+                llab = sl.cut(llabels, box)
+                if isinstance(mask, np.ndarray):
+                    llab = np.where(mask, llab, 0)
+                linelabels0 = np.zeros(llabels.max()+1, dtype=np.bool)
+                linelabels0[linelabels] = True
+                llab *= linelabels0[llab]
+                newregion = rlab.max()+1
+                rlab = np.where(llab, np.where(rlab, rlab, newregion), 0)
+                order = np.argsort(morph.reading_order((lbin>0) * rlab, rl, bt))
+                # get region label with highest share for each line,
+                # then assign it to that region
+                llab2rlab, llabcount = dict(), dict()
+                for line, region, count in morph.correspondences(llab, rlab).T:
+                    if line > 0 and region > 0 and count > llabcount.get(line, 0):
+                        llabcount[line] = count
+                        llab2rlab[line] = region
+                rlab2llab = dict()
+                for line, region in llab2rlab.items():
+                    rlab2llab.setdefault(region, list()).append(line)
+                for region in order:
+                    if not region in rlab2llab:
+                        continue
+                    lines = rlab2llab[region]
+                    num_regions += 1
+                    if region == newregion:
+                        if debug:
+                            LOG.debug('new region {} for lines {}'.format(num_regions, lines))
+                        else:
+                            LOG.debug('new region %d for %d lines', num_regions, len(lines))
+                    else:
+                        if debug:
+                            LOG.debug('new region {} for existing region {} lines {}'.format(num_regions, region, lines))
+                        else:
+                            LOG.debug('new region %d for existing region %d', num_regions, region)
+                    relabel[lines] = num_regions
         
         _, lcounts = np.unique(lbin, return_counts=True)
         if (len(lcounts) <= 2 or
@@ -1253,61 +1377,161 @@ def lines2regions(binary, llabels,
             finalize()
             return
         
-        # try cuts via annotated separators (strong integration)
+        # try split via annotated separators (strong integration)
         # i.e. does current slice of sepmask contain true partitions?
-        # (at least 2 partitions which contain at least 1 significant line label each)
+        # (at least 2 partitions which contain at least 1 line label each,
+        #  where each line label in that partition in the current slice
+        #  must cover a significant part of that line label in the full image)
         partitions, npartitions = None, 0
         if (isinstance(sepmask, np.ndarray) and
             np.count_nonzero(sepmask)):
             sepm = sl.cut(sepmask, box)
             if isinstance(mask, np.ndarray):
                 sepm = np.where(mask, sepm, 1)
-            if is_partition:
-                # sepmask already applied in current X-Y branch:
-                # don't try again, but provide `partitions` for next step
-                partitions, npartitions = 1-sepm, 1
-            else:
-                # sepmask already applied in higher X-Y branch:
-                # apply again in this cut like another separator
+            if isinstance(rlabels, np.ndarray):
+                # treat existing regions like separators
+                rlab = sl.cut(rlabels, box)
+                if isinstance(mask, np.ndarray):
+                    rlab = np.where(mask, rlab, 0)
+                sepm = np.where(rlab, 1, sepm)
+            # provide `partitions` for next step
+            partitions, npartitions = 1-sepm, 1
+            new_partition_type = None
+            # try to find `partitions` in current step
+            if partition_type != 'splitmask':
+                # sepmask not applied yet, or already applied in higher X-Y branch:
+                # try to apply in this cut like another separator
                 partitions, npartitions = morph.label(1-sepm)
                 if npartitions > 1:
-                    # delete partitions that have no significant line labels
-                    lpartitions = [None]
+                    # first, delete partitions that have no significant line labels
+                    splitmap = np.zeros(len(objects)+1, dtype=np.int)
                     for label in range(1, npartitions+1):
-                        linelabels = np.bincount(lbin[partitions==label], minlength=len(objects))
-                        linelabels[0] = 0 # without bg
+                        linecounts = np.bincount(lbin[partitions==label], minlength=len(objects))
+                        linecounts[0] = 0 # without bg
                         # get significant line labels for this partition
-                        # (but keep insignificant non-empty labels when complete)
-                        linelabels = np.nonzero(linelabels >= np.minimum(
-                            np.maximum(bincounts, 1), min_line * scale))[0]
-                        if np.any(linelabels):
-                            lpartitions.append(linelabels)
+                        # (but keep insignificant non-empty labels if complete)
+                        mincounts = np.minimum(min_line * scale, np.maximum(1, bincounts))
+                        linelabels = np.nonzero(linecounts >= mincounts)[0]
+                        if linelabels.size:
+                            splitmap[linelabels] = label
                             if debug: LOG.debug('  sepmask partition %d: %s', label, str(linelabels))
                         else:
-                            lpartitions.append(None)
                             partitions[partitions==label] = 0
-                    # merge partitions that share any significant line labels
+                    # second, merge partitions that share any significant line labels
                     for label1 in range(1, npartitions+1):
-                        if lpartitions[label1] is None:
+                        if not np.any(splitmap == label1):
                             continue
                         for label2 in range(label1+1, npartitions+1):
-                            if lpartitions[label2] is None:
+                            if not np.any(splitmap == label2):
                                 continue
-                            if np.any(np.intersect1d(lpartitions[label1],
-                                                     lpartitions[label2])):
+                            if np.any((splitmap == label1) & (splitmap == label2)):
+                                splitmap[splitmap == label2] = label1
                                 partitions[partitions==label2] = label1
-                                lpartitions[label1] = np.union1d(lpartitions[label1],
-                                                                 lpartitions[label2])
-                                lpartitions[label2] = [0]
-                    # re-label and re-order surviving partitions
-                    lpartitions = np.setdiff1d(np.unique(partitions), [0]) # without bg/sepm
-                    npartitions = len(lpartitions)
+                    npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
+                    new_partition_type = 'splitmask'
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
+            if partition_type != 'topological':
+                # try to partition spanning lines against separator-split lines
+                # get current slice's line labels
+                def find_topological():
+                    # run only if needed (no other partition/slicing possible)
+                    nonlocal partitions, npartitions, new_partition_type
+                    llab = sl.cut(llabels, box)
+                    if isinstance(mask, np.ndarray):
+                        llab = np.where(mask, llab, 0)
+                    obj = [sl.intersect(o, box) for o in objects]
+                    # get current slice's foreground
+                    bin = sl.cut(binary, box)
+                    if isinstance(mask, np.ndarray):
+                        bin = np.where(mask, bin, 0)
+                    # get current slice's separator labels
+                    seplab, nseps = morph.label(sepm)
+                    if nseps == 0:
+                        return
+                    # sepind = np.unique(seplab)
+                    # (but keep only those with large fg i.e. ignore white-space seps)
+                    seplabs, counts = np.unique(seplab * bin, return_counts=True)
+                    kept = np.in1d(seplab.ravel(), seplabs[counts > scale * min_line])
+                    seplab = seplab * kept.reshape(*seplab.shape)
+                    DSAVE('seplab', seplab)
+                    sepobj = morph.find_objects(seplab)
+                    if not len(sepobj):
+                        return
+                    # get current slice's line labels
+                    # (but keep only those with foreground)
+                    linelabels = np.setdiff1d(np.unique(lbin), [0])
+                    nlines = linelabels.max() + 1
+                    # find pairs of lines above each other with a separator next to them
+                    leftseps = np.zeros((nlines, nseps), np.bool)
+                    rghtseps = np.zeros((nlines, nseps), np.bool)
+                    for line in linelabels:
+                        for i, sep in enumerate(sepobj):
+                            if sep is None:
+                                continue
+                            if sl.yoverlap(sep, obj[line]) / sl.height(obj[line]) <= 0.75:
+                                continue
+                            sepx = np.nonzero(seplab[obj[line][0]] == i + 1)[1]
+                            binx = np.nonzero(lbin[obj[line][0]] == line)[1]
+                            if not binx.size:
+                                continue
+                            # more robust to noise: 95% instead of max(), 5% instead of min()
+                            if sepx.max() <= np.percentile(binx, 5):
+                                leftseps[line, i] = True
+                            if sepx.min() >= np.percentile(binx, 95):
+                                rghtseps[line, i] = True
+                    # true separators have some lines on either side
+                    trueseps = leftseps.max(axis=0) & rghtseps.max(axis=0)
+                    if not np.any(trueseps):
+                        return
+                    if debug: LOG.debug("trueseps: %s", str(trueseps))
+                    neighbours = np.zeros((nlines, nlines), np.bool)
+                    for i in linelabels:
+                        for j in linelabels[i+1:]:
+                            if sl.yoverlap_rel(obj[i], obj[j]) > 0.5:
+                                continue
+                            # pair must have common separator on one side,
+                            # which must also have some line on the other side
+                            if (np.any(leftseps[i] & leftseps[j] & trueseps) or
+                                np.any(rghtseps[i] & rghtseps[j] & trueseps)):
+                                if debug: LOG.debug("neighbours: %d/%d", i, j)
+                                neighbours[i,j] = True
+                    if not np.any(neighbours):
+                        return
+                    # group neighbours by adjacency (i.e. put any contiguous pairs
+                    # of such line labels into the same group)
+                    nlabels = llab.max() + 1
+                    splitmap = np.zeros(nlabels, dtype=np.int)
+                    for i, j in zip(*neighbours.nonzero()):
+                        if splitmap[i] > 0:
+                            splitmap[j] = splitmap[i]
+                        elif splitmap[j] > 0:
+                            splitmap[i] = splitmap[j]
+                        else:
+                            splitmap[i] = i
+                            splitmap[j] = i
+                    nsplits = splitmap.max()
+                    # group non-neighbours by adjacency (i.e. put any other contiguous
+                    # non-empty line labels into the same group)
+                    nonneighbours = (splitmap==0)[llab] * (llab > 0) * (sepm == 0)
+                    nonneighbours, _ = morph.label(nonneighbours)
+                    for i, j in morph.correspondences(nonneighbours, llab, False).T:
+                        if i > 0 and j > 0:
+                            splitmap[j] = i + nsplits
+                    if debug: LOG.debug('  groups of adjacent lines: %s', str(splitmap))
+                    partitions = splitmap[llab]
+                    DSAVE('partitions', partitions)
+                    npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
                     if npartitions > 1:
-                        # sort partitions in reading order
-                        order = morph.reading_order(partitions,rl,bt)
-                        partitions = order[partitions]
-                        #lpartitions = order[lpartitions]
+                        if debug: LOG.debug("  found %d spanning partitions", npartitions)
+                        # re-assign background to nearest partition
+                        partitions = morph.spread_labels(np.where(llab, partitions, 0))
+                        # re-assert mask, if any
+                        if isinstance(mask, np.ndarray):
+                            partitions = np.where(mask, partitions, 0)
+                        new_partition_type = 'topological'
+            else:
+                def find_topological():
+                    return
         
         # try cuts via h/v projection profiles
         y = np.mean(lbin>0, axis=1)
@@ -1329,7 +1553,7 @@ def lines2regions(binary, llabels,
                 llab[box[0],box[1].stop-1-i] = -10*np.log(y+1e-9)
                 llab[box[0].start+i,box[1]] = -10*np.log(x+1e-9)
                 llab[box[0].stop-1-i,box[1]] = -10*np.log(x+1e-9)
-            DSAVE('recursive_x_y_cut' + ('_masked' if is_partition else ''), llab)
+            DSAVE('recursive_x_y_cut_' + (partition_type or 'sliced'), llab)
         gap_weights = list()
         for is_horizontal, profile in enumerate([y, x]):
             # find gaps in projection profiles
@@ -1431,8 +1655,7 @@ def lines2regions(binary, llabels,
         y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
         x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
         if debug: LOG.debug('   prominent y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
-        if (isinstance(sepmask, np.ndarray) and
-            np.count_nonzero(sepmask)):
+        if npartitions > 0:
             # TODO this can be avoided when backtracking below
             # suppress peaks creating fewer partitions than others --
             # how large in our preferred direction will the new partitions
@@ -1458,6 +1681,9 @@ def lines2regions(binary, llabels,
             y_gaps, y_weights = y_gaps[y_allowed], y_weights[y_allowed]
             x_gaps, x_weights = x_gaps[x_allowed], x_weights[x_allowed]
             if debug: LOG.debug('   most partitioning y_gaps {} x_gaps {}'.format(y_gaps, x_gaps))
+        else:
+            y_partitionscores = None
+            x_partitionscores = None
         # suppress less prominent peaks again, this time stricter
         y_prominence = np.amax(y_weights, initial=0)
         x_prominence = np.amax(x_weights, initial=0)
@@ -1499,6 +1725,11 @@ def lines2regions(binary, llabels,
             partitionscores = y_partitionscores
             lim = len(y)
 
+        if not np.any(gaps) and npartitions == 1:
+            # no slices and no partitions, but separators exist
+            # so try to fall back to more elaborate partitioning
+            find_topological() # partitions, npartitions, new_partition_type
+
         # now that we have a decision on direction (x/y)
         # as well as scores for its gaps, decide whether
         # to prefer cuts at annotated separators (partitions) instead
@@ -1512,7 +1743,9 @@ def lines2regions(binary, llabels,
                 sum(map(sl.height if prefer_vertical else sl.width,
                         (morph.find_objects(partitions)))) > np.max(
                             partitionscores, initial=0))):
-            # continue on each partition by suppressing the others
+            # continue on each partition by suppressing the others, respectively
+            order = morph.reading_order(partitions,rl,bt)
+            partitions = order[partitions]
             LOG.debug('cutting by %d partitions on %s', npartitions, box)
             if debug:
                 # show current cut/box inside full image
@@ -1525,7 +1758,7 @@ def lines2regions(binary, llabels,
                 DSAVE('recursive_x_y_cut_partitions', llab2)
             for label in range(1, npartitions+1):
                 LOG.debug('next partition %d on %s', label, box)
-                recursive_x_y_cut(box, mask=partitions==label, is_partition=True)
+                recursive_x_y_cut(box, mask=partitions==label, partition_type=new_partition_type)
             return
         
         if not np.any(gaps):
@@ -1546,12 +1779,12 @@ def lines2regions(binary, llabels,
         for start, stop in cuts:
             #box[1*choose_vertical] ... dim to cut in
             #box[1-choose_vertical] ... dim to range over
-            if choose_vertical:
+            if choose_vertical: # "cut in vertical direction"
                 sub = sl.box(0, len(y), start, stop)
-            else:
+            else: # "cut in horizontal direction"
                 sub = sl.box(start, stop, 0, len(x))
-            LOG.debug('next %s block on %s is %s', 'vertical'
-                      if choose_vertical else 'horizontal',
+            LOG.debug('next %s block on %s is %s', 'horizontal'
+                      if choose_vertical else 'vertical',
                       box, sub)
             recursive_x_y_cut(sl.compose(box,sub),
                               mask=sl.cut(mask,sub) if isinstance(mask, np.ndarray)

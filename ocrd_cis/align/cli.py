@@ -8,6 +8,7 @@ from ocrd.decorators import ocrd_cli_options
 from ocrd.decorators import ocrd_cli_wrap_processor
 from ocrd_utils import MIMETYPE_PAGE
 from ocrd_utils import getLogger
+from ocrd_utils import getLevelName
 from ocrd_utils import make_file_id
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import to_xml
@@ -15,24 +16,20 @@ from ocrd_models.ocrd_page_generateds import TextEquivType
 from ocrd_cis import JavaAligner
 from ocrd_cis import get_ocrd_tool
 
-LOG_LEVEL = 'INFO'
-
 @click.command()
 @ocrd_cli_options
 def ocrd_cis_align(*args, **kwargs):
-    if 'log_level' in kwargs and kwargs['log_level']:
-        global LOG_LEVEL
-        LOG_LEVEL = kwargs['log_level']
     return ocrd_cli_wrap_processor(Aligner, *args, **kwargs)
 
 class Aligner(Processor):
-    LOG_LEVEL = 'INFO'
     def __init__(self, *args, **kwargs):
         ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
         kwargs['version'] = ocrd_tool['version']
         super(Aligner, self).__init__(*args, **kwargs)
-        self.log = getLogger('cis.Processor.Aligner')
+
+        if hasattr(self, 'workspace'):
+            self.log = getLogger('cis.Processor.Aligner')
 
     def process(self):
         ifgs = self.input_file_grp.split(",")  # input file groups
@@ -100,14 +97,14 @@ class Aligner(Processor):
                 te = TextEquivType(
                     Unicode=get_textequiv_unicode(line.region),
                     conf=get_textequiv_conf(line.region),
-                    dataType="ocrd-cis-line-alignment",
-                    dataTypeDetails=ddt)
+                    dataType="other",
+                    dataTypeDetails="ocrd-cis-line-alignment:" + ddt)
                 lines[0].region.add_TextEquiv(te)
             else:
                 self.log.debug("len: %i, i: %i", len(lines[0].region.get_TextEquiv()), i)
-                lines[0].region.get_TextEquiv()[i].set_dataType(
-                    "ocrd-cis-line-alignment-master-ocr")
-            lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(ddt)
+                lines[0].region.get_TextEquiv()[i].set_dataType("other")
+                lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(
+                    "ocrd-cis-line-alignment-master-ocr:" + ddt)
             lines[0].region.get_TextEquiv()[i].set_index(i+1)
         self.align_words(lines)
 
@@ -149,8 +146,8 @@ class Aligner(Processor):
                 ifg = word.input_file.input_file_group
                 self.log.debug("(empty) word alignment: [%s]", ifg)
                 te = TextEquivType(
-                    dataType="ocrd-cis-empty-word-alginment",
-                    dataTypeDetails=ifg)
+                    dataType="other",
+                    dataTypeDetails="ocrd-cis-empty-word-alignment:" + ifg)
                 words[0].region[0].add_TextEquiv(te)
                 words[0].region[0].get_TextEquiv()[i].set_index(i+1)
                 continue
@@ -165,13 +162,13 @@ class Aligner(Processor):
                 te = TextEquivType(
                     Unicode=_str,
                     conf=conf,
-                    dataType="ocrd-cis-word-alignment",
-                    dataTypeDetails=ddt)
+                    dataType="other",
+                    dataTypeDetails="ocrd-cis-word-alignment:" + ddt)
                 words[0].region[0].add_TextEquiv(te)
             else:
-                words[0].region[0].get_TextEquiv()[i].set_dataType(
-                    'ocrd-cis-word-alignment-master-ocr')
-                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(ddt)
+                words[0].region[0].get_TextEquiv()[i].set_dataType("other")
+                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(
+                    "ocrd-cis-word-alignment-master-ocr:" + ddt)
             words[0].region[0].get_TextEquiv()[i].set_index(i+1)
 
     def find_word(self, tokens, regions, t="other"):
@@ -292,7 +289,7 @@ class Aligner(Processor):
             self.log.debug("input line: %s", i)
         n = len(ifs)
         self.log.debug("starting java client")
-        p = JavaAligner(n, LOG_LEVEL or 'INFO')
+        p = JavaAligner(n, getLevelName(self.log.getEffectiveLevel()))
         return p.run("\n".join(_input))
 
 class FileAlignment:
