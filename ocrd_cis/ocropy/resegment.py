@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import os.path
+from itertools import chain
 import numpy as np
 from skimage import draw
 from shapely.geometry import Polygon, asPolygon, LineString
@@ -482,6 +483,10 @@ def join_polygons(polygons, loc=''):
     # compoundp = unary_union(polygons)
     # jointp = compoundp.convex_hull
     LOG = getLogger('processor.OcropyResegment')
+    polygons = list(chain.from_iterable([
+        poly.geoms if poly.type in ['MultiPolygon', 'GeometryCollection']
+        else [poly]
+        for poly in polygons]))
     if len(polygons) == 1:
         return polygons[0]
     # get equidistant list of points along hull
