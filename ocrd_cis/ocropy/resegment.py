@@ -385,7 +385,8 @@ class OcropyResegment(Processor):
             # combine all assigned new lines to single outline polygon
             if len(new_lines) > 1:
                 LOG.debug("joining %d new line polygons for '%s'", len(new_lines), line.id)
-            new_polygon = join_polygons([intersections[(i, j)] for i in new_lines], loc=line.id)
+            new_polygon = join_polygons([intersections[(i, j)] for i in new_lines],
+                                        loc=line.id, scale=scale)
             line_polygons[j] = new_polygon
             # convert back to absolute (page) coordinates:
             line_polygon = coordinates_for_segment(new_polygon.exterior.coords[:-1],
@@ -460,7 +461,8 @@ def spread_dist(lines, old_labels, new_labels, binarized, components, coords,
         else:
             # get alpha shape
             poly = join_polygons([make_valid(Polygon(contour))
-                                  for contour in contours], loc=line.id)
+                                  for contour in contours],
+                                 loc=line.id, scale=scale)
         poly = poly.exterior.coords[:-1]
         polygon = coordinates_for_segment(poly, None, coords)
         polygon = polygon_for_parent(polygon, line.parent_object_)
@@ -478,7 +480,7 @@ def diff_polygons(poly1, poly2):
     poly = make_valid(poly)
     return poly
 
-def join_polygons(polygons, loc=''):
+def join_polygons(polygons, loc='', scale=20):
     """construct concave hull (alpha shape) from input polygons"""
     # compoundp = unary_union(polygons)
     # jointp = compoundp.convex_hull
@@ -493,14 +495,14 @@ def join_polygons(polygons, loc=''):
     # (otherwise alphashape will jump across the interior)
     points = [poly.exterior.interpolate(dist).coords[0] # .xy
               for poly in polygons
-              for dist in np.arange(0, poly.length, 5.0)]
+              for dist in np.arange(0, poly.length, scale / 2)]
     #alpha = alphashape.optimizealpha(points) # too slow
-    alpha = 0.05
+    alpha = 0.03
     jointp = alphashape.alphashape(points, alpha)
     tries = 0
     # from descartes import PolygonPatch
     # import matplotlib.pyplot as plt
-    while jointp.type in ['MultiPolygon', 'GeometryCollection']:
+    while jointp.type in ['MultiPolygon', 'GeometryCollection'] or len(jointp.interiors):
         # plt.figure()
         # plt.gca().scatter(*zip(*points))
         # for geom in jointp.geoms:
