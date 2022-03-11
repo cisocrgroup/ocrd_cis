@@ -266,9 +266,10 @@ class OcropyResegment(Processor):
                         continue
                     line_polygon = baseline_of_segment(line, parent_coords)
                     line_ltr = line_polygon[0,0] < line_polygon[-1,0]
-                    line_polygon = make_valid(join_polygons(LineString(line_polygon).buffer(
+                    line_polygon = make_valid(join_polygons([LineString(line_polygon).buffer(
                         # left-hand side if left-to-right, and vice versa
-                        scale * (-1) ** line_ltr, single_sided=True), loc=line.id))
+                        scale * (-1) ** line_ltr, single_sided=True)],
+                                                            loc=line.id, scale=scale))
                     line_polygon = np.array(line_polygon.exterior, np.int)[:-1]
                     line_y, line_x = draw.polygon(line_polygon[:, 1],
                                                   line_polygon[:, 0],
