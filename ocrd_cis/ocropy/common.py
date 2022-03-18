@@ -996,7 +996,9 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
 #   (which must be split anyway)
 # - with tighter polygonal spread around foreground
 # - with spread of line labels against separator labels
+# - with baseline extraction
 # - return bg line and sep labels intead of just fg line labels
+# - return baseline coords, too
 @checks(ABINARY2)
 def compute_segmentation(binary,
                          zoom=1.0,
@@ -1046,6 +1048,7 @@ def compute_segmentation(binary,
        foreground may remain unlabelled for
        separators and other non-text like small
        noise, or large drop-capitals / images),
+    - list of Numpy arrays of baseline coordinates [y, x points in lr order]
     - Numpy array of horizontal foreground lines mask,
     - Numpy array of vertical foreground lines mask,
     - Numpy array of large/non-text foreground component mask,
@@ -1144,7 +1147,81 @@ def compute_segmentation(binary,
 
     #segmentation = llabels*binary
     #return segmentation
-    return llabels, hlines, vlines, images, colseps, scale
+    blines = compute_baselines(bottom, top, llabels, scale)
+    return llabels, blines, hlines, vlines, images, colseps, scale
+
+@checks(AFLOAT2,AFLOAT2,SEGMENTATION,NUMBER)
+def compute_baselines(bottom, top, linelabels, scale, method='bottom'):
+    """Get the coordinates of baselines running along each bottom gradient peak."""
+    seeds = linelabels > 0
+    # smooth bottom+top maps horizontally for centerline estimation
+    bot = filters.gaussian_filter(bottom, (scale*0.25,scale), mode='constant')
+    top = filters.gaussian_filter(top, (scale*0.25,scale), mode='constant')
+    # idea: center is where bottom and top gradient meet in the middle
+    # (but between top and bottom, not between bottom and top)
+    # - calculation via numpy == or isclose is too fragile numerically:
+    #clines = np.isclose(top, bottom, rtol=0.5) & (np.diff(top - bottom, axis=0, append=0) < 0)
+    # - calculation via zero crossing of bop-bottom is more robust,
+    #   but needs post-processing for lines with much larger height than scale
+    if method == 'center':
+        blines = (np.diff(np.sign(top - bottom), axis=0, append=0) < 0) & seeds
+        #DSAVE('centerlines', blines)
+    # - calculation via peak gradient
+    elif method == 'bottom':
+        bot1d = np.diff(bot, axis=0, append=0)
+        bot1d = np.diff(np.sign(bot1d), axis=0, append=0) < 0
+        bot1d &= bot > 0
+        #DSAVE('bot1d', bot1d)
+        blines = bot1d
+    baselabels, nbaselabels = morph.label(blines)
+    baseslices = [(slice(0,0),slice(0,0))] + morph.find_objects(baselabels)
+    # if multiple labels per seed, ignore the ones above others
+    # (can happen due to mis-estimation of scale)
+    corrs = morph.correspondences(linelabels, baselabels).T
+    labelmap = {}
+    #DSAVE('baselines', baselabels)
+    def partitions(adj, starti, startpart=None):
+        for i in range(starti, len(adj)):
+            if startpart is None:
+                yield from partitions(adj, i + 1, [i])
+            elif all(adj[i][j] for j in startpart):
+                yield from partitions(adj, i + 1, [i] + startpart)
+        if startpart is not None:
+            yield startpart
+    for line in np.unique(linelabels):
+        if not line: continue # ignore bg line
+        corrinds = corrs[:, 0] == line
+        corrinds[corrs[:, 1] == 0] = False # ignore bg baseline
+        if not np.any(corrinds): continue
+        corrinds = corrinds.nonzero()[0]
+        if len(corrinds) == 1:
+            labelmap.setdefault(line, list()).append(corrs[corrinds[0], 1])
+            continue
+        nonoverlapping = ~np.eye(len(corrinds), dtype=np.bool)
+        for i, indi in enumerate(corrinds[:-1]):
+            baselabeli = corrs[indi, 1]
+            baseslicei = baseslices[baselabeli]
+            for j, indj in enumerate(corrinds[i + 1:], i + 1):
+                baselabelj = corrs[indj, 1]
+                baseslicej = baseslices[baselabelj]
+                if sl.xoverlaps(baseslicei, baseslicej):
+                    nonoverlapping[i, j] = False
+                    nonoverlapping[j, i] = False
+        def pathlen(path):
+            return sum(corrs[corrinds[pos], 2] for pos in path)
+        corrgroups = sorted(partitions(nonoverlapping, 0), key=pathlen)
+        # select longest path
+        corrinds = corrinds[corrgroups[-1]]
+        labelmap.setdefault(line, list()).extend(corrs[corrinds, 1])
+    basepoints = []
+    for line in np.unique(linelabels):
+        if line not in labelmap: continue
+        linemask = linelabels == line
+        points = []
+        for label in labelmap[line]:
+            points.extend(list(zip(*np.where((baselabels == label) & linemask))))
+        basepoints.append(points)
+    return basepoints
 
 # from ocropus-gpageseg, but
 # - on both foreground and background,
@@ -1741,7 +1818,7 @@ def lines2regions(binary, llabels,
                 npartitions > len(gaps)+1 or
                 # partitions without the cut still score better than after
                 sum(map(sl.height if prefer_vertical else sl.width,
-                        (morph.find_objects(partitions)))) > np.max(
+                        morph.find_objects(partitions))) > np.max(
                             partitionscores, initial=0))):
             # continue on each partition by suppressing the others, respectively
             order = morph.reading_order(partitions,rl,bt)
