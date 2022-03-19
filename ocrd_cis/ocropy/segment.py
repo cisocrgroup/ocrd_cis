@@ -669,9 +669,8 @@ class OcropySegment(Processor):
             element_array[sepmask] = np.amax(element_array) # clip to white/bg
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
-                image_clipped, file_id + '.IMG-CLIP',
-                page_id=page_id,
-                file_grp=self.output_file_grp)
+                image_clipped, file_id + '.IMG-CLIP', self.output_file_grp,
+                page_id=page_id)
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
         else:
@@ -708,9 +707,8 @@ class OcropySegment(Processor):
             element_array[sep_bin] = np.amax(element_array) # clip to white/bg
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
-                image_clipped, file_id + '.IMG-CLIP',
-                page_id=page_id,
-                file_grp=self.output_file_grp)
+                image_clipped, file_id + '.IMG-CLIP', self.output_file_grp,
+                page_id=page_id)
             # update PAGE (reference the image file):
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))

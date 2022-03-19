@@ -142,10 +142,8 @@ class OcropyDeskew(Processor):
             segment_coords['features'] += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
-            segment_image,
-            file_id + '.IMG-DESKEW',
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            segment_image, file_id + '.IMG-DESKEW', self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
