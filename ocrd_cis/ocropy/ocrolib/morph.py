@@ -21,7 +21,8 @@ def label(image,**kw):
     """
     # default connectivity in OpenCV: 8 (which is equivalent to...)
     # default connectivity in scikit-image: 2
-    n, labels = cv2.connectedComponents(image.astype(uint8), connectivity=4)
+    # connectivity=4 crashes (segfaults) OpenCV#21366
+    n, labels = cv2.connectedComponents(image.astype(uint8))
     #n, labels = cv2.connectedComponentsWithAlgorithm(image.astype(uint8), connectivity=4, ltype=2, ccltype=cv2.CCL_DEFAULT)
     return labels, n-1
     # try: return measurements.label(image,**kw)
