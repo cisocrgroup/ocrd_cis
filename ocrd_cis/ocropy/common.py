@@ -1141,7 +1141,7 @@ def compute_segmentation(binary,
     LOG.debug('sorting labels by reading order')
     llabels = morph.reading_order(llabels,rl,bt)[llabels]
     DSAVE('llabels_ordered', llabels)
-    
+
     #segmentation = llabels*binary
     #return segmentation
     return llabels, hlines, vlines, images, colseps, scale

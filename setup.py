@@ -43,7 +43,7 @@ setup(
         'scipy',
         'numpy>=1.17.0',
         'pillow>=7.1.2',
-        'shapely>=1.7.1,<1.8',
+        'shapely>=1.7.1',
         'scikit-image',
         'alphashape',
         'opencv-python-headless',

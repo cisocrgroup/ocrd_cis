@@ -5,7 +5,7 @@ import numpy as np
 from skimage import draw
 from skimage.morphology import convex_hull_image
 import cv2
-from shapely.geometry import Polygon, asPolygon
+from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
 from shapely.ops import unary_union
 
@@ -125,14 +125,15 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
                 polygon = polygon.simplify(tolerance)
                 if polygon.is_valid:
                     break
-            polygon = polygon.exterior.coords[:-1] # keep open
-            if len(polygon) < 4:
+            poly = polygon.exterior.coords[:-1] # keep open
+            if len(poly) < 4:
                 LOG.warning('Label %d contour %d has less than 4 points for %s',
                             label, i, name)
                 continue
-            results.append((label, polygon))
+            results.append((label, poly))
             result_labels[contour_labels == i+1] = len(results)
     return results, result_labels
+
 
 class OcropySegment(Processor):
 
@@ -761,7 +762,7 @@ def make_intersection(poly1, poly2):
     if interp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity
-        interp = asPolygon(np.round(interp.exterior.coords))
+        interp = Polygon(np.round(interp.exterior.coords))
         interp = make_valid(interp)
     return interp
 

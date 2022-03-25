@@ -4,7 +4,7 @@ import os.path
 from itertools import chain
 import numpy as np
 from skimage import draw
-from shapely.geometry import Polygon, asPolygon, LineString
+from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
 from shapely.ops import unary_union
 import alphashape
@@ -209,7 +209,7 @@ class OcropyResegment(Processor):
             segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
             segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
             line_polygons.append(prep(segment_polygon))
-            segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
+            segment_polygon = np.array(segment_polygon.exterior.coords, np.int)[:-1]
             # draw.polygon: If any segment_polygon lies outside of parent
             # (causing negative/above-max indices), either fully or partially,
             # then this will silently ignore them. The caller does not need
@@ -224,7 +224,7 @@ class OcropyResegment(Processor):
                       segment.id, page_id if fullpage else parent.id)
             segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
             segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
-            segment_polygon = np.array(segment_polygon.exterior, np.int)[:-1]
+            segment_polygon = np.array(segment_polygon.exterior.coords, np.int)[:-1]
             ignore_bin[draw.polygon(segment_polygon[:, 1],
                                     segment_polygon[:, 0],
                                     parent_bin.shape)] = False
@@ -271,7 +271,7 @@ class OcropyResegment(Processor):
                         # left-hand side if left-to-right, and vice versa
                         scale * (-1) ** line_ltr, single_sided=True)],
                                                             loc=line.id, scale=scale))
-                    line_polygon = np.array(line_polygon.exterior, np.int)[:-1]
+                    line_polygon = np.array(line_polygon.exterior.coords, np.int)[:-1]
                     line_y, line_x = draw.polygon(line_polygon[:, 1],
                                                   line_polygon[:, 0],
                                                   parent_bin.shape)
@@ -284,8 +284,8 @@ class OcropyResegment(Processor):
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
                 maxseps=0, maxcolseps=len(ignore), maximages=0)
         except Exception as err:
-            LOG.warning('Cannot line-segment %s "%s": %s',
-                        tag, page_id if fullpage else parent.id, err)
+            LOG.error('Cannot line-segment %s "%s": %s',
+                      tag, page_id if fullpage else parent.id, err)
             return
         LOG.info("Found %d new line labels for %d existing lines on %s '%s'",
                  new_line_labels.max(), len(lines), tag, parent.id)
@@ -476,7 +476,7 @@ def diff_polygons(poly1, poly2):
     if poly.type == 'MultiPolygon':
         poly = poly.convex_hull
     if poly.minimum_clearance < 1.0:
-        poly = asPolygon(np.round(poly.exterior.coords))
+        poly = Polygon(np.round(poly.exterior.coords))
     poly = make_valid(poly)
     return poly
 
@@ -517,7 +517,7 @@ def join_polygons(polygons, loc='', scale=20):
     if jointp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity
-        jointp = asPolygon(np.round(jointp.exterior.coords))
+        jointp = Polygon(np.round(jointp.exterior.coords))
         jointp = make_valid(jointp)
     return jointp
 
