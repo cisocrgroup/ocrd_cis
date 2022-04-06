@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import os.path
+from itertools import chain
 import numpy as np
 from skimage import draw
 from skimage.morphology import convex_hull_image
@@ -8,6 +9,7 @@ import cv2
 from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
 from shapely.ops import unary_union
+import alphashape
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -142,43 +144,10 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
             # get baseline segments intersecting with this line mask
             # and concatenate them from left to right
             if baselines is not None:
-                base = []
-                for baseline in baselines:
-                    baseline = baseline.intersection(polygon)
-                    # post-process
-                    if (baseline.is_empty or
-                        baseline.type in ['Point', 'MultiPoint']):
-                        continue
-                    base_x = [pt[0] for pt in base]
-                    base_left = min(base_x, default=0)
-                    base_right = max(base_x, default=0)
-                    left = baseline.bounds[0]
-                    right = baseline.bounds[2]
-                    if (baseline.type == 'GeometryCollection' or
-                        baseline.type.startswith('Multi')):
-                        # heterogeneous result: filter point
-                        for geom in baseline.geoms:
-                            if geom.type == 'Point':
-                                continue
-                            left = geom.bounds[0]
-                            right = geom.bounds[2]
-                            if left > base_right:
-                                base.extend(geom.coords)
-                                base_right = right
-                            elif right < base_left:
-                                base = list(geom.coords) + base
-                                base_left = left
-                            else:
-                                LOG.warning("baseline part component crosses existing x")
-                                continue
-                    elif left > base_right:
-                        base.extend(baseline.coords)
-                    elif right < base_left:
-                        base = list(baseline.coords) + base
-                    else:
-                        LOG.warning("baseline part crosses existing x")
-                        continue
-                    assert all(p1[0] < p2[0] for p1, p2 in zip(base[:-1],base[1:])), base
+                base = join_baselines([baseline.intersection(polygon)
+                                       for baseline in baselines], name)
+                if base is not None:
+                    base = base.coords
             else:
                 base = None
             results.append((label, poly, base))
@@ -833,6 +802,97 @@ def make_valid(polygon):
         # simplification may require a larger tolerance
         polygon = polygon.simplify(tolerance)
     return polygon
+
+def diff_polygons(poly1, poly2):
+    poly = poly1.difference(poly2)
+    if poly.type == 'MultiPolygon':
+        poly = poly.convex_hull
+    if poly.minimum_clearance < 1.0:
+        poly = Polygon(np.round(poly.exterior.coords))
+    poly = make_valid(poly)
+    return poly
+
+def join_polygons(polygons, loc='', scale=20):
+    """construct concave hull (alpha shape) from input polygons"""
+    # compoundp = unary_union(polygons)
+    # jointp = compoundp.convex_hull
+    LOG = getLogger('processor.OcropyResegment')
+    polygons = list(chain.from_iterable([
+        poly.geoms if poly.type in ['MultiPolygon', 'GeometryCollection']
+        else [poly]
+        for poly in polygons]))
+    if len(polygons) == 1:
+        return polygons[0]
+    # get equidistant list of points along hull
+    # (otherwise alphashape will jump across the interior)
+    points = [poly.exterior.interpolate(dist).coords[0] # .xy
+              for poly in polygons
+              for dist in np.arange(0, poly.length, scale / 2)]
+    #alpha = alphashape.optimizealpha(points) # too slow
+    alpha = 0.01
+    jointp = alphashape.alphashape(points, alpha)
+    tries = 0
+    # from descartes import PolygonPatch
+    # import matplotlib.pyplot as plt
+    while jointp.type in ['MultiPolygon', 'GeometryCollection'] or len(jointp.interiors):
+        # plt.figure()
+        # plt.gca().scatter(*zip(*points))
+        # for geom in jointp.geoms:
+        #     plt.gca().add_patch(PolygonPatch(geom, alpha=0.2))
+        # plt.show()
+        alpha *= 0.7
+        tries += 1
+        if tries > 10:
+            LOG.warning("cannot find alpha for concave hull on '%s'", loc)
+            alpha = 0
+        jointp = alphashape.alphashape(points, alpha)
+    if jointp.minimum_clearance < 1.0:
+        # follow-up calculations will necessarily be integer;
+        # so anticipate rounding here and then ensure validity
+        jointp = Polygon(np.round(jointp.exterior.coords))
+        jointp = make_valid(jointp)
+    return jointp
+
+def join_baselines(baselines, loc=''):
+    LOG = getLogger('processor.OcropyResegment')
+    result = []
+    for baseline in baselines:
+        if (baseline.is_empty or
+            baseline.type in ['Point', 'MultiPoint']):
+            continue
+        base_x = [pt[0] for pt in result]
+        base_left = min(base_x, default=0)
+        base_right = max(base_x, default=0)
+        left = baseline.bounds[0]
+        right = baseline.bounds[2]
+        if (baseline.type == 'GeometryCollection' or
+            baseline.type.startswith('Multi')):
+            # heterogeneous result: filter point
+            for geom in baseline.geoms:
+                if geom.type == 'Point':
+                    continue
+                left = geom.bounds[0]
+                right = geom.bounds[2]
+                if left > base_right:
+                    result.extend(geom.coords)
+                    base_right = right
+                elif right < base_left:
+                    result = list(geom.coords) + result
+                    base_left = left
+                else:
+                    LOG.warning("baseline part component crosses existing x in %s", loc)
+                    continue
+        elif left > base_right:
+            result.extend(baseline.coords)
+        elif right < base_left:
+            result = list(baseline.coords) + result
+        else:
+            LOG.warning("baseline part crosses existing x in %s", loc)
+            continue
+        assert all(p1[0] < p2[0] for p1, p2 in zip(result[:-1], result[1:])), result
+    if not len(result):
+        return None
+    return LineString(result)
 
 def page_get_reading_order(ro, rogroup):
     """Add all elements from the given reading order group to the given dictionary.

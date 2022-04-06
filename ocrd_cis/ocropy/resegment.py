@@ -1,17 +1,15 @@
 from __future__ import absolute_import
 
 import os.path
-from itertools import chain
 import numpy as np
 from skimage import draw
 from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
 from shapely.ops import unary_union
-import alphashape
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
-    to_xml, PageType
+    to_xml, PageType, BaselineType
 )
 from ocrd import Processor
 from ocrd_utils import (
@@ -42,7 +40,10 @@ from .segment import (
     masks2polygons,
     polygon_for_parent,
     make_valid,
-    make_intersection
+    make_intersection,
+    join_baselines,
+    join_polygons,
+    diff_polygons
 )
 
 TOOL = 'ocrd-cis-ocropy-resegment'
@@ -281,7 +282,7 @@ class OcropyResegment(Processor):
                         scale=scale, loc=parent.id, threshold=threshold)
             return
         try:
-            new_line_labels, _, _, _, _, _, scale = compute_segmentation(
+            new_line_labels, new_baselines, _, _, _, _, scale = compute_segmentation(
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
                 maxseps=0, maxcolseps=len(ignore), maximages=0)
         except Exception as err:
@@ -292,12 +293,12 @@ class OcropyResegment(Processor):
                  new_line_labels.max(), len(lines), tag, parent.id)
         # polygonalize and prepare comparison
         new_line_polygons, new_line_labels = masks2polygons(
-            new_line_labels, parent_bin, '%s "%s"' % (tag, parent.id),
+            new_line_labels, new_baselines, parent_bin, '%s "%s"' % (tag, parent.id),
             min_area=640/zoom/zoom)
         DSAVE('line_labels', [np.mean(line_labels, axis=0), parent_bin])
         DSAVE('new_line_labels', [new_line_labels, parent_bin])
-        new_line_polygons = [make_valid(Polygon(line_poly))
-                             for line_label, line_poly in new_line_polygons]
+        new_line_polygons, new_baselines = zip(*[(make_valid(Polygon(line_poly)), LineString(baseline))
+                                                 for _, line_poly, baseline in new_line_polygons])
         # polygons for intersecting pairs
         intersections = dict()
         # ratio of overlap between intersection and new line
@@ -386,9 +387,11 @@ class OcropyResegment(Processor):
             # combine all assigned new lines to single outline polygon
             if len(new_lines) > 1:
                 LOG.debug("joining %d new line polygons for '%s'", len(new_lines), line.id)
-            new_polygon = join_polygons([intersections[(i, j)] for i in new_lines],
-                                        loc=line.id, scale=scale)
+            new_polygon = join_polygons([intersections[(i, j)]
+                                         for i in new_lines], loc=line.id, scale=scale)
             line_polygons[j] = new_polygon
+            new_baseline = join_baselines([new_polygon.intersection(new_baselines[i])
+                                           for i in new_lines], loc=line.id)
             # convert back to absolute (page) coordinates:
             line_polygon = coordinates_for_segment(new_polygon.exterior.coords[:-1],
                                                    parent_image, parent_coords)
@@ -398,6 +401,10 @@ class OcropyResegment(Processor):
                 return
             # annotate result:
             line.get_Coords().set_points(points_from_polygon(line_polygon))
+            if new_baseline is not None:
+                new_baseline = coordinates_for_segment(new_baseline.coords,
+                                                       parent_image, parent_coords)
+                line.set_Baseline(BaselineType(points=points_from_polygon(new_baseline)))
             # now also ensure the assigned lines do not overlap other existing lines
             for i in new_lines:
                 for otherj in np.nonzero(fits_fg[i] > 0.1)[0]:
@@ -480,58 +487,9 @@ def spread_dist(lines, old_labels, new_labels, binarized, components, coords,
             continue
         line.get_Coords().set_points(points_from_polygon(polygon))
 
-def diff_polygons(poly1, poly2):
-    poly = poly1.difference(poly2)
-    if poly.type == 'MultiPolygon':
-        poly = poly.convex_hull
-    if poly.minimum_clearance < 1.0:
-        poly = Polygon(np.round(poly.exterior.coords))
-    poly = make_valid(poly)
-    return poly
-
-def join_polygons(polygons, loc='', scale=20):
-    """construct concave hull (alpha shape) from input polygons"""
-    # compoundp = unary_union(polygons)
-    # jointp = compoundp.convex_hull
-    LOG = getLogger('processor.OcropyResegment')
-    polygons = list(chain.from_iterable([
-        poly.geoms if poly.type in ['MultiPolygon', 'GeometryCollection']
-        else [poly]
-        for poly in polygons]))
-    if len(polygons) == 1:
-        return polygons[0]
-    # get equidistant list of points along hull
-    # (otherwise alphashape will jump across the interior)
-    points = [poly.exterior.interpolate(dist).coords[0] # .xy
-              for poly in polygons
-              for dist in np.arange(0, poly.length, scale / 2)]
-    #alpha = alphashape.optimizealpha(points) # too slow
-    alpha = 0.01
-    jointp = alphashape.alphashape(points, alpha)
-    tries = 0
-    # from descartes import PolygonPatch
-    # import matplotlib.pyplot as plt
-    while jointp.type in ['MultiPolygon', 'GeometryCollection'] or len(jointp.interiors):
-        # plt.figure()
-        # plt.gca().scatter(*zip(*points))
-        # for geom in jointp.geoms:
-        #     plt.gca().add_patch(PolygonPatch(geom, alpha=0.2))
-        # plt.show()
-        alpha *= 0.7
-        tries += 1
-        if tries > 10:
-            LOG.warning("cannot find alpha for concave hull on '%s'", loc)
-            alpha = 0
-        jointp = alphashape.alphashape(points, alpha)
-    if jointp.minimum_clearance < 1.0:
-        # follow-up calculations will necessarily be integer;
-        # so anticipate rounding here and then ensure validity
-        jointp = Polygon(np.round(jointp.exterior.coords))
-        jointp = make_valid(jointp)
-    return jointp
-
 # zzz should go into core ocrd_utils
 def baseline_of_segment(segment, coords):
     line = np.array(polygon_from_points(segment.get_Baseline().points))
     line = transform_coordinates(line, coords['transform'])
     return np.round(line).astype(np.int32)
+
