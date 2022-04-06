@@ -31,7 +31,7 @@ from .ocrolib import midrange, morph
 from .common import (
     pil2array,
     odd,
-    # DSAVE,
+    DSAVE,
     # binarize,
     check_page,
     check_region,
@@ -294,8 +294,8 @@ class OcropyResegment(Processor):
         new_line_polygons, new_line_labels = masks2polygons(
             new_line_labels, parent_bin, '%s "%s"' % (tag, parent.id),
             min_area=640/zoom/zoom)
-        # DSAVE('line_labels', [np.mean(line_labels, axis=0), parent_bin])
-        # DSAVE('new_line_labels', [new_line_labels, parent_bin], disabled=False)
+        DSAVE('line_labels', [np.mean(line_labels, axis=0), parent_bin])
+        DSAVE('new_line_labels', [new_line_labels, parent_bin])
         new_line_polygons = [make_valid(Polygon(line_poly))
                              for line_label, line_poly in new_line_polygons]
         # polygons for intersecting pairs
@@ -421,12 +421,20 @@ def spread_dist(lines, old_labels, new_labels, binarized, components, coords,
                 scale=43, loc='', threshold=0.9):
     """redefine line coordinates by contourizing spread of connected components propagated from new labels"""
     LOG = getLogger('processor.OcropyResegment')
+    DSAVE('baseline-seeds', [new_labels, (components>0)])
     # allocate to connected components consistently (by majority,
     # ignoring smallest components like punctuation)
     #new_labels = morph.propagate_labels_majority(binarized, new_labels)
     new_labels = morph.propagate_labels_majority(components > 0, new_labels)
+    DSAVE('majority-propagated', [new_labels, (components>0) & (new_labels==0)])
     # dilate/grow labels from connected components against each other and bg
+    new_labels = morph.spread_labels(new_labels, maxdist=scale*2)
+    DSAVE('scale-spread', [new_labels, (components>0)])
+    # now propagate again to catch smallest components like punctuation
+    new_labels = morph.propagate_labels_majority(components > 0, new_labels)
+    DSAVE('propagated-again', [new_labels, (components>0) & (new_labels==0)])
     new_labels = morph.spread_labels(new_labels, maxdist=scale/2)
+    DSAVE('spread-again', [new_labels, (components>0)])
     # find polygon hull and modify line coords
     for i, line in enumerate(lines):
         new_label = new_labels == i + 1
