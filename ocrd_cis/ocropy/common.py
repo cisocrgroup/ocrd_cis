@@ -1818,7 +1818,7 @@ def lines2regions(binary, llabels,
                 npartitions > len(gaps)+1 or
                 # partitions without the cut still score better than after
                 sum(map(sl.height if prefer_vertical else sl.width,
-                        morph.find_objects(partitions))) > np.max(
+                        filter(None, morph.find_objects(partitions)))) > np.max(
                             partitionscores, initial=0))):
             # continue on each partition by suppressing the others, respectively
             order = morph.reading_order(partitions,rl,bt)
