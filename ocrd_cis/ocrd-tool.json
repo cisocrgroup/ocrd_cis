@@ -439,7 +439,7 @@
 				},
 				"model": {
 					"type": "string",
-					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+					"description": "load model or create new one (e.g. fraktur.pyrnn)"
 				},
 				"ntrain": {
 					"type": "number",
