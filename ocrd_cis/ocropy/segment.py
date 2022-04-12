@@ -191,7 +191,7 @@ class OcropySegment(Processor):
         When ``level-of-operation`` is ``page`` or ``table``, this also entails
         detecting
         - up to ``maximages`` large foreground images,
-        - up to ``maxseps`` foreground h/v-line separators and
+        - up to ``maxseps`` foreground line separators and
         - up to ``maxcolseps`` background column separators
         before text line segmentation itself, as well as aggregating text lines
         to text regions afterwards.
@@ -492,7 +492,7 @@ class OcropySegment(Processor):
         try:
             if report:
                 raise Exception(report)
-            line_labels, baselines, hlines, vlines, images, colseps, scale = compute_segmentation(
+            line_labels, baselines, seplines, images, colseps, scale = compute_segmentation(
                 # suppress separators and ignored regions for textline estimation
                 # but keep them for h/v-line detection (in fullpage mode):
                 element_bin, seps=(sep_bin+ignore_labels)>0,
@@ -502,8 +502,7 @@ class OcropySegment(Processor):
                 maxcolseps=self.parameter['maxcolseps'],
                 maxseps=self.parameter['maxseps'],
                 maximages=self.parameter['maximages'] if element_name != 'table' else 0,
-                csminheight=self.parameter['csminheight'],
-                hlminwidth=self.parameter['hlminwidth'])
+                csminheight=self.parameter['csminheight'])
         except Exception as err:
             if isinstance(element, TextRegionType):
                 LOG.error('Cannot line-segment region "%s": %s', element_id, err)
@@ -526,8 +525,7 @@ class OcropySegment(Processor):
                 # (these cannot be split or grouped together with other regions)
                 line_labels = np.where(line_labels, line_labels+len(ignore), ignore_labels)
                 # suppress separators/images in fg and try to use for partitioning slices
-                sepmask = np.maximum(np.maximum(hlines, vlines),
-                                     np.maximum(sep_bin, images))
+                sepmask = np.maximum(sep_bin, np.maximum(seplines > 0, images > 0))
                 region_labels = lines2regions(
                     element_bin, line_labels,
                     rlabels=ignore_labels,
@@ -645,11 +643,9 @@ class OcropySegment(Processor):
                             index = page_add_to_reading_order(rogroup, region.id, index)
             # add additional image/non-text regions from compute_segmentation
             # (e.g. drop-capitals or images) ...
-            image_labels, num_images = morph.label(images)
-            LOG.info('Found %d large non-text/image regions for %s "%s"',
-                     num_images, element_name, element_id)
+            LOG.info('Found %d large image regions for %s "%s"', images.max(), element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            image_polygons, _ = masks2polygons(image_labels, None, element_bin,
+            image_polygons, _ = masks2polygons(images, None, element_bin,
                                                '%s "%s"' % (element_name, element_id))
             for image_label, polygon, _ in image_polygons:
                 # convert back to absolute (page) coordinates:
@@ -664,22 +660,17 @@ class OcropySegment(Processor):
                 element.add_ImageRegion(ImageRegionType(
                     id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
-            # split rulers into separator regions:
-            hline_labels, num_hlines = morph.label(hlines)
-            vline_labels, num_vlines = morph.label(vlines)
-            LOG.info('Found %d/%d h/v-lines for %s "%s"',
-                     num_hlines, num_vlines, element_name, element_id)
+            # split detected separator labels into separator regions:
+            LOG.info('Found %d separator lines for %s "%s"', seplines.max(), element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            hline_polygons, _ = masks2polygons(hline_labels, None, element_bin,
-                                               '%s "%s"' % (element_name, element_id))
-            vline_polygons, _ = masks2polygons(vline_labels, None, element_bin,
-                                               '%s "%s"' % (element_name, element_id))
-            for _, polygon, _ in hline_polygons + vline_polygons:
+            sep_polygons, _ = masks2polygons(seplines, None, element_bin,
+                                             '%s "%s"' % (element_name, element_id))
+            for sep_label, polygon, _ in sep_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
                 region_polygon = polygon_for_parent(region_polygon, element)
                 if region_polygon is None:
-                    LOG.warning('Ignoring extant region contour for separator')
+                    LOG.warning('Ignoring extant region contour for separator %d', sep_label)
                     continue
                 # annotate result:
                 region_no += 1

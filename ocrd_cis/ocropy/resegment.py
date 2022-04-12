@@ -282,7 +282,7 @@ class OcropyResegment(Processor):
                         scale=scale, loc=parent.id, threshold=threshold)
             return
         try:
-            new_line_labels, new_baselines, _, _, _, _, scale = compute_segmentation(
+            new_line_labels, new_baselines, _, _, _, scale = compute_segmentation(
                 parent_bin, seps=ignore_bin, zoom=zoom, fullpage=fullpage,
                 maxseps=0, maxcolseps=len(ignore), maximages=0)
         except Exception as err:
