@@ -802,7 +802,7 @@ def compute_colseps_conv(binary, scale=1.0, csminheight=10, maxcolseps=2):
     grad = filters.gaussian_filter(1.0*binary,(scale,scale*0.5),order=(0,1))
     grad = filters.uniform_filter(grad,(10.0*scale,1)) # csminheight
     DSAVE("colwsseps2_grad-raw",grad)
-    grad = (grad>0.5*np.amax(grad))
+    grad = grad > np.minimum(0.5 * np.amax(grad), np.percentile(grad, 99.5))
     DSAVE("colwsseps2_grad",grad)
     # combine dilated edges and whitespace
     seps = np.minimum(thresh,filters.maximum_filter(grad,(odd(10*scale),odd(5*scale))))
