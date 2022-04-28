@@ -47,8 +47,7 @@ setup(
         'scikit-image',
         'alphashape',
         'opencv-python-headless',
-        'python-Levenshtein',
-        'calamari_ocr == 0.3.5'
+        'python-Levenshtein'
     ],
     extras_require={
         'debug': ['matplotlib>3.0.0'],
