@@ -59,7 +59,7 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-segment'
 
-def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=None):
+def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=None, reorder=True):
     """Convert label masks into polygon coordinates.
 
     Given a Numpy array of background labels ``bg_labels``,
@@ -114,11 +114,15 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
         if not total_area:
             # ignore if too small
             continue
-        # sort contours in reading order
+        # redraw label array
         contour_labels = np.zeros_like(bg_mask, np.uint8)
         for i, contour in enumerate(contours):
-            cv2.drawContours(contour_labels, contours[i:i+1], -1, i+1, cv2.FILLED)
-        order = np.argsort(morph.reading_order(contour_labels)[1:])
+            cv2.drawContours(contour_labels, contours, i, i+1, cv2.FILLED)
+        if reorder:
+            # sort contours in reading order
+            order = np.argsort(morph.reading_order(contour_labels)[1:])
+        else:
+            order = range(len(contours))
         # convert to polygons
         for i in order:
             contour = contours[i]
@@ -133,14 +137,13 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
             polygon = contour[:, 0, ::] # already ordered x,y
             # simplify and validate:
             polygon = Polygon(polygon)
-            for tolerance in range(2, int(area)):
-                polygon = polygon.simplify(tolerance)
-                if polygon.is_valid:
-                    break
+            if not polygon.is_valid:
+                #LOG.debug(polygon.wkt)
+                LOG.debug(explain_validity(polygon))
+            polygon = make_valid(polygon)
             poly = polygon.exterior.coords[:-1] # keep open
             if len(poly) < 4:
-                LOG.warning('Label %d contour %d has less than 4 points for %s',
-                            label, i, name)
+                LOG.warning('Label %d contour %d for %s has less than 4 points', label, i, name)
                 continue
             # get baseline segments intersecting with this line mask
             # and concatenate them from left to right
@@ -572,7 +575,7 @@ class OcropySegment(Processor):
                         "region label %d has both existing regions and new lines (%s)" % (
                             region_label, str(region_line_labels0))
                     region = ignore[region_line_labels0[0] - 1]
-                    if rogroup and region.parent_object_ == element and not isinstance(region, SeparatorRegionType):
+                    if rogroup and region.parent_object_ is element and not isinstance(region, SeparatorRegionType):
                         index = page_add_to_reading_order(rogroup, region.id, index)
                     LOG.debug('Region label %d is for ignored region "%s"',
                               region_label, region.id)
@@ -662,10 +665,11 @@ class OcropySegment(Processor):
                     id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
             # split detected separator labels into separator regions:
-            LOG.info('Found %d separator lines for %s "%s"', seplines.max(), element_name, element_id)
+            LOG.info('Found %d separators for %s "%s"', seplines.max(), element_name, element_id)
             # find contours around region labels (can be non-contiguous):
             sep_polygons, _ = masks2polygons(seplines, None, element_bin,
-                                             '%s "%s"' % (element_name, element_id))
+                                             '%s "%s"' % (element_name, element_id),
+                                             reorder=False)
             for sep_label, polygon, _ in sep_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
@@ -772,8 +776,7 @@ def make_intersection(poly1, poly2):
         interp = unary_union([geom for geom in interp.geoms if geom.area > 0])
     if interp.type == 'MultiPolygon':
         # homogeneous result: construct convex hull to connect
-        # FIXME: construct concave hull / alpha shape
-        interp = interp.convex_hull
+        interp = join_polygons(interp.geoms)
     if interp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity
