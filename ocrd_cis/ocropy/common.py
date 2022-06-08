@@ -522,6 +522,14 @@ def compute_seplines(binary, scale, maxseps=0):
     
     Returns a same-size separator label array.
     """
+    # tries to find a compromise for the following issues,
+    # potentially occurring in combination (or all at once):
+    # - non-congiguous or broken lines (due to thin ink or low contrast)
+    # - skewed, curved or warped lines (due to non-planar photography or irregular typography)
+    # - very close or overlapping text (due to show-through or bad binarization)
+    # - superimposed fg noise (due to bad binarization) that may connect text and non-text
+    # - intersecting vertical and horizontal lines, even closed shapes (enclosing text)
+    # - line-like glyphs (i.e. false positives)
     if maxseps == 0:
         return np.zeros_like(binary, np.int)
     skel, dist = medial_axis(binary, return_distance=True)
@@ -692,7 +700,7 @@ def compute_seplines(binary, scale, maxseps=0):
             return sl.union(slices[0], union(slices[1:]))
         return slices[0]
     for sep in range(1, numsep + 1):
-        sepsizes[sep] = sum(sepsizes[corrmap == sep])
+        sepsizes[sep] = max(sepsizes[corrmap == sep]) # sum
         sepslices[sep] = union(sepslices[corrmap == sep])
     sepsizes = sepsizes[:numsep + 1]
     sepslices = sepslices[:numsep + 1]
