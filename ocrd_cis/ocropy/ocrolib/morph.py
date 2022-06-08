@@ -170,6 +170,20 @@ def rg_closing(image,size,origin=0):
     # image = r_dilation(image,size,origin=0)
     # return r_erosion(image,size,origin=-1)
 
+@checks(GRAYSCALE,ABINARY2)
+def rg_reconstruction(image,mask,step=1,maxsteps=None):
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2*step+1,2*step+1))
+    dilated = image
+    while maxsteps is None or maxsteps > 0:
+        dilated = cv2.dilate(src=dilated, kernel=kernel)
+        dilated = np.where(mask, dilated, image)
+        # did result change?
+        if (image == dilated).all():
+            return dilated
+        if maxsteps:
+            maxsteps -= step
+    return dilated
+
 @checks(SEGMENTATION)
 def showlabels(x,n=7):
     import matplotlib.pyplot as plt
@@ -337,8 +351,8 @@ def all_neighbors(image, dist=1, bg=NaN):
     assert amin(image)>=0
     u = unique(q*image+shift(image,(dist,0),order=0,cval=bg))
     d = unique(q*image+shift(image,(-dist,0),order=0,cval=bg))
-    l = unique(q*image+shift(image,(dist,dist),order=0,cval=bg))
-    r = unique(q*image+shift(image,(-dist,dist),order=0,cval=bg))
+    l = unique(q*image+shift(image,(0,dist),order=0,cval=bg))
+    r = unique(q*image+shift(image,(0,-dist),order=0,cval=bg))
     all = unique(r_[u,d,l,r])
     all = all[all!=bg]
     all = c_[all//q,all%q]
