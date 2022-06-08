@@ -719,11 +719,17 @@ def compute_seplines(binary, scale, maxseps=0):
     ordermap[order[:maxseps]] = np.arange(1, maxseps + 1)
     sepmap = ordermap[sepmap]
     DSAVE("sep-top", sepmap[labels])
-    sepseeds = morph.propagate_labels_simple(binary, sepmap[labels])
-    DSAVE("seps-top-propagated", sepseeds)
-    # FIXME: perhaps hclose / vclose first?
+    # spread into fg against other fg
+    sepseeds = sepmap[labels]
+    sepseeds = morph.spread_labels(sepseeds, maxdist=max(sepdists))
+    sepseeds[~binary] = 0
+    #labels = morph.propagate_labels_simple(binary, labels)
+    #DSAVE("seps-top-spread-fg", sepseeds)
+    # spread into bg against other fg
+    sepseeds[binary & (sepseeds == 0)] = maxseps + 1
     seplabels = morph.spread_labels(sepseeds, maxdist=scale / 2)
-    DSAVE("seps-top-spread", seplabels)
+    seplabels[seplabels == maxseps + 1] = 0
+    DSAVE("seps-top-spread-bg", seplabels)
     return seplabels
 
 # from ocropus-gpageseg, but with horizontal opening
