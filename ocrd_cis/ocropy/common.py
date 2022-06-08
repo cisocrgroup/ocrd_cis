@@ -8,6 +8,7 @@ from scipy.ndimage import measurements, filters, interpolation, morphology
 from scipy import stats, signal
 #from skimage.morphology import convex_hull_image
 from skimage.morphology import medial_axis
+import networkx as nx
 from PIL import Image
 
 from . import ocrolib
@@ -1281,7 +1282,7 @@ def compute_baselines(bottom, top, linelabels, scale, method='bottom'):
         bot1d = np.diff(bot, axis=0, append=0)
         bot1d = np.diff(np.sign(bot1d), axis=0, append=0) < 0
         bot1d &= bot > 0
-        #DSAVE('bot1d', bot1d)
+        DSAVE('bot1d', bot1d)
         blines = bot1d
     baselabels, nbaselabels = morph.label(blines)
     baseslices = [(slice(0,0),slice(0,0))] + morph.find_objects(baselabels)
@@ -1289,18 +1290,7 @@ def compute_baselines(bottom, top, linelabels, scale, method='bottom'):
     # (can happen due to mis-estimation of scale)
     corrs = morph.correspondences(linelabels, baselabels).T
     labelmap = {}
-    #DSAVE('baselines', baselabels)
-    # FIXME: this is slow and should be replace by some graph clustering algorithm
-    #        (we want a permutation matrix which maximizes triangles in the adjacency matrix,
-    #         then pick the triangle-subgraph with the largest sum of pixels at its nodes)
-    def partitions(adj, starti, startpart=None):
-        for i in range(starti, len(adj)):
-            if startpart is None:
-                yield from partitions(adj, i + 1, [i])
-            elif all(adj[i][j] for j in startpart):
-                yield from partitions(adj, i + 1, [i] + startpart)
-        if startpart is not None:
-            yield startpart
+    DSAVE('baselines-raw', baselabels)
     for line in np.unique(linelabels):
         if not line: continue # ignore bg line
         corrinds = corrs[:, 0] == line
@@ -1320,11 +1310,11 @@ def compute_baselines(bottom, top, linelabels, scale, method='bottom'):
                 if sl.xoverlaps(baseslicei, baseslicej):
                     nonoverlapping[i, j] = False
                     nonoverlapping[j, i] = False
+        # find all maximal cliques in the graph (i.e. all fully connected subgraphs)
+        # and then pick the partition with the largest sum of pixels at its nodes
         def pathlen(path):
-            return sum(corrs[corrinds[pos], 2] for pos in path)
-        corrgroups = sorted(partitions(nonoverlapping, 0), key=pathlen)
-        # select longest path
-        corrinds = corrinds[corrgroups[-1]]
+            return sum(corrs[corrinds[path], 2])
+        corrinds = corrinds[max(nx.find_cliques(nx.Graph(nonoverlapping)), key=pathlen)]
         labelmap.setdefault(line, list()).extend(corrs[corrinds, 1])
     basepoints = []
     for line in np.unique(linelabels):
