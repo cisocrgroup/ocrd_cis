@@ -1675,12 +1675,6 @@ def lines2regions(binary, llabels,
             sepm = sl.cut(sepmask, box)
             if isinstance(mask, np.ndarray):
                 sepm = np.where(mask, sepm, 1)
-            if isinstance(rlabels, np.ndarray):
-                # treat existing regions like separators
-                rlab = sl.cut(rlabels, box)
-                if isinstance(mask, np.ndarray):
-                    rlab = np.where(mask, rlab, 0)
-                sepm = np.where(rlab, 1, sepm)
             # provide `partitions` for next step
             partitions, npartitions = 1-sepm, 1
             new_partition_type = None
@@ -1690,31 +1684,35 @@ def lines2regions(binary, llabels,
                 # try to apply in this cut like another separator
                 partitions, npartitions = morph.label(1-sepm)
                 if npartitions > 1:
-                    # first, delete partitions that have no significant line labels
-                    splitmap = np.zeros(len(objects)+1, dtype=np.int)
-                    for label in range(1, npartitions+1):
-                        linecounts = np.bincount(lbin[partitions==label], minlength=len(objects))
+                    # delete partitions that have no significant line labels,
+                    # merge partitions that share any significant line labels
+                    splitmap = np.zeros((len(objects), npartitions), dtype=np.bool)
+                    for label in range(npartitions):
+                        linecounts = np.bincount(lbin[partitions==label+1], minlength=len(objects))
                         linecounts[0] = 0 # without bg
                         # get significant line labels for this partition
                         # (but keep insignificant non-empty labels if complete)
                         mincounts = np.minimum(min_line * scale, np.maximum(1, bincounts))
                         linelabels = np.nonzero(linecounts >= mincounts)[0]
                         if linelabels.size:
-                            splitmap[linelabels] = label
-                            if debug: LOG.debug('  sepmask partition %d: %s', label, str(linelabels))
+                            splitmap[linelabels, label] = True
+                            if debug: LOG.debug('  sepmask partition %d: %s', label+1, str(linelabels))
                         else:
-                            partitions[partitions==label] = 0
-                    # second, merge partitions that share any significant line labels
-                    for label1 in range(1, npartitions+1):
-                        if not np.any(splitmap == label1):
+                            partitions[partitions==label+1] = 0
+                    if isinstance(rlabels, np.ndarray):
+                        # keep existing regions in distinct partitions if possible
+                        rlab = sl.cut(rlabels, box)
+                        if isinstance(mask, np.ndarray):
+                            rlab = np.where(mask, rlab, 0)
+                        splitmap[np.unique(lbin[rlab>0])] = False
+                    mergemap = np.arange(npartitions + 1)
+                    for line in splitmap:
+                        if not np.any(line):
                             continue
-                        for label2 in range(label1+1, npartitions+1):
-                            if not np.any(splitmap == label2):
-                                continue
-                            if np.any((splitmap == label1) & (splitmap == label2)):
-                                splitmap[splitmap == label2] = label1
-                                partitions[partitions==label2] = label1
-                    npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
+                        parts = np.flatnonzero(line)+1
+                        mergemap[parts] = mergemap[parts[0]]
+                    partitions = mergemap[partitions]
+                    npartitions = len(np.setdiff1d(np.unique(mergemap), [0]))
                     new_partition_type = 'splitmask'
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
             if partition_type != 'topological':
@@ -1722,10 +1720,16 @@ def lines2regions(binary, llabels,
                 # get current slice's line labels
                 def find_topological():
                     # run only if needed (no other partition/slicing possible)
-                    nonlocal partitions, npartitions, new_partition_type
+                    nonlocal sepm, partitions, npartitions, new_partition_type
                     llab = sl.cut(llabels, box)
                     if isinstance(mask, np.ndarray):
                         llab = np.where(mask, llab, 0)
+                    if isinstance(rlabels, np.ndarray):
+                        # treat existing regions like separators
+                        rlab = sl.cut(rlabels, box)
+                        if isinstance(mask, np.ndarray):
+                            rlab = np.where(mask, rlab, 0)
+                        sepm = np.where(rlab, 1, sepm)
                     obj = [sl.intersect(o, box) for o in objects]
                     # get current slice's foreground
                     bin = sl.cut(binary, box)
