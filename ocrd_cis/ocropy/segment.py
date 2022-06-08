@@ -3,13 +3,14 @@ from __future__ import absolute_import
 import os.path
 from itertools import chain
 import numpy as np
+from scipy.sparse.csgraph import minimum_spanning_tree
 from skimage import draw
 from skimage.morphology import convex_hull_image
 import cv2
 from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
-from shapely.ops import unary_union
-import alphashape
+from shapely.ops import unary_union, nearest_points
+from shapely.validation import explain_validity
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -803,40 +804,33 @@ def diff_polygons(poly1, poly2):
     poly = make_valid(poly)
     return poly
 
-def join_polygons(polygons, loc='', scale=20):
+def join_polygons(polygons, scale=20):
     """construct concave hull (alpha shape) from input polygons"""
     # compoundp = unary_union(polygons)
     # jointp = compoundp.convex_hull
-    LOG = getLogger('processor.OcropyResegment')
     polygons = list(chain.from_iterable([
         poly.geoms if poly.type in ['MultiPolygon', 'GeometryCollection']
         else [poly]
         for poly in polygons]))
-    if len(polygons) == 1:
+    npoly = len(polygons)
+    if npoly == 1:
         return polygons[0]
-    # get equidistant list of points along hull
-    # (otherwise alphashape will jump across the interior)
-    points = [poly.exterior.interpolate(dist).coords[0] # .xy
-              for poly in polygons
-              for dist in np.arange(0, poly.length, min(scale / 2, poly.length / 4))]
-    #alpha = alphashape.optimizealpha(points) # too slow
-    alpha = 0.01
-    jointp = alphashape.alphashape(points, alpha)
-    tries = 0
-    # from descartes import PolygonPatch
-    # import matplotlib.pyplot as plt
-    while jointp.is_empty or jointp.area == 0.0 or jointp.type in ['MultiPolygon', 'GeometryCollection'] or len(jointp.interiors):
-        # plt.figure()
-        # plt.gca().scatter(*zip(*points))
-        # for geom in jointp.geoms:
-        #     plt.gca().add_patch(PolygonPatch(geom, alpha=0.2))
-        # plt.show()
-        alpha *= 0.7
-        tries += 1
-        if tries > 10:
-            LOG.warning("cannot find alpha for concave hull on '%s'", loc)
-            alpha = 0
-        jointp = alphashape.alphashape(points, alpha)
+    # find min-dist path through all polygons (travelling salesman)
+    pairs = itertools.combinations(range(npoly), 2)
+    dists = np.eye(npoly, dtype=float)
+    for i, j in pairs:
+	dists[i, j] = polygons[i].distance(polygons[j])
+        dists[j, i] = dists[i, j]
+    dists = minimum_spanning_tree(dists, overwrite=True)
+    # add bridge polygons (where necessary)
+    for prevp, nextp in zip(*dists.nonzero()):
+        prevp = polygons[prevp]
+        nextp = polygons[nextp]
+        nearest = nearest_points(prevp, nextp)
+        bridgep = LineString(nearest).buffer(max(1, scale/5), resolution=1)
+        polygons.append(bridgep)
+    jointp = unary_union(polygons)
+    assert jointp.type == 'Polygon', jointp.wkt
     if jointp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity

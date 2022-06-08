@@ -45,7 +45,6 @@ setup(
         'pillow>=7.1.2',
         'shapely>=1.7.1',
         'scikit-image',
-        'alphashape',
         'opencv-python-headless',
         'python-Levenshtein'
     ],
