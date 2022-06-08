@@ -535,33 +535,112 @@ def compute_seplines(binary, scale, maxseps=0):
     numsep = 0
     sepsizes = [0]
     sepslices = [None]
+    sepdists = [0]
     for label in range(1, nlabels + 1):
         labelslice = slices[label]
         labelmask = labels == label
         labelsize = np.count_nonzero(labelmask) # sum of skel pixels, i.e. "inner length"
+        labelarea = sl.area(labelslice)
+        labelaspect = sl.aspect(labelslice)
+        if labelaspect > 1:
+            labelaspect = 1 / labelaspect
         labellength = np.hypot(*sl.dims(labelslice)) # length of bbox diagonal, i.e. "outer length"
         #LOG.debug("skel label %d has inner size %d and outer size %d", label, labelsize, labellength)
-        if labelsize > 1.4 * labellength:
-            # not long / stretched out / too compact
-            # todo: maybe just check aspect ratio for orthogonal lines?
+        if labelsize > 1.5 * labellength and labelaspect >= 0.1 and labelsize < 15 * scale: #and labelsize > 0.1 * labelarea
+            # not long / straight, but very compact
             continue
         distances = dist[labelmask]
-        mean_dist = np.mean(distances)
-        var_dist = np.var(distances)
-        #LOG.debug("skel label %d has dist %.1f±%.2f", label, mean_dist, np.sqrt(var_dist))
+        avg_dist = np.median(distances) #np.mean(distances)
+        std_dist = np.std(distances)
         # todo: empirical analysis of ideal thresholds
-        if mean_dist < scale / 4 and var_dist < 0.3:
-            numsep += 1
-            sepmap[label] = numsep
-            sepsizes.append(labelsize)
-            sepslices.append(labelslice)
-        # todo: we could also use the mean+var as a criterion to split components
-        #       where the distance exceeds the threshold; e.g. vlines that touch
-        #       letters or images
+        if avg_dist > scale / 4 or std_dist/avg_dist > 0.7:
+            continue
+        #LOG.debug("skel label %d has dist %.1f±%.2f", label, avg_dist, std_dist)
+        numsep += 1
+        sepmap[label] = numsep
+        sepsizes.append(labelsize)
+        sepslices.append(labelslice)
+        sepdists.append(avg_dist)
+        if labelsize > 10 * scale and avg_dist > 0 and std_dist / avg_dist > 0.2:
+            # try to split this large label up along neighbouring spans of similar distances:
+            # (e.g. vlines that touch letters or images)
+            # 1. get optimal (by variability) spans as bin intervals, then merge largest spans
+            disthist, distedges = np.histogram(distances, bins='scott', density=True) # stone
+            disthist *= np.diff(distedges) # get probability masses
+            disthistlarge = disthist > 0.1
+            if np.count_nonzero(disthistlarge) < 2:
+                continue # only 1 large bin
+            disthistlarge[-1] = True # ensure full interval
+            distedges = distedges[1:][disthistlarge]
+            disthist = np.cumsum(disthist)[disthistlarge]
+            disthist = np.diff(disthist, prepend=0)
+            distbin = np.digitize(distances, distedges, right=True)
+            # 2. now find connected components within bins, but map all tiny components
+            #    to a single label so they can be replaced by their neighbours later-on
+            sublabels = np.zeros_like(labels)
+            sublabels[labelmask] = distbin + 1
+            DSAVE("sublabels", sublabels)
+            sublabels2 = np.zeros_like(labels)
+            sublabel = 1
+            sublabelmap = [0, 1]
+            for bin in range(len(distedges)):
+                binmask = sublabels == bin + 1
+                binlabels, nbinlabels = morph.label(binmask)
+                _, binlabelcounts = np.unique(binlabels, return_counts=True)
+                largemask = (binlabelcounts > 2 * scale)[binlabels]
+                smallmask = (binlabelcounts <= 2 * scale)[binlabels]
+                sublabels2[binmask & smallmask] = 1
+                if not np.any(binmask & largemask):
+                    continue
+                sublabels2[binmask & largemask] = binlabels[binmask & largemask] + sublabel
+                sublabel += nbinlabels
+                sublabelmap.extend(nbinlabels*[bin + 1])
+            if sublabel == 1:
+                continue # only tiny sublabels here
+            DSAVE("sublabels_connected", sublabels2)
+            sublabelmap = np.array(sublabelmap)
+            # 3. finally, replace tiny components by nearest components,
+            #    and recombine survivors to bin labels
+            smallmask = sublabels2 == 1
+            sublabels2[smallmask] = 0
+            sublabels2[smallmask] = morph.spread_labels(sublabels2)[smallmask]
+            sublabels = sublabelmap[sublabels2]
+            DSAVE("sublabels_final", sublabels)
+            # now apply as multiple separators
+            numsep -= 1
+            sepmap[label] = 0
+            slices[label] = None
+            sepsizes = sepsizes[:-1]
+            sepslices = sepslices[:-1]
+            sepdists = sepdists[:-1]
+            for sublabel in np.unique(sublabels[labelmask]):
+                sublabelmask = sublabels == sublabel
+                sublabelsize = np.count_nonzero(sublabelmask)
+                sublabelslice = sublabelmask.nonzero()
+                sublabelslice = sl.box(sublabelslice[0].min(),
+                                       sublabelslice[0].max(),
+                                       sublabelslice[1].min(),
+                                       sublabelslice[1].max())
+                subdistances = dist[sublabelmask]
+                nlabels += 1
+                numsep += 1
+                sepmap = np.append(sepmap, numsep)
+                labels[sublabelmask] = nlabels
+                slices.append(sublabelslice)
+                sepsizes.append(sublabelsize)
+                sepslices.append(sublabelslice)
+                sepdists.append(np.median(subdistances))
+                #LOG.debug("adding sublabel %d as sep %d (size %d [%s])", sublabel, numsep, sublabelsize, str(sublabelslice))
     sepsizes = np.array(sepsizes)
     sepslices = np.array(sepslices)
     LOG.debug("detected %d separator candidates", numsep)
     DSAVE("seps-raw", sepmap[labels])
+    # now dilate+erode to link neighbouring candidates,
+    # but allow only such links which
+    # - stay consistent regarding avg/std width
+    # - do not enclose large areas in between
+    # - do not "change direction" (roughly adds up their diagonals)
+    # then combine mutual neighbourships to largest allowed partitions
     d0 = odd(max(1,scale/2))
     d1 = odd(max(1,scale/4))
     closed = morph.rb_closing(sepmap[labels] > 0, (d0,d1))
@@ -574,23 +653,37 @@ def compute_seplines(binary, scale, maxseps=0):
         corrinds[corrs[:, 0] == 0] = False # ignore bg
         corrinds = corrinds.nonzero()[0]
         if len(corrinds) == 1:
-            continue
+            continue # nothing to link
+        nonoverlapping = np.zeros((len(corrinds), len(corrinds)), dtype=np.bool)
         for i, indi in enumerate(corrinds[:-1]):
             sepi = corrs[indi, 0]
             labeli = np.flatnonzero(sepmap == sepi)[0]
             slicei = slices[labeli]
             lengthi = np.hypot(*sl.dims(slicei))
+            areai = sl.area(slicei)
             for j, indj in enumerate(corrinds[i + 1:], i + 1):
                 sepj = corrs[indj, 0]
                 labelj = np.flatnonzero(sepmap == sepj)[0]
                 slicej = slices[labelj]
                 lengthj = np.hypot(*sl.dims(slicej))
-                #inter = sl.intersect(slicei, slicej)
+                areaj = sl.area(slicej)
                 union = sl.union(slicei, slicej)
                 length = np.hypot(*sl.dims(union))
-                if length > 0.9 * (lengthi + lengthj):
-                #if sl.empty(inter) or sl.area(inter) / sl.area(union) < 0.2:
-                    corrmap[sepj] = corrmap[sepi]
+                if length < 0.9 * (lengthi + lengthj):
+                    continue
+                if sl.area(union) > 1.3 * (areai + areaj):
+                    continue
+                if not (0.8 < sepdists[sepi] / sepdists[sepj] < 1.2):
+                    continue
+                inter = sl.intersect(slicei, slicej)
+                if (sl.empty(inter) or
+                    (sl.area(inter) / areai < 0.2 and
+                     sl.area(inter) / areaj < 0.2)):
+                    nonoverlapping[i, j] = True
+                    nonoverlapping[j, i] = True
+        # find largest maximal clique (i.e. fully connected subgraphs)
+        corrinds = corrinds[max(nx.find_cliques(nx.Graph(nonoverlapping)), key=len)]
+        corrmap[corrs[corrinds, 0]] = corrs[corrinds[0], 0]
     _, corrmap = np.unique(corrmap, return_inverse=True) # make contiguous
     numsep = corrmap.max()
     LOG.debug("linked to %d separator candidates", numsep)
