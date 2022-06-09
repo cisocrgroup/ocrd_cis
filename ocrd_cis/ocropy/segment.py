@@ -59,7 +59,7 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-segment'
 
-def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=None, reorder=True):
+def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=None, open_holes=False, reorder=True):
     """Convert label masks into polygon coordinates.
 
     Given a Numpy array of background labels ``bg_labels``,
@@ -106,8 +106,88 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
                           label, str(conflicts))
             else:
                 bg_mask = hull
-        # find outer contour (parts):
-        contours, _ = cv2.findContours(bg_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if open_holes:
+            # def plot_poly(contour, color):
+            #     import matplotlib.pyplot as plt
+            #     from matplotlib.patches import Polygon as PolygonPatch
+            #     plt.figure()
+            #     plt.imshow(fg_bin)
+            #     plt.gca().scatter(*zip(*contour[:,0]))
+            #     plt.gca().add_patch(PolygonPatch(contour[:,0], alpha=0.5, color=color, closed=False))
+            #     plt.show()
+            # find outer contour (parts) plus direct holes (if any)
+            contours = []
+            cont, hier = cv2.findContours(bg_mask.astype(np.uint8), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+            idx = 0
+            while idx >= 0:
+                contour = cont[idx]
+                if len(contour) < 3:
+                    idx = hier[0, idx, 0]
+                    continue
+                #plot_poly(contour, 'red')
+                idx_hole = hier[0, idx, 2]
+                while idx_hole >= 0:
+                    hole = cont[idx_hole]
+                    if len(hole) < 3:
+                        idx_hole = hier[0, idx_hole, 0]
+                        continue
+                    LOG.debug("label %d contour %d [%d pts] has hole %d [%d pts]",
+                              label, idx, len(contour), idx_hole, len(hole))
+                    #plot_poly(hole, 'blue')
+                    # cut child from outside...
+                    # first get nearest point on child
+                    hole_idx = np.argmin([cv2.pointPolygonTest(contour, tuple(pt[0]), True)
+                                          for pt in hole])
+                    # now get nearest point on parent
+                    # (we cannot use PolygonTest directly, because we must also interpolate
+                    #  to prevent crossing edges; at least each 10px)
+                    contour = np.append(contour, contour[0:1], axis=0)
+                    contour2 = np.diff(contour, axis=0)
+                    contourtics = np.maximum(1, np.linalg.norm(contour2, axis=2).astype(np.int)[:,0] // 10)
+                    interpol = []
+                    for i, ntics in enumerate(contourtics):
+                        interpol.extend(np.array(contour[i:i+1] +
+                                                 contour2[i:i+1] *
+                                                 np.linspace(0, 1, ntics)[:,np.newaxis,np.newaxis],
+                                                 np.int))
+                    interpol.append(contour[-1])
+                    interpol = np.array(interpol)
+                    contourtics = np.insert(np.cumsum(contourtics), 0, 0)
+                    assert np.all(contour == interpol[contourtics])
+                    interpol_idx = np.linalg.norm(interpol - hole[hole_idx], axis=2).argmin()
+                    contour_idx = np.searchsorted(contourtics, interpol_idx)
+                    if interpol_idx in contourtics:
+                        contour_idx2 = contour_idx + 1
+                    else:
+                        contour_idx2 = contour_idx
+                    if contour_idx2 >= len(contour):
+                        contour_idx2 = 0
+                    cispoint1 = cispoint2 = interpol[interpol_idx:interpol_idx+1]
+                    if interpol_idx == 0:
+                        diff1 = (interpol[-1:] - cispoint1) // 5
+                    else:
+                        diff1 = (interpol[interpol_idx-1:interpol_idx] - cispoint1) // 5
+                    if interpol_idx + 1 >= len(interpol):
+                        diff2 = (interpol[0:1] - cispoint2) // 5
+                    else:
+                        diff2 = (interpol[interpol_idx+1:interpol_idx+2] - cispoint2) // 5
+                    cispoint1 = cispoint1 + diff1
+                    cispoint2 = cispoint2 + diff2
+                    LOG.debug("stitching at interpolation pos %d hole pos %d", interpol_idx, hole_idx)
+                    # now stitch together outer (up to cision), inner (re-arranged around cision), outer (rest)
+                    # (this works, because inner contours have inverse direction)
+                    contour = np.concatenate([contour[:contour_idx], cispoint1,
+                                              hole[hole_idx:], hole[:hole_idx],
+                                              cispoint2, contour[contour_idx:]])
+                    #plot_poly(contour, 'green')
+                    idx_hole = hier[0, idx_hole, 0]
+                #plot_poly(contour, 'red')
+                LOG.debug("adding label %d contour %d [%d pts]", label, idx, len(contour))
+                contours.append(contour)
+                idx = hier[0, idx, 0]
+        else:
+            # find outer contour (parts):
+            contours, _ = cv2.findContours(bg_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # determine areas of parts:
         areas = [cv2.contourArea(contour) for contour in contours]
         total_area = sum(areas)
@@ -669,7 +749,7 @@ class OcropySegment(Processor):
             # find contours around region labels (can be non-contiguous):
             sep_polygons, _ = masks2polygons(seplines, None, element_bin,
                                              '%s "%s"' % (element_name, element_id),
-                                             reorder=False)
+                                             open_holes=True, reorder=False)
             for sep_label, polygon, _ in sep_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
@@ -822,7 +902,7 @@ def join_polygons(polygons, scale=20):
     pairs = itertools.combinations(range(npoly), 2)
     dists = np.eye(npoly, dtype=float)
     for i, j in pairs:
-	dists[i, j] = polygons[i].distance(polygons[j])
+        dists[i, j] = polygons[i].distance(polygons[j])
         dists[j, i] = dists[i, j]
     dists = minimum_spanning_tree(dists, overwrite=True)
     # add bridge polygons (where necessary)
