@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 import os.path
-from itertools import chain
+import itertools
 import numpy as np
 from scipy.sparse.csgraph import minimum_spanning_tree
 from skimage import draw
@@ -887,11 +887,11 @@ def diff_polygons(poly1, poly2):
     poly = make_valid(poly)
     return poly
 
-def join_polygons(polygons, scale=20):
+def join_polygons(polygons, loc='', scale=20):
     """construct concave hull (alpha shape) from input polygons"""
     # compoundp = unary_union(polygons)
     # jointp = compoundp.convex_hull
-    polygons = list(chain.from_iterable([
+    polygons = list(itertools.chain.from_iterable([
         poly.geoms if poly.type in ['MultiPolygon', 'GeometryCollection']
         else [poly]
         for poly in polygons]))
