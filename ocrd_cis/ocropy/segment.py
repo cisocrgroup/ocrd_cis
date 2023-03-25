@@ -221,6 +221,9 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
                 #LOG.debug(polygon.wkt)
                 LOG.debug(explain_validity(polygon))
             polygon = make_valid(polygon)
+            if not polygon.is_valid:
+                #LOG.debug(polygon.wkt)
+                LOG.warning(explain_validity(polygon))
             poly = polygon.exterior.coords[:-1] # keep open
             if len(poly) < 4:
                 LOG.warning('Label %d contour %d for %s has less than 4 points', label, i, name)
@@ -229,7 +232,8 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
             # and concatenate them from left to right
             if baselines is not None:
                 base = join_baselines([baseline.intersection(polygon)
-                                       for baseline in baselines], name)
+                                       for baseline in baselines
+                                       if baseline.intersects(polygon)], name)
                 if base is not None:
                     base = base.coords
             else:
