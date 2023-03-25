@@ -902,8 +902,11 @@ def join_polygons(polygons, loc='', scale=20):
     pairs = itertools.combinations(range(npoly), 2)
     dists = np.eye(npoly, dtype=float)
     for i, j in pairs:
-        dists[i, j] = polygons[i].distance(polygons[j])
-        dists[j, i] = dists[i, j]
+        dist = polygons[i].distance(polygons[j])
+        if dist == 0:
+            dist = 1e-5 # if pair merely touches, we still need to get an edge
+        dists[i, j] = dist
+        dists[j, i] = dist
     dists = minimum_spanning_tree(dists, overwrite=True)
     # add bridge polygons (where necessary)
     for prevp, nextp in zip(*dists.nonzero()):
