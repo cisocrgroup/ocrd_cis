@@ -297,8 +297,9 @@ class OcropyResegment(Processor):
             min_area=640/zoom/zoom)
         DSAVE('line_labels', [np.mean(line_labels, axis=0), parent_bin])
         DSAVE('new_line_labels', [new_line_labels, parent_bin])
-        new_line_polygons, new_baselines = zip(*[(make_valid(Polygon(line_poly)), LineString(baseline))
-                                                 for _, line_poly, baseline in new_line_polygons])
+        new_line_polygons, new_baselines = list(zip(*[
+            (make_valid(Polygon(line_poly)), LineString(baseline))
+            for _, line_poly, baseline in new_line_polygons])) or ([], [])
         # polygons for intersecting pairs
         intersections = dict()
         # ratio of overlap between intersection and new line
