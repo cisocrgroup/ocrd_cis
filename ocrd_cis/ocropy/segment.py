@@ -855,10 +855,10 @@ def make_intersection(poly1, poly2):
     # post-process
     if interp.is_empty or interp.area == 0.0:
         return None
-    if interp.type == 'GeometryCollection':
+    if interp.geom_type == 'GeometryCollection':
         # heterogeneous result: filter zero-area shapes (LineString, Point)
         interp = unary_union([geom for geom in interp.geoms if geom.area > 0])
-    if interp.type == 'MultiPolygon':
+    if interp.geom_type == 'MultiPolygon':
         # homogeneous result: construct convex hull to connect
         interp = join_polygons(interp.geoms)
     if interp.minimum_clearance < 1.0:
@@ -885,7 +885,7 @@ def make_valid(polygon):
 
 def diff_polygons(poly1, poly2):
     poly = poly1.difference(poly2)
-    if poly.type == 'MultiPolygon':
+    if poly.geom_type == 'MultiPolygon':
         poly = poly.convex_hull
     if poly.minimum_clearance < 1.0:
         poly = Polygon(np.round(poly.exterior.coords))
@@ -897,7 +897,7 @@ def join_polygons(polygons, loc='', scale=20):
     # compoundp = unary_union(polygons)
     # jointp = compoundp.convex_hull
     polygons = list(itertools.chain.from_iterable([
-        poly.geoms if poly.type in ['MultiPolygon', 'GeometryCollection']
+        poly.geoms if poly.geom_type in ['MultiPolygon', 'GeometryCollection']
         else [poly]
         for poly in polygons]))
     npoly = len(polygons)
@@ -921,7 +921,7 @@ def join_polygons(polygons, loc='', scale=20):
         bridgep = LineString(nearest).buffer(max(1, scale/5), resolution=1)
         polygons.append(bridgep)
     jointp = unary_union(polygons)
-    assert jointp.type == 'Polygon', jointp.wkt
+    assert jointp.geom_type == 'Polygon', jointp.wkt
     if jointp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity
@@ -951,10 +951,10 @@ def join_baselines(baselines, loc=''):
         assert all(p1[0] < p2[0] for p1, p2 in zip(result[:-1], result[1:])), result
     for baseline in baselines:
         if (baseline.is_empty or
-            baseline.type in ['Point', 'MultiPoint']):
+            baseline.geom_type in ['Point', 'MultiPoint']):
             continue
-        if (baseline.type == 'GeometryCollection' or
-            baseline.type.startswith('Multi')):
+        if (baseline.geom_type == 'GeometryCollection' or
+            baseline.geom_type.startswith('Multi')):
             for geom in baseline.geoms:
                 add_baseline(geom)
             continue
