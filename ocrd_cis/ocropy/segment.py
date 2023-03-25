@@ -90,7 +90,7 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
         if not label:
             # ignore if background
             continue
-        bg_mask = np.array(bg_labels == label, np.bool)
+        bg_mask = np.array(bg_labels == label, bool)
         if not np.count_nonzero(bg_mask * fg_bin):
             # ignore if missing foreground
             LOG.debug('skipping label %d in %s due to empty fg',
@@ -98,7 +98,7 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
             continue
         # simplify to convex hull
         if simplify is not None:
-            hull = convex_hull_image(bg_mask.astype(np.uint8)).astype(np.bool)
+            hull = convex_hull_image(bg_mask.astype(np.uint8)).astype(bool)
             conflicts = np.setdiff1d(hull * simplify,
                                      bg_mask * simplify)
             if conflicts.any():
@@ -136,20 +136,20 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
                     #plot_poly(hole, 'blue')
                     # cut child from outside...
                     # first get nearest point on child
-                    hole_idx = np.argmin([cv2.pointPolygonTest(contour, tuple(pt[0]), True)
+                    hole_idx = np.argmin([cv2.pointPolygonTest(contour, pt[0].tolist(), True)
                                           for pt in hole])
                     # now get nearest point on parent
                     # (we cannot use PolygonTest directly, because we must also interpolate
                     #  to prevent crossing edges; at least each 10px)
                     contour = np.append(contour, contour[0:1], axis=0)
                     contour2 = np.diff(contour, axis=0)
-                    contourtics = np.maximum(1, np.linalg.norm(contour2, axis=2).astype(np.int)[:,0] // 10)
+                    contourtics = np.maximum(1, np.linalg.norm(contour2, axis=2).astype(int)[:,0] // 10)
                     interpol = []
                     for i, ntics in enumerate(contourtics):
                         interpol.extend(np.array(contour[i:i+1] +
                                                  contour2[i:i+1] *
                                                  np.linspace(0, 1, ntics)[:,np.newaxis,np.newaxis],
-                                                 np.int))
+                                                 int))
                     interpol.append(contour[-1])
                     interpol = np.array(interpol)
                     contourtics = np.insert(np.cumsum(contourtics), 0, 0)
@@ -537,9 +537,9 @@ class OcropySegment(Processor):
             LOG.warning("Skipping '%s' with zero size", element_id)
             return
         element_array = pil2array(image)
-        element_bin = np.array(element_array <= midrange(element_array), np.bool)
-        sep_bin = np.zeros_like(element_bin, np.bool)
-        ignore_labels = np.zeros_like(element_bin, np.int)
+        element_bin = np.array(element_array <= midrange(element_array), bool)
+        sep_bin = np.zeros_like(element_bin, bool)
+        ignore_labels = np.zeros_like(element_bin, int)
         for i, segment in enumerate(ignore):
             LOG.debug('masking foreground of %s "%s" for "%s"',
                       type(segment).__name__[:-4], segment.id, element_id)
@@ -778,7 +778,7 @@ class OcropySegment(Processor):
         else:
             # get mask from region polygon:
             region_polygon = coordinates_of_segment(element, image, coords)
-            region_mask = np.zeros_like(element_bin, np.bool)
+            region_mask = np.zeros_like(element_bin, bool)
             region_mask[draw.polygon(region_polygon[:, 1],
                                      region_polygon[:, 0],
                                      region_mask.shape)] = True

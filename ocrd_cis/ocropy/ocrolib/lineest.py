@@ -31,7 +31,7 @@ class CenterNormalizer:
         #DSAVE('lineest check 1 dilated', smoothed + 0.5*line)
         smoothed = filters.gaussian_filter(smoothed, (1, h//10), mode='constant') # 2
         #DSAVE('lineest check 2 smoothed', smoothed + 0.5*line)
-        smoothed = np.array(smoothed > np.median(smoothed), dtype=np.float) # 3 # or 0.05 instead of median?
+        smoothed = np.array(smoothed > np.median(smoothed), dtype=float) # 3 # or 0.05 instead of median?
         #DSAVE('lineest check 3 thresholded', smoothed + 0.5*line)
         smoothed = filters.minimum_filter(smoothed, (2, h//5)) # 4: undo 1/2
         #DSAVE('lineest check 4 eroded', smoothed + 0.5*line)

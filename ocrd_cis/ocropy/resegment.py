@@ -188,8 +188,8 @@ class OcropyResegment(Processor):
         # prepare line segmentation
         parent_array = pil2array(parent_image)
         #parent_array, _ = common.binarize(parent_array, maxskew=0) # just in case still raw
-        parent_bin = np.array(parent_array <= midrange(parent_array), np.bool)
-        ignore_bin = np.ones_like(parent_bin, np.bool)
+        parent_bin = np.array(parent_array <= midrange(parent_array), bool)
+        ignore_bin = np.ones_like(parent_bin, bool)
         if isinstance(parent, PageType):
             tag = 'page'
             fullpage = True
@@ -203,14 +203,14 @@ class OcropyResegment(Processor):
                         page_id if fullpage else parent.id, report)
             return
         # get existing line labels:
-        line_labels = np.zeros_like(parent_bin, np.bool)
+        line_labels = np.zeros_like(parent_bin, bool)
         line_labels = np.tile(line_labels[np.newaxis], (len(lines), 1, 1))
         line_polygons = []
         for i, segment in enumerate(lines):
             segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
             segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
             line_polygons.append(prep(segment_polygon))
-            segment_polygon = np.array(segment_polygon.exterior.coords, np.int)[:-1]
+            segment_polygon = np.array(segment_polygon.exterior.coords, int)[:-1]
             # draw.polygon: If any segment_polygon lies outside of parent
             # (causing negative/above-max indices), either fully or partially,
             # then this will silently ignore them. The caller does not need
@@ -225,7 +225,7 @@ class OcropyResegment(Processor):
                       segment.id, page_id if fullpage else parent.id)
             segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
             segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
-            segment_polygon = np.array(segment_polygon.exterior.coords, np.int)[:-1]
+            segment_polygon = np.array(segment_polygon.exterior.coords, int)[:-1]
             ignore_bin[draw.polygon(segment_polygon[:, 1],
                                     segment_polygon[:, 0],
                                     parent_bin.shape)] = False
@@ -273,7 +273,7 @@ class OcropyResegment(Processor):
                         # left-hand side if left-to-right, and vice versa
                         scale * (-1) ** line_ltr, single_sided=True)],
                                                             loc=line.id, scale=scale))
-                    line_polygon = np.array(line_polygon.exterior.coords, np.int)[:-1]
+                    line_polygon = np.array(line_polygon.exterior.coords, int)[:-1]
                     line_y, line_x = draw.polygon(line_polygon[:, 1],
                                                   line_polygon[:, 0],
                                                   parent_bin.shape)
@@ -303,11 +303,11 @@ class OcropyResegment(Processor):
         # polygons for intersecting pairs
         intersections = dict()
         # ratio of overlap between intersection and new line
-        fits_bg = np.zeros((len(new_line_polygons), len(line_polygons)), np.float)
-        fits_fg = np.zeros((len(new_line_polygons), len(line_polygons)), np.float)
+        fits_bg = np.zeros((len(new_line_polygons), len(line_polygons)), float)
+        fits_fg = np.zeros((len(new_line_polygons), len(line_polygons)), float)
         # ratio of overlap between intersection and existing line
-        covers_bg = np.zeros((len(new_line_polygons), len(line_polygons)), np.float)
-        covers_fg = np.zeros((len(new_line_polygons), len(line_polygons)), np.float)
+        covers_bg = np.zeros((len(new_line_polygons), len(line_polygons)), float)
+        covers_fg = np.zeros((len(new_line_polygons), len(line_polygons)), float)
         # compare segmentations, calculating ratios of overlapping fore/background area
         for i, new_line_poly in enumerate(new_line_polygons):
             for j, line_poly in enumerate(line_polygons):
@@ -333,7 +333,7 @@ class OcropyResegment(Processor):
                     #           fits_bg[i,j]*100, covers_bg[i,j]*100,
                     #           fits_fg[i,j]*100, covers_fg[i,j]*100)
         # assign new lines to existing lines, if possible
-        assignments = np.ones(len(new_line_polygons), np.int) * -1
+        assignments = np.ones(len(new_line_polygons), int) * -1
         for i, new_line_poly in enumerate(new_line_polygons):
             if not fits_bg[i].any():
                 LOG.debug("new line %d fits no existing line's background", i)

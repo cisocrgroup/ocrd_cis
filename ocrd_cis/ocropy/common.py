@@ -463,7 +463,7 @@ def compute_images(binary, scale, maximages=5):
     Returns a same-size image label array.
     """
     if maximages == 0:
-        return np.zeros_like(binary, np.int)
+        return np.zeros_like(binary, int)
     images = binary
     # d0 = odd(max(2,scale/5))
     # d1 = odd(max(2,scale/8))
@@ -475,7 +475,7 @@ def compute_images(binary, scale, maximages=5):
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=2*maximages)
     DSAVE('images1_large', images+0.6*binary)
     if not images.any():
-        return np.zeros_like(binary, np.int)
+        return np.zeros_like(binary, int)
     # 2- open horizontally and vertically to suppress
     #    v/h-lines; these will be detected separately,
     #    and it is dangerous to combine them into one
@@ -500,7 +500,7 @@ def compute_images(binary, scale, maximages=5):
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=maximages)
     DSAVE('images5_selected', images+0.6*binary)
     if not images.any():
-        return np.zeros_like(binary, np.int)
+        return np.zeros_like(binary, int)
     # 6- dilate a little to get a smooth contour without gaps
     dilated = morph.r_dilation(images, (odd(scale),odd(scale)))
     images = morph.propagate_labels_majority(binary, dilated+1)
@@ -531,7 +531,7 @@ def compute_seplines(binary, scale, maxseps=0):
     # - intersecting vertical and horizontal lines, even closed shapes (enclosing text)
     # - line-like glyphs (i.e. false positives)
     if maxseps == 0:
-        return np.zeros_like(binary, np.int)
+        return np.zeros_like(binary, int)
     skel, dist = medial_axis(binary, return_distance=True)
     DSAVE("medial-axis", [dist, skel])
     labels, nlabels = morph.label(skel)
@@ -539,7 +539,7 @@ def compute_seplines(binary, scale, maxseps=0):
     DSAVE("skel-labels", labels)
     # determine those components which could be separators
     # (filter by compactness, and by mean+variance of distances)
-    sepmap = np.zeros(nlabels + 1, np.int)
+    sepmap = np.zeros(nlabels + 1, int)
     numsep = 0
     sepsizes = [0]
     sepslices = [None]
@@ -662,7 +662,7 @@ def compute_seplines(binary, scale, maxseps=0):
         corrinds = corrinds.nonzero()[0]
         if len(corrinds) == 1:
             continue # nothing to link
-        nonoverlapping = np.zeros((len(corrinds), len(corrinds)), dtype=np.bool)
+        nonoverlapping = np.zeros((len(corrinds), len(corrinds)), dtype=bool)
         for i, indi in enumerate(corrinds[:-1]):
             sepi = corrs[indi, 0]
             labeli = np.flatnonzero(sepmap == sepi)[0]
@@ -715,7 +715,7 @@ def compute_seplines(binary, scale, maxseps=0):
     if np.any(minsize):
         maxseps = min(maxseps, minsize[0])
     maxseps = min(maxseps, numsep)
-    ordermap = np.zeros(numsep + 1, np.int)
+    ordermap = np.zeros(numsep + 1, int)
     ordermap[order[:maxseps]] = np.arange(1, maxseps + 1)
     sepmap = ordermap[sepmap]
     DSAVE("sep-top", sepmap[labels])
@@ -1163,7 +1163,7 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
             label1_y, label1_x = np.where(seeds == label)
             label2_y, label2_x = np.where(seed2)
             shared_y = np.intersect1d(label1_y, label2_y)
-            gap = np.zeros_like(seed2, np.bool)
+            gap = np.zeros_like(seed2, bool)
             for y in shared_y:
                 can_x_min = label2_x[label2_y == y][0]
                 can_x_max = label2_x[label2_y == y][-1]
@@ -1407,7 +1407,7 @@ def compute_baselines(bottom, top, linelabels, scale, method='bottom'):
         if len(corrinds) == 1:
             labelmap.setdefault(line, list()).append(corrs[corrinds[0], 1])
             continue
-        nonoverlapping = ~np.eye(len(corrinds), dtype=np.bool)
+        nonoverlapping = ~np.eye(len(corrinds), dtype=bool)
         for i, indi in enumerate(corrinds[:-1]):
             baselabeli = corrs[indi, 1]
             baseslicei = baseslices[baselabeli]
@@ -1577,7 +1577,7 @@ def lines2regions(binary, llabels,
     bincounts = np.bincount(lbinary.flatten())
     
     LOG.debug('combining lines to regions')
-    relabel = np.zeros(np.amax(llabels)+1, np.int)
+    relabel = np.zeros(np.amax(llabels)+1, int)
     num_regions = 0
     def recursive_x_y_cut(box, mask=None, partition_type=None, debug=False):
         """Split lbinary at horizontal or vertical gaps recursively.
@@ -1624,7 +1624,7 @@ def lines2regions(binary, llabels,
                 llab = sl.cut(llabels, box)
                 if isinstance(mask, np.ndarray):
                     llab = np.where(mask, llab, 0)
-                linelabels0 = np.zeros(llabels.max()+1, dtype=np.bool)
+                linelabels0 = np.zeros(llabels.max()+1, dtype=bool)
                 linelabels0[linelabels] = True
                 llab *= linelabels0[llab]
                 newregion = rlab.max()+1
@@ -1686,7 +1686,7 @@ def lines2regions(binary, llabels,
                 if npartitions > 1:
                     # delete partitions that have no significant line labels,
                     # merge partitions that share any significant line labels
-                    splitmap = np.zeros((len(objects), npartitions), dtype=np.bool)
+                    splitmap = np.zeros((len(objects), npartitions), dtype=bool)
                     for label in range(npartitions):
                         linecounts = np.bincount(lbin[partitions==label+1], minlength=len(objects))
                         linecounts[0] = 0 # without bg
@@ -1753,8 +1753,8 @@ def lines2regions(binary, llabels,
                     linelabels = np.setdiff1d(np.unique(lbin), [0])
                     nlines = linelabels.max() + 1
                     # find pairs of lines above each other with a separator next to them
-                    leftseps = np.zeros((nlines, nseps), np.bool)
-                    rghtseps = np.zeros((nlines, nseps), np.bool)
+                    leftseps = np.zeros((nlines, nseps), bool)
+                    rghtseps = np.zeros((nlines, nseps), bool)
                     for line in linelabels:
                         for i, sep in enumerate(sepobj):
                             if sep is None:
@@ -1775,7 +1775,7 @@ def lines2regions(binary, llabels,
                     if not np.any(trueseps):
                         return
                     if debug: LOG.debug("trueseps: %s", str(trueseps))
-                    neighbours = np.zeros((nlines, nlines), np.bool)
+                    neighbours = np.zeros((nlines, nlines), bool)
                     for i in linelabels:
                         for j in linelabels[i+1:]:
                             if sl.yoverlap_rel(obj[i], obj[j]) > 0.5:
@@ -1791,7 +1791,7 @@ def lines2regions(binary, llabels,
                     # group neighbours by adjacency (i.e. put any contiguous pairs
                     # of such line labels into the same group)
                     nlabels = llab.max() + 1
-                    splitmap = np.zeros(nlabels, dtype=np.int)
+                    splitmap = np.zeros(nlabels, dtype=int)
                     for i, j in zip(*neighbours.nonzero()):
                         if splitmap[i] > 0:
                             splitmap[j] = splitmap[i]
@@ -1879,8 +1879,8 @@ def lines2regions(binary, llabels,
                 if not gaps.shape[0]:
                     continue
                 for start, stop, height in sorted(zip(
-                        props['left_ips'].astype(np.int),
-                        props['right_ips'].astype(np.int),
+                        props['left_ips'].astype(int),
+                        props['right_ips'].astype(int),
                         props['peak_heights']), key=lambda x: x[2]):
                     if is_horizontal:
                         llab[box[0].start+int(scale/2):box[0].stop-int(scale/2),box[1].start+start:box[1].start+stop] = -10*np.log(-height+1e-9)
