@@ -927,40 +927,33 @@ def join_polygons(polygons, loc='', scale=20):
 def join_baselines(baselines, loc=''):
     LOG = getLogger('processor.OcropyResegment')
     result = []
-    for baseline in baselines:
-        if (baseline.is_empty or
-            baseline.type in ['Point', 'MultiPoint']):
-            continue
+    def add_baseline(baseline):
+        nonlocal result
         base_x = [pt[0] for pt in result]
         base_left = min(base_x, default=0)
         base_right = max(base_x, default=0)
         left = baseline.bounds[0]
         right = baseline.bounds[2]
-        if (baseline.type == 'GeometryCollection' or
-            baseline.type.startswith('Multi')):
-            # heterogeneous result: filter point
-            for geom in baseline.geoms:
-                if geom.type == 'Point':
-                    continue
-                left = geom.bounds[0]
-                right = geom.bounds[2]
-                if left > base_right:
-                    result.extend(geom.coords)
-                    base_right = right
-                elif right < base_left:
-                    result = list(geom.coords) + result
-                    base_left = left
-                else:
-                    LOG.warning("baseline part component crosses existing x in %s", loc)
-                    continue
-        elif left > base_right:
+        if baseline.coords[0][0] > baseline.coords[-1][0]:
+            baseline.coords = list(baseline.coords[::-1])
+        if left > base_right:
             result.extend(baseline.coords)
         elif right < base_left:
             result = list(baseline.coords) + result
         else:
             LOG.warning("baseline part crosses existing x in %s", loc)
-            continue
+            return
         assert all(p1[0] < p2[0] for p1, p2 in zip(result[:-1], result[1:])), result
+    for baseline in baselines:
+        if (baseline.is_empty or
+            baseline.type in ['Point', 'MultiPoint']):
+            continue
+        if (baseline.type == 'GeometryCollection' or
+            baseline.type.startswith('Multi')):
+            for geom in baseline.geoms:
+                add_baseline(geom)
+            continue
+        add_baseline(baseline)
     if not len(result):
         return None
     return LineString(result)
