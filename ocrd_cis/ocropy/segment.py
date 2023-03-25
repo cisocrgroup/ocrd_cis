@@ -869,17 +869,18 @@ def make_intersection(poly1, poly2):
     return interp
 
 def make_valid(polygon):
-    for split in range(1, len(polygon.exterior.coords)-1):
+    points = list(polygon.exterior.coords)
+    for split in range(1, len(points)):
         if polygon.is_valid or polygon.simplify(polygon.area).is_valid:
             break
         # simplification may not be possible (at all) due to ordering
         # in that case, try another starting point
-        polygon = Polygon(polygon.exterior.coords[-split:]+polygon.exterior.coords[:-split])
-    for tolerance in range(1, int(polygon.area)):
+        polygon = Polygon(points[-split:]+points[:-split])
+    for tolerance in range(int(polygon.area)):
         if polygon.is_valid:
             break
         # simplification may require a larger tolerance
-        polygon = polygon.simplify(tolerance)
+        polygon = polygon.simplify(tolerance + 1)
     return polygon
 
 def diff_polygons(poly1, poly2):
