@@ -370,9 +370,9 @@ def check_page(binary, zoom=1.0):
     if np.mean(binary)<np.median(binary): return "image may be inverted"
     h,w = binary.shape
     if h<600/zoom: return "image not tall enough for a page image %s"%(binary.shape,)
-    if h>10000/zoom: return "image too tall for a page image %s"%(binary.shape,)
+    if h>20000/zoom: return "image too tall for a page image %s"%(binary.shape,)
     if w<600/zoom: return "image too narrow for a page image %s"%(binary.shape,)
-    if w>10000/zoom: return "image too wide for a page image %s"%(binary.shape,)
+    if w>20000/zoom: return "image too wide for a page image %s"%(binary.shape,)
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
