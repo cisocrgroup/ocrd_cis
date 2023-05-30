@@ -207,8 +207,12 @@ class OcropyResegment(Processor):
         line_labels = np.tile(line_labels[np.newaxis], (len(lines), 1, 1))
         line_polygons = []
         for i, segment in enumerate(lines):
-            segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
-            segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
+            if self.parameter['baseline_only'] and segment.Baseline:
+                segment_baseline = baseline_of_segment(segment, parent_coords)
+                segment_polygon = polygon_from_baseline(segment_baseline, 30/zoom)
+            else:
+                segment_polygon = coordinates_of_segment(segment, parent_image, parent_coords)
+                segment_polygon = make_valid(Polygon(segment_polygon)).buffer(margin)
             line_polygons.append(prep(segment_polygon))
             segment_polygon = np.array(segment_polygon.exterior.coords, int)[:-1]
             # draw.polygon: If any segment_polygon lies outside of parent
@@ -267,12 +271,8 @@ class OcropyResegment(Processor):
                         LOG.warning("Skipping '%s' without baseline", line.id)
                         new_labels[line_labels[i]] = i + 1
                         continue
-                    line_polygon = baseline_of_segment(line, parent_coords)
-                    line_ltr = line_polygon[0,0] < line_polygon[-1,0]
-                    line_polygon = make_valid(join_polygons([LineString(line_polygon).buffer(
-                        # left-hand side if left-to-right, and vice versa
-                        scale * (-1) ** line_ltr, single_sided=True)],
-                                                            loc=line.id, scale=scale))
+                    line_baseline = baseline_of_segment(line, parent_coords)
+                    line_polygon = polygon_from_baseline(line_baseline, scale)
                     line_polygon = np.array(line_polygon.exterior.coords, int)[:-1]
                     line_y, line_x = draw.polygon(line_polygon[:, 1],
                                                   line_polygon[:, 0],
@@ -460,7 +460,7 @@ def spread_dist(lines, old_labels, new_labels, binarized, components, coords,
             continue
         count = np.count_nonzero(old_label * binarized)
         if not count:
-            LOG.warning("skipping binarizy-empty line '%s'", line.id)
+            LOG.warning("skipping binary-empty line '%s'", line.id)
             continue
         covers = np.count_nonzero(new_label * binarized) / count
         if covers < threshold:
@@ -494,3 +494,11 @@ def baseline_of_segment(segment, coords):
     line = transform_coordinates(line, coords['transform'])
     return np.round(line).astype(np.int32)
 
+# zzz should go into core ocrd_utils
+def polygon_from_baseline(baseline, scale):
+    ltr = baseline[0,0] < baseline[-1,0]
+    # left-hand side if left-to-right, and vice versa
+    polygon = make_valid(join_polygons([LineString(baseline).buffer(scale * (-1) ** ltr,
+                                                                    single_sided=True)],
+                                       scale=scale))
+    return polygon

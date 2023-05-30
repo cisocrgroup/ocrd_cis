@@ -191,7 +191,7 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Resegment text lines",
+			"description": "Improve coordinates of text lines",
 			"parameters": {
 				"level-of-operation": {
 					"type": "string",
@@ -204,6 +204,11 @@
 					"enum": ["lineest", "baseline", "ccomps"],
 					"description": "source for new line polygon candidates ('lineest' for line estimation, i.e. how Ocropy would have segmented text lines; 'baseline' tries to re-polygonize from the baseline annotation; 'ccomps' avoids crossing connected components by majority rule)",
 					"default": "lineest"
+				},
+				"baseline_only": {
+					"type": "boolean",
+					"description": "ignore existing textline coords completely and use baseline as input if possible",
+					"default": false
 				},
 				"dpi": {
 					"type": "number",
