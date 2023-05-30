@@ -319,6 +319,7 @@ def check_line(binary, zoom=1.0):
     ##if w<1.5*h: return "line too short %s"%(binary.shape,)
     if w<1.5*h and w<32/zoom: return "image too short for a line image %s"%(binary.shape,)
     if w>4000/zoom: return "image too long for a line image %s"%(binary.shape,)
+    return None
     ratio = w*1.0/h
     _, ncomps = measurements.label(binary)
     lo = int(0.5*ratio+0.5)
@@ -348,6 +349,7 @@ def check_region(binary, zoom=1.0):
     if h>5000/zoom: return "image too tall for a region image %s"%(binary.shape,)
     if w<100/zoom: return "image too narrow for a region image %s"%(binary.shape,)
     if w>5000/zoom: return "image too wide for a region image %s"%(binary.shape,)
+    return None
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
@@ -375,6 +377,7 @@ def check_page(binary, zoom=1.0):
     if h>10000/zoom: return "image too tall for a page image %s"%(binary.shape,)
     if w<600/zoom: return "image too narrow for a page image %s"%(binary.shape,)
     if w>10000/zoom: return "image too wide for a page image %s"%(binary.shape,)
+    return None
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
