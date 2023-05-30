@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import os.path
 import numpy as np
-from skimage import draw
+from skimage import draw, segmentation
 from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
 from shapely.ops import unary_union
@@ -429,20 +429,22 @@ def spread_dist(lines, old_labels, new_labels, binarized, components, coords,
                 scale=43, loc='', threshold=0.9):
     """redefine line coordinates by contourizing spread of connected components propagated from new labels"""
     LOG = getLogger('processor.OcropyResegment')
-    DSAVE('baseline-seeds', [new_labels, (components>0)])
-    # allocate to connected components consistently (by majority,
-    # ignoring smallest components like punctuation)
-    #new_labels = morph.propagate_labels_majority(binarized, new_labels)
-    new_labels = morph.propagate_labels_majority(components > 0, new_labels)
-    DSAVE('majority-propagated', [new_labels, (components>0) & (new_labels==0)])
+    DSAVE('seeds', [new_labels, (components>0)])
+    # allocate to connected components consistently
+    # (ignoring smallest components like punctuation)
+    # but when there are conflicts, meet in the middle via watershed
+    new_labels2 = morph.propagate_labels(components > 0, new_labels, conflict=0)
+    new_labels2 = segmentation.watershed(new_labels2, markers=new_labels, mask=(components > 0))
+    DSAVE('propagated', new_labels2)
     # dilate/grow labels from connected components against each other and bg
-    new_labels = morph.spread_labels(new_labels, maxdist=scale*2)
-    DSAVE('scale-spread', [new_labels, (components>0)])
+    new_labels = morph.spread_labels(new_labels2, maxdist=scale*2)
+    DSAVE('spread', new_labels)
     # now propagate again to catch smallest components like punctuation
-    new_labels = morph.propagate_labels_majority(components > 0, new_labels)
-    DSAVE('propagated-again', [new_labels, (components>0) & (new_labels==0)])
-    new_labels = morph.spread_labels(new_labels, maxdist=scale/2)
-    DSAVE('spread-again', [new_labels, (components>0)])
+    new_labels2 = morph.propagate_labels(binarized, new_labels, conflict=0)
+    new_labels2 = segmentation.watershed(new_labels2, markers=new_labels, mask=binarized)
+    DSAVE('propagated-again', [new_labels2, binarized & (new_labels2==0)])
+    new_labels = morph.spread_labels(new_labels2, maxdist=scale/2)
+    DSAVE('spread-again', [new_labels, binarized])
     # find polygon hull and modify line coords
     for i, line in enumerate(lines):
         new_label = new_labels == i + 1
