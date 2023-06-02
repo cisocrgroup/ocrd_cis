@@ -136,7 +136,7 @@ def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=N
                     #plot_poly(hole, 'blue')
                     # cut child from outside...
                     # first get nearest point on child
-                    hole_idx = np.argmin([cv2.pointPolygonTest(contour, pt[0].tolist(), True)
+                    hole_idx = np.argmin([cv2.pointPolygonTest(contour, tuple(pt[0].tolist()), True)
                                           for pt in hole])
                     # now get nearest point on parent
                     # (we cannot use PolygonTest directly, because we must also interpolate
