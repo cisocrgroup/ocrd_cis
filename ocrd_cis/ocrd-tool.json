@@ -302,26 +302,6 @@
 				}
 			}
 		},
-		"ocrd-cis-ocropy-rec": {
-			"executable": "ocrd-cis-ocropy-rec",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"recognition/text-recognition"
-			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"description": "Recognize text snippets",
-			"parameters": {
-				"model": {
-					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
-				}
-			}
-		},
 		"ocrd-cis-ocropy-segment": {
 			"executable": "ocrd-cis-ocropy-segment",
 			"categories": [
