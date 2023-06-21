@@ -298,7 +298,9 @@
 				},
 				"model": {
 					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn.gz)"
 				}
 			}
 		},
@@ -418,13 +420,15 @@
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
-					"description": "PAGE XML hierarchy level granularity",
+					"description": "hierarchy level to extract GT pairs from",
 					"enum": ["line", "word", "glyph"],
 					"default": "line"
 				},
 				"model": {
 					"type": "string",
-					"description": "load model or create new one (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "load model (e.g. 'fraktur.pyrnn.gz') to init weights, or none to train from scratch"
 				},
 				"ntrain": {
 					"type": "number",
