@@ -959,7 +959,7 @@ def join_baselines(baselines, loc=''):
                 add_baseline(geom)
             continue
         add_baseline(baseline)
-    if not len(result):
+    if len(result) < 2:
         return None
     return LineString(result)
 

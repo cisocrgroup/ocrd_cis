@@ -39,7 +39,7 @@ class OcropyDeskew(Processor):
         super(OcropyDeskew, self).__init__(*args, **kwargs)
 
     def process(self):
-        """Deskew the regions of the workspace.
+        """Deskew the pages or regions of the workspace.
 
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the TextRegion level.
