@@ -35,7 +35,7 @@ TOOL = 'ocrd-cis-ocropy-recognize'
 def resize_keep_ratio(image, baseheight=48):
     scale = baseheight / image.height
     wsize = round(image.width * scale)
-    image = image.resize((wsize, baseheight), Image.ANTIALIAS)
+    image = image.resize((wsize, baseheight), Image.LANCZOS)
     return image, scale
 
 # from ocropus-rpred process1, but without input files and without lineest/dewarping

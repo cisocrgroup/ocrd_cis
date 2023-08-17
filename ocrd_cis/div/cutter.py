@@ -26,7 +26,7 @@ def bounding_box(coord_points):
 def resize_keep_ratio(image, baseheight=48):
     hpercent = (baseheight / float(image.size[1]))
     wsize = int((float(image.size[0] * float(hpercent))))
-    image = image.resize((wsize, baseheight), Image.ANTIALIAS)
+    image = image.resize((wsize, baseheight), Image.LANCZOS)
     return image
 
 

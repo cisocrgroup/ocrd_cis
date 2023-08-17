@@ -45,7 +45,7 @@ def rtrain(inputs, load, output, ntrain):
         baseheight = 48
         hpercent = (baseheight / float(image.size[1]))
         wsize = int((float(image.size[0] * float(hpercent))))
-        image = image.resize((wsize, baseheight), Image.ANTIALIAS)
+        image = image.resize((wsize, baseheight), Image.LANCZOS)
         return image
 
     # make sure an output file has been set
