@@ -1,4 +1,12 @@
 FROM ocrd/core:latest AS base
+ARG VCS_REF
+ARG BUILD_DATE
+LABEL \
+    maintainer="https://github.com/OCR-D/ocrd_cis/issues" \
+    org.label-schema.vcs-ref=$VCS_REF \
+    org.label-schema.vcs-url="https://github.com/OCR-D/ocrd_cis" \
+    org.label-schema.build-date=$BUILD_DATE
+
 ENV VERSION="Di 12. Mai 13:26:35 CEST 2020"
 ENV GITURL="https://github.com/cisocrgroup"
 ENV DOWNLOAD_URL="http://cis.lmu.de/~finkf"
