@@ -11,7 +11,10 @@ uninstall:
 	${PIP} uninstall ${PKG}
 
 docker-build: Dockerfile
-	docker build -t flobar/ocrd_cis:latest .
+	docker build \
+	--build-arg VCS_REF=$$(git rev-parse --short HEAD) \
+	--build-arg BUILD_DATE=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+	-t flobar/ocrd_cis:latest .
 docker-push: docker-build
 	docker push flobar/ocrd_cis:latest
 
