@@ -1,0 +1,19 @@
+version: 2.1
+jobs:
+
+  test-python3:
+    docker:
+      - image: ocrd/core
+    environment:
+      PIP: pip3
+      PYTHON: python3
+    steps:
+      - checkout
+      - run: make install
+      - run: make test
+
+workflows:
+  version: 2
+  build-and-test:
+    jobs:
+      - test-python3
