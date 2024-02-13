@@ -4,14 +4,11 @@ tmpdir=$(mktemp -d)
 trap "rm -rf $tmpdir" EXIT
 
 OCRD_CIS_FILEGRP="OCR-D-GT-SEG-LINE"
-# fixme: it does not work like this - the OCR-D GT repo uses different URL paths for different datasets
-# this is merely the path for blumenbach_anatomie_1805.ocrd.zip
-data_url="http://hdl.handle.net/21.11156/6B119B3C-A24A-424C-AC3C-27E64B051780"
+data_url="https://github.com/OCR-D/gt_structure_text/releases/download/l1.1.20/"
 function ocrd_cis_download_bagit() {
-	local destdir="$tmpdir/download"
-	mkdir -p "$destdir"
-	local dest="$destdir/$1"
-	wget -nc -O $dest $data_url
+	local url="$data_url/$1"
+	mkdir -p "$tmpdir/download"
+	wget -nc -P "$tmpdir/download" "$url"
 }
 
 function ocrd_cis_init_ws() {
