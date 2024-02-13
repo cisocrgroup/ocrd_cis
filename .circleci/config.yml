@@ -9,7 +9,7 @@ jobs:
     steps:
       - checkout
       - run: make install
-      - run: make test
+      - run: make test V=""
 workflows:
   version: 2
   build-and-test:
