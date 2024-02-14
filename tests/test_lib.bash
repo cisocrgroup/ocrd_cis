@@ -23,13 +23,20 @@ function ocrd_cis_align() {
 	ocrd resmgr download ocrd-cis-ocropy-recognize fraktur.pyrnn.gz
 	ocrd resmgr download ocrd-cis-ocropy-recognize fraktur-jze.pyrnn.gz
 	# run ocr
-	ocrd-cis-ocropy-recognize -l DEBUG -m $tmpws/mets.xml \
- 				-I $OCRD_CIS_FILEGRP -O OCR-D-CIS-OCR-1 \
+        pushd $tmpws
+        ocrd-cis-ocropy-binarize -l DEBUG -I $OCRD_CIS_FILEGRP -O OCR-D-CIS-IMG-BIN
+	ocrd-cis-ocropy-recognize -l DEBUG \
+ 				-I OCR-D-CIS-IMG-BIN -O OCR-D-CIS-OCR-1 \
 				-P textequiv_level word -P model fraktur.pyrnn.gz
-	ocrd-cis-ocropy-recognize -l DEBUG -m $tmpws/mets.xml \
-				-I $OCRD_CIS_FILEGRP -O OCR-D-CIS-OCR-2 \
+	ocrd-cis-ocropy-recognize -l DEBUG \
+				-I OCR-D-CIS-IMG-BIN -O OCR-D-CIS-OCR-2 \
 				-P textequiv_level word -P model fraktur-jze.pyrnn.gz
-	ocrd-cis-align -l DEBUG -m $tmpws/mets.xml \
-				-I OCR-D-CIS-OCR-1,OCR-D-CIS-OCR-2,$OCRD_CIS_FILEGRP \
+	ocrd-cis-align -l DEBUG	-I OCR-D-CIS-OCR-1,OCR-D-CIS-OCR-2,$OCRD_CIS_FILEGRP \
 				-O OCR-D-CIS-ALIGN
+        popd
+}
+
+function fail() {
+    echo >&2 "$@"
+    false
 }
