@@ -10,8 +10,32 @@ jobs:
       - checkout
       - run: make install
       - run: make test V=""
+
+  deploy-docker:
+    docker:
+      - image: circleci/buildpack-deps:stretch
+    environment:
+      DOCKER_TAG: ocrd/cis
+    steps:
+      - checkout
+      - setup_remote_docker: # https://circleci.com/docs/2.0/building-docker-images/
+         docker_layer_caching: true
+      - run: make docker TAG=$DOCKER_TAG
+      - run:
+          name: Login to Docker Hub
+          command: echo "$DOCKERHUB_PASS" | docker login --username "$DOCKERHUB_USER" --password-stdin
+      - run: docker push $DOCKER_TAG
+
 workflows:
   version: 2
   build-and-test:
     jobs:
       - test-python3
+  deploy:
+    jobs:
+      - deploy-docker:
+          filters:
+            branches:
+              only:
+                - master
+                - fix-alpha-shape
