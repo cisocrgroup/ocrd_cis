@@ -6,17 +6,11 @@ ocrd_cis_init_ws blumenbach_anatomie_1805.ocrd.zip
 # test if there are 3 gt files
 pushd "$tmpws"
 found_files=0
-for file in $(ocrd workspace find -G OCR-D-GT-SEG-LINE); do
-	if [[ ! -f "$file" ]]; then
-		echo "cannot find ground truth file: $file"
-		exit 1
-	fi
+for file in $(ocrd workspace find -G $OCRD_CIS_FILEGRP); do
+	[[ -f "$file" ]] || fail "cannot find ground truth file: $file"
 	found_files=$((found_files + 1))
 done
-if [[ $found_files != 3 ]]; then
-	echo "invalid number of files: $found_files"
-	exit 1
-fi
+(( found_files == 3 )) || fail "invalid number of files: $found_files"
 popd
 
 ocrd_cis_align
@@ -28,31 +22,20 @@ cat > /dev/null
 echo '{}'
 EOF
 chmod a+x "$tmpdir/bin/profiler.bash"
-ocrd-cis-postcorrect --log-level DEBUG \
-					 -I OCR-D-CIS-ALIGN \
-					 -O OCR-D-CIS-POSTCORRECT \
-					 -m $tmpws/mets.xml \
-					 --parameter <(cat <<EOF
-{
-"profilerPath": "$tmpdir/bin/profiler.bash",
-"profilerConfig": "ignored",
-"model": "$(ocrd-cis-data -model)",
-"nOCR": 2
-}
-EOF
-)
+ocrd-cis-postcorrect -l DEBUG \
+			-I OCR-D-CIS-ALIGN \
+			-O OCR-D-CIS-POSTCORRECT \
+			-m $tmpws/mets.xml \
+			-P profilerPath $tmpdir/bin/profiler.bash \
+			-P profilerConfig ignored \
+			-P model "$(ocrd-cis-data -model)" \
+			-P nOCR 2
 
 pushd $tmpws
 found_files=0
 for file in $(ocrd workspace find -G OCR-D-CIS-POSTCORRECT); do
-	if [[ ! -f "$file" ]]; then
-		echo "$file: not a file"
-		exit 1
-	fi
+	[[ -f "$file" ]] || fail "$file: not a file"
 	found_files=$((found_files + 1))
 done
-if [[ $found_files != 3 ]]; then
-	echo "invalid number of files: $found_files"
-	exit 1
-fi
+(( found_files == 3 )) || fail "invalid number of files: $found_files"
 popd
