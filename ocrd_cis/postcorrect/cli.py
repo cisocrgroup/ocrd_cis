@@ -37,6 +37,12 @@ class PostCorrector(Processor):
                               self.parameter,
                               getLevelName(self.log.getEffectiveLevel()))
         p.exe()
-        # reload the mets file to prevent it from overriding the
-        # updated version from the java process
-        self.reload_mets()
+        # reload the mets file to prevent run_processor's save_mets
+        # from overriding the results from the Java process
+        self.workspace.reload_mets()
+        # workaround for cisocrgroup/ocrd-postcorrection#13 (absolute paths in output):
+        for output_file in self.workspace.find_files(file_grp=self.output_file_grp):
+            flocat = output_file._el.find('{http://www.loc.gov/METS/}FLocat')
+            flocat.attrib['LOCTYPE'] = 'OTHER'
+            flocat.attrib['OTHERLOCTYPE'] = 'FILE'
+            output_file.local_filename = os.path.relpath(output_file.local_filename, self.workspace.directory)
