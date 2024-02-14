@@ -7,13 +7,13 @@ OCRD_CIS_FILEGRP="OCR-D-GT-SEG-LINE"
 data_url="https://github.com/OCR-D/gt_structure_text/releases/download/l1.1.20/"
 function ocrd_cis_download_bagit() {
 	local url="$data_url/$1"
-	mkdir -p "$tmpdir/download"
-	wget -nc -P "$tmpdir/download" "$url"
+	mkdir -p "$PWD/download"
+	wget -nc -P "$PWD/download" "$url"
 }
 
 function ocrd_cis_init_ws() {
 	ocrd_cis_download_bagit "$1"
-	ocrd zip spill -d "$tmpdir" "$tmpdir/download/$1"
+	ocrd zip spill -d "$tmpdir" "$PWD/download/$1"
 	tmpws="$tmpdir/${1%.ocrd.zip}"
 }
 
