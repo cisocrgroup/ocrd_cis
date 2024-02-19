@@ -191,7 +191,7 @@
 			"output_file_grp": [
 				"OCR-D-SEG-LINE"
 			],
-			"description": "Resegment text lines",
+			"description": "Improve coordinates of text lines",
 			"parameters": {
 				"level-of-operation": {
 					"type": "string",
@@ -204,6 +204,11 @@
 					"enum": ["lineest", "baseline", "ccomps"],
 					"description": "source for new line polygon candidates ('lineest' for line estimation, i.e. how Ocropy would have segmented text lines; 'baseline' tries to re-polygonize from the baseline annotation; 'ccomps' avoids crossing connected components by majority rule)",
 					"default": "lineest"
+				},
+				"baseline_only": {
+					"type": "boolean",
+					"description": "ignore existing textline coords completely and use baseline as input if possible",
+					"default": false
 				},
 				"dpi": {
 					"type": "number",
@@ -293,27 +298,9 @@
 				},
 				"model": {
 					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
-				}
-			}
-		},
-		"ocrd-cis-ocropy-rec": {
-			"executable": "ocrd-cis-ocropy-rec",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"recognition/text-recognition"
-			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"description": "Recognize text snippets",
-			"parameters": {
-				"model": {
-					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn.gz)"
 				}
 			}
 		},
@@ -433,13 +420,15 @@
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
-					"description": "PAGE XML hierarchy level granularity",
+					"description": "hierarchy level to extract GT pairs from",
 					"enum": ["line", "word", "glyph"],
 					"default": "line"
 				},
 				"model": {
 					"type": "string",
-					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "load model (e.g. 'fraktur.pyrnn.gz') to init weights, or none to train from scratch"
 				},
 				"ntrain": {
 					"type": "number",

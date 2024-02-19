@@ -7,6 +7,8 @@ import numpy as np
 from scipy.ndimage import measurements, filters, interpolation, morphology
 from scipy import stats, signal
 #from skimage.morphology import convex_hull_image
+from skimage.morphology import medial_axis
+import networkx as nx
 from PIL import Image
 
 from . import ocrolib
@@ -317,6 +319,7 @@ def check_line(binary, zoom=1.0):
     ##if w<1.5*h: return "line too short %s"%(binary.shape,)
     if w<1.5*h and w<32/zoom: return "image too short for a line image %s"%(binary.shape,)
     if w>4000/zoom: return "image too long for a line image %s"%(binary.shape,)
+    return None
     ratio = w*1.0/h
     _, ncomps = measurements.label(binary)
     lo = int(0.5*ratio+0.5)
@@ -346,6 +349,7 @@ def check_region(binary, zoom=1.0):
     if h>5000/zoom: return "image too tall for a region image %s"%(binary.shape,)
     if w<100/zoom: return "image too narrow for a region image %s"%(binary.shape,)
     if w>5000/zoom: return "image too wide for a region image %s"%(binary.shape,)
+    return None
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
@@ -370,9 +374,10 @@ def check_page(binary, zoom=1.0):
     if np.mean(binary)<np.median(binary): return "image may be inverted"
     h,w = binary.shape
     if h<600/zoom: return "image not tall enough for a page image %s"%(binary.shape,)
-    if h>10000/zoom: return "image too tall for a page image %s"%(binary.shape,)
+    if h>20000/zoom: return "image too tall for a page image %s"%(binary.shape,)
     if w<600/zoom: return "image too narrow for a page image %s"%(binary.shape,)
-    if w>10000/zoom: return "image too wide for a page image %s"%(binary.shape,)
+    if w>20000/zoom: return "image too wide for a page image %s"%(binary.shape,)
+    return None
     # zoom factor (DPI relative) and 4 (against fragmentation from binarization)
     slots = int(w*h*1.0/(30*30)*zoom*zoom) * 4
     _,ncomps = measurements.label(binary)
@@ -450,18 +455,18 @@ def DSAVE(title,array, interactive=False):
 
 @checks(ABINARY2,NUMBER)
 def compute_images(binary, scale, maximages=5):
-    """Finds (and removes) large connected foreground components.
+    """Detects large connected foreground components that could be images.
     
     Parameters:
     - ``binary``, a bool or int array of the page image, with 1=black
     - ``scale``, square root of average bbox area of characters
-    - ``maximages``, maximum number of large components to keep
+    - ``maximages``, maximum number of images to find
     (This could be drop-capitals, line drawings or photos.)
     
-    Returns a same-size bool array as a mask image.
+    Returns a same-size image label array.
     """
     if maximages == 0:
-        return binary == -1
+        return np.zeros_like(binary, int)
     images = binary
     # d0 = odd(max(2,scale/5))
     # d1 = odd(max(2,scale/8))
@@ -473,7 +478,7 @@ def compute_images(binary, scale, maximages=5):
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=2*maximages)
     DSAVE('images1_large', images+0.6*binary)
     if not images.any():
-        return images > 0
+        return np.zeros_like(binary, int)
     # 2- open horizontally and vertically to suppress
     #    v/h-lines; these will be detected separately,
     #    and it is dangerous to combine them into one
@@ -498,14 +503,237 @@ def compute_images(binary, scale, maximages=5):
     images = morph.select_regions(images,sl.area,min=(4*scale)**2,nbest=maximages)
     DSAVE('images5_selected', images+0.6*binary)
     if not images.any():
-        return images > 0
+        return np.zeros_like(binary, int)
     # 6- dilate a little to get a smooth contour without gaps
     dilated = morph.r_dilation(images, (odd(scale),odd(scale)))
     images = morph.propagate_labels_majority(binary, dilated+1)
     images = morph.spread_labels(images, maxdist=scale)==2
+    images, _ = morph.label(images)
     DSAVE('images6_dilated', images+0.6*binary)
     # we could repeat reconstruct-dilate here...
-    return images > 0
+    return images
+
+@checks(ABINARY2,NUMBER)
+def compute_seplines(binary, scale, maxseps=0):
+    """Detects thin connected foreground components that could be separators.
+    
+    Parameters:
+    - ``binary``, a bool or int array of the page image, with 1=black
+    - ``scale``, square root of average bbox area of characters
+    - ``maxseps``, maximum number of separators to find
+    (This could be horizontal, vertical or oblique, even slightly warped and discontinuous lines.)
+    
+    Returns a same-size separator label array.
+    """
+    # tries to find a compromise for the following issues,
+    # potentially occurring in combination (or all at once):
+    # - non-congiguous or broken lines (due to thin ink or low contrast)
+    # - skewed, curved or warped lines (due to non-planar photography or irregular typography)
+    # - very close or overlapping text (due to show-through or bad binarization)
+    # - superimposed fg noise (due to bad binarization) that may connect text and non-text
+    # - intersecting vertical and horizontal lines, even closed shapes (enclosing text)
+    # - line-like glyphs (i.e. false positives)
+    if maxseps == 0:
+        return np.zeros_like(binary, int)
+    skel, dist = medial_axis(binary, return_distance=True)
+    DSAVE("medial-axis", [dist, skel])
+    labels, nlabels = morph.label(skel)
+    slices = [None] + morph.find_objects(labels)
+    DSAVE("skel-labels", labels)
+    # determine those components which could be separators
+    # (filter by compactness, and by mean+variance of distances)
+    sepmap = np.zeros(nlabels + 1, int)
+    numsep = 0
+    sepsizes = [0]
+    sepslices = [None]
+    sepdists = [0]
+    for label in range(1, nlabels + 1):
+        labelslice = slices[label]
+        labelmask = labels == label
+        labelsize = np.count_nonzero(labelmask) # sum of skel pixels, i.e. "inner length"
+        labelarea = sl.area(labelslice)
+        labelaspect = sl.aspect(labelslice)
+        if labelaspect > 1:
+            labelaspect = 1 / labelaspect
+        labellength = np.hypot(*sl.dims(labelslice)) # length of bbox diagonal, i.e. "outer length"
+        #LOG.debug("skel label %d has inner size %d and outer size %d", label, labelsize, labellength)
+        if labelsize > 1.5 * labellength and labelaspect >= 0.1 and labelsize < 15 * scale: #and labelsize > 0.1 * labelarea
+            # not long / straight, but very compact
+            continue
+        distances = dist[labelmask]
+        avg_dist = np.median(distances) #np.mean(distances)
+        std_dist = np.std(distances)
+        # todo: empirical analysis of ideal thresholds
+        if avg_dist > scale / 4 or std_dist/avg_dist > 0.7:
+            continue
+        #LOG.debug("skel label %d has dist %.1f±%.2f", label, avg_dist, std_dist)
+        numsep += 1
+        sepmap[label] = numsep
+        sepsizes.append(labelsize)
+        sepslices.append(labelslice)
+        sepdists.append(avg_dist)
+        if labelsize > 10 * scale and avg_dist > 0 and std_dist / avg_dist > 0.2:
+            # try to split this large label up along neighbouring spans of similar distances:
+            # (e.g. vlines that touch letters or images)
+            # 1. get optimal (by variability) spans as bin intervals, then merge largest spans
+            disthist, distedges = np.histogram(distances, bins='scott', density=True) # stone
+            disthist *= np.diff(distedges) # get probability masses
+            disthistlarge = disthist > 0.1
+            if np.count_nonzero(disthistlarge) < 2:
+                continue # only 1 large bin
+            disthistlarge[-1] = True # ensure full interval
+            distedges = distedges[1:][disthistlarge]
+            disthist = np.cumsum(disthist)[disthistlarge]
+            disthist = np.diff(disthist, prepend=0)
+            distbin = np.digitize(distances, distedges, right=True)
+            # 2. now find connected components within bins, but map all tiny components
+            #    to a single label so they can be replaced by their neighbours later-on
+            sublabels = np.zeros_like(labels)
+            sublabels[labelmask] = distbin + 1
+            DSAVE("sublabels", sublabels)
+            sublabels2 = np.zeros_like(labels)
+            sublabel = 1
+            sublabelmap = [0, 1]
+            for bin in range(len(distedges)):
+                binmask = sublabels == bin + 1
+                binlabels, nbinlabels = morph.label(binmask)
+                _, binlabelcounts = np.unique(binlabels, return_counts=True)
+                largemask = (binlabelcounts > 2 * scale)[binlabels]
+                smallmask = (binlabelcounts <= 2 * scale)[binlabels]
+                sublabels2[binmask & smallmask] = 1
+                if not np.any(binmask & largemask):
+                    continue
+                sublabels2[binmask & largemask] = binlabels[binmask & largemask] + sublabel
+                sublabel += nbinlabels
+                sublabelmap.extend(nbinlabels*[bin + 1])
+            if sublabel == 1:
+                continue # only tiny sublabels here
+            DSAVE("sublabels_connected", sublabels2)
+            sublabelmap = np.array(sublabelmap)
+            # 3. finally, replace tiny components by nearest components,
+            #    and recombine survivors to bin labels
+            smallmask = sublabels2 == 1
+            sublabels2[smallmask] = 0
+            sublabels2[smallmask] = morph.spread_labels(sublabels2)[smallmask]
+            sublabels = sublabelmap[sublabels2]
+            DSAVE("sublabels_final", sublabels)
+            # now apply as multiple separators
+            numsep -= 1
+            sepmap[label] = 0
+            slices[label] = None
+            sepsizes = sepsizes[:-1]
+            sepslices = sepslices[:-1]
+            sepdists = sepdists[:-1]
+            for sublabel in np.unique(sublabels[labelmask]):
+                sublabelmask = sublabels == sublabel
+                sublabelsize = np.count_nonzero(sublabelmask)
+                sublabelslice = sublabelmask.nonzero()
+                sublabelslice = sl.box(sublabelslice[0].min(),
+                                       sublabelslice[0].max(),
+                                       sublabelslice[1].min(),
+                                       sublabelslice[1].max())
+                subdistances = dist[sublabelmask]
+                nlabels += 1
+                numsep += 1
+                sepmap = np.append(sepmap, numsep)
+                labels[sublabelmask] = nlabels
+                slices.append(sublabelslice)
+                sepsizes.append(sublabelsize)
+                sepslices.append(sublabelslice)
+                sepdists.append(np.median(subdistances))
+                #LOG.debug("adding sublabel %d as sep %d (size %d [%s])", sublabel, numsep, sublabelsize, str(sublabelslice))
+    sepsizes = np.array(sepsizes)
+    sepslices = np.array(sepslices)
+    LOG.debug("detected %d separator candidates", numsep)
+    DSAVE("seps-raw", sepmap[labels])
+    # now dilate+erode to link neighbouring candidates,
+    # but allow only such links which
+    # - stay consistent regarding avg/std width
+    # - do not enclose large areas in between
+    # - do not "change direction" (roughly adds up their diagonals)
+    # then combine mutual neighbourships to largest allowed partitions
+    d0 = odd(max(1,scale/2))
+    d1 = odd(max(1,scale/4))
+    closed = morph.rb_closing(sepmap[labels] > 0, (d0,d1))
+    DSAVE("seps-closed", [dist, closed])
+    labels2, nlabels2 = morph.label(closed)
+    corrs = morph.correspondences(sepmap[labels], labels2, return_counts=False).T
+    corrmap = np.arange(numsep + 1)
+    for sep2 in range(1, nlabels2 + 1):
+        corrinds = corrs[:, 1] == sep2
+        corrinds[corrs[:, 0] == 0] = False # ignore bg
+        corrinds = corrinds.nonzero()[0]
+        if len(corrinds) == 1:
+            continue # nothing to link
+        nonoverlapping = np.zeros((len(corrinds), len(corrinds)), dtype=bool)
+        for i, indi in enumerate(corrinds[:-1]):
+            sepi = corrs[indi, 0]
+            labeli = np.flatnonzero(sepmap == sepi)[0]
+            slicei = slices[labeli]
+            lengthi = np.hypot(*sl.dims(slicei))
+            areai = sl.area(slicei)
+            for j, indj in enumerate(corrinds[i + 1:], i + 1):
+                sepj = corrs[indj, 0]
+                labelj = np.flatnonzero(sepmap == sepj)[0]
+                slicej = slices[labelj]
+                lengthj = np.hypot(*sl.dims(slicej))
+                areaj = sl.area(slicej)
+                union = sl.union(slicei, slicej)
+                length = np.hypot(*sl.dims(union))
+                if length < 0.9 * (lengthi + lengthj):
+                    continue
+                if sl.area(union) > 1.3 * (areai + areaj):
+                    continue
+                if not (0.8 < sepdists[sepi] / sepdists[sepj] < 1.2):
+                    continue
+                inter = sl.intersect(slicei, slicej)
+                if (sl.empty(inter) or
+                    (sl.area(inter) / areai < 0.2 and
+                     sl.area(inter) / areaj < 0.2)):
+                    nonoverlapping[i, j] = True
+                    nonoverlapping[j, i] = True
+        # find largest maximal clique (i.e. fully connected subgraphs)
+        corrinds = corrinds[max(nx.find_cliques(nx.Graph(nonoverlapping)), key=len)]
+        corrmap[corrs[corrinds, 0]] = corrs[corrinds[0], 0]
+    _, corrmap = np.unique(corrmap, return_inverse=True) # make contiguous
+    numsep = corrmap.max()
+    LOG.debug("linked to %d separator candidates", numsep)
+    def union(slices):
+        if len(slices) > 1:
+            return sl.union(slices[0], union(slices[1:]))
+        return slices[0]
+    for sep in range(1, numsep + 1):
+        sepsizes[sep] = max(sepsizes[corrmap == sep]) # sum
+        sepslices[sep] = union(sepslices[corrmap == sep])
+    sepsizes = sepsizes[:numsep + 1]
+    sepslices = sepslices[:numsep + 1]
+    seplengths = np.array([np.hypot(*sl.dims(sepslice)) if sepslice else 0
+                           for sepslice in sepslices])
+    sepmap = corrmap[sepmap]
+    DSAVE("seps-raw-linked", sepmap[labels])
+    # order by size, filter minsize and filter top maxseps
+    order = np.argsort(sepsizes)[::-1]
+    # no more than maxseps and no smaller than scale
+    minsize = np.flatnonzero((sepsizes[order] < scale) | (seplengths[order] < 3 * scale))
+    if np.any(minsize):
+        maxseps = min(maxseps, minsize[0])
+    maxseps = min(maxseps, numsep)
+    ordermap = np.zeros(numsep + 1, int)
+    ordermap[order[:maxseps]] = np.arange(1, maxseps + 1)
+    sepmap = ordermap[sepmap]
+    DSAVE("sep-top", sepmap[labels])
+    # spread into fg against other fg
+    sepseeds = sepmap[labels]
+    sepseeds = morph.spread_labels(sepseeds, maxdist=max(sepdists))
+    sepseeds[~binary] = 0
+    #labels = morph.propagate_labels_simple(binary, labels)
+    #DSAVE("seps-top-spread-fg", sepseeds)
+    # spread into bg against other fg
+    sepseeds[binary & (sepseeds == 0)] = maxseps + 1
+    seplabels = morph.spread_labels(sepseeds, maxdist=scale / 2)
+    seplabels[seplabels == maxseps + 1] = 0
+    DSAVE("seps-top-spread-bg", seplabels)
+    return seplabels
 
 # from ocropus-gpageseg, but with horizontal opening
 @deprecated
@@ -685,7 +913,7 @@ def compute_colseps_conv(binary, scale=1.0, csminheight=10, maxcolseps=2):
     grad = filters.gaussian_filter(1.0*binary,(scale,scale*0.5),order=(0,1))
     grad = filters.uniform_filter(grad,(10.0*scale,1)) # csminheight
     DSAVE("colwsseps2_grad-raw",grad)
-    grad = (grad>0.5*np.amax(grad))
+    grad = grad > np.minimum(0.5 * np.amax(grad), np.percentile(grad, 99.5))
     DSAVE("colwsseps2_grad",grad)
     # combine dilated edges and whitespace
     seps = np.minimum(thresh,filters.maximum_filter(grad,(odd(10*scale),odd(5*scale))))
@@ -938,7 +1166,7 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
             label1_y, label1_x = np.where(seeds == label)
             label2_y, label2_x = np.where(seed2)
             shared_y = np.intersect1d(label1_y, label2_y)
-            gap = np.zeros_like(seed2, np.bool)
+            gap = np.zeros_like(seed2, bool)
             for y in shared_y:
                 can_x_min = label2_x[label2_y == y][0]
                 can_x_max = label2_x[label2_y == y][-1]
@@ -974,20 +1202,20 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
             relabel[relabel == label2] = new_label
     # apply re-assignments:
     seeds = relabel[seeds]
-    DSAVE("hmerge5_connected", seeds)
+    # DSAVE("hmerge5_connected", seeds)
     return seeds
         
 # from ocropus-gpageseg, but:
 # - with fullpage switch
-#   (opt-in for h/v-line and column detection),
+#   (opt-in for separator line and column detection),
 # - with external separator mask
-#   (opt-in for h/v-line pass-through)
+#   (opt-in for separator line pass-through)
 # - with zoom parameter
 #   (make fixed dimension params relative to pixel density,
 #    instead of blind 300 DPI assumption)
-# - with improved h/v-line and column detection
-# - with v-line detection _before_ column detection
-# - with h/v-line suppression _after_ large component filtering
+# - with improved separator line and column detection
+# - with separator detection _before_ column detection
+# - with separator suppression _after_ large component filtering
 # - with more robust line seed estimation,
 # - with horizontal merge instead of blur,
 # - with component majority for foreground
@@ -996,17 +1224,18 @@ def hmerge_line_seeds(binary, seeds, scale, threshold=0.8, seps=None):
 #   (which must be split anyway)
 # - with tighter polygonal spread around foreground
 # - with spread of line labels against separator labels
+# - with baseline extraction
 # - return bg line and sep labels intead of just fg line labels
+# - return baseline coords, too
 @checks(ABINARY2)
 def compute_segmentation(binary,
                          zoom=1.0,
                          fullpage=False,
                          seps=None,
                          maxcolseps=2,
+                         csminheight=4,
                          maxseps=0,
                          maximages=0,
-                         csminheight=4,
-                         hlminwidth=10,
                          spread_dist=None,
                          rl=False,
                          bt=False):
@@ -1024,13 +1253,10 @@ def compute_segmentation(binary,
     - for up to ``maxcolseps`` multi-line vertical whitespaces
       (as column separators, counted piece-wise) of at least
       ``csminheight`` multiples of ``scale``,
-    - for up to ``maxseps`` vertical black lines
-      (as column separators, counted piece-wise) of at least
-      ``csminheight`` multiples of ``scale``, and
-    - for any number of horizontal lines of at least
-      ``hlminwidth`` multiples of ``scale``,
+    - for up to ``maxseps`` black separator lines (horizontal, vertical
+      or oblique; counted piece-wise),
     - for anything in ``seps`` if given,
-    then suppress these separator components and return them separately.
+    then suppress these non-text components and return them separately.
     
     Labels will be projected ("spread") from the foreground to the
     surrounding background within ``spread_dist`` distance (or half
@@ -1046,8 +1272,8 @@ def compute_segmentation(binary,
        foreground may remain unlabelled for
        separators and other non-text like small
        noise, or large drop-capitals / images),
-    - Numpy array of horizontal foreground lines mask,
-    - Numpy array of vertical foreground lines mask,
+    - list of Numpy arrays of baseline coordinates [y, x points in lr order]
+    - Numpy array of foreground separator lines mask,
     - Numpy array of large/non-text foreground component mask,
     - Numpy array of vertical background separators mask,
     - the estimated scale (i.e. median sqrt bbox area of glyph components).
@@ -1059,18 +1285,17 @@ def compute_segmentation(binary,
     LOG.debug('height: %d, zoom: %.2f, scale: %d', binary.shape[0], zoom, scale)
 
     if fullpage:
-        LOG.debug('computing images')
+        LOG.debug('detecting images')
         images = compute_images(binary, scale, maximages=maximages)
-        LOG.debug('computing horizontal/vertical line separators')
-        hlines = compute_hlines(binary, scale, hlminwidth=hlminwidth, images=images)
-        vlines = compute_separators_morph(binary, scale, csminheight=csminheight, maxseps=maxseps, images=images)
-        binary = np.minimum(binary,1-hlines)
-        binary = np.minimum(binary,1-vlines)
-        binary = np.minimum(binary,1-images)
+        LOG.debug('detecting separators')
+        #hlines = compute_hlines(binary, scale, hlminwidth=hlminwidth, images=images)
+        #vlines = compute_separators_morph(binary, scale, csminheight=csminheight, maxseps=maxseps, images=images)
+        slines = compute_seplines(binary, scale, maxseps=maxseps)
+        binary = np.minimum(binary, 1 - (slines > 0))
+        binary = np.minimum(binary, 1 - (images > 0))
     else:
-        hlines = np.zeros_like(binary, np.bool)
-        vlines = np.zeros_like(binary, np.bool)
-        images = np.zeros_like(binary, np.bool)
+        slines = np.zeros_like(binary, np.uint8)
+        images = np.zeros_like(binary, np.uint8)
     if seps is not None and not seps.all():
         # suppress separators/images for line estimation
         # (unless it encompasses the full image for some reason)
@@ -1089,8 +1314,7 @@ def compute_segmentation(binary,
         # get a larger (closed) mask of all separators
         # (both bg boundary and fg line seps, detected
         # and passed in) to separate line/column labels
-        sepmask = np.maximum(hlines, vlines)
-        sepmask = np.maximum(sepmask, images)
+        sepmask = np.maximum(slines > 0, images > 0)
         sepmask = np.maximum(sepmask, colseps)
         if seps is not None:
             sepmask = np.maximum(sepmask, seps)
@@ -1141,10 +1365,76 @@ def compute_segmentation(binary,
     LOG.debug('sorting labels by reading order')
     llabels = morph.reading_order(llabels,rl,bt)[llabels]
     DSAVE('llabels_ordered', llabels)
-    
+
     #segmentation = llabels*binary
     #return segmentation
-    return llabels, hlines, vlines, images, colseps, scale
+    blines = compute_baselines(bottom, top, llabels, scale)
+    return llabels, blines, slines, images, colseps, scale
+
+@checks(AFLOAT2,AFLOAT2,SEGMENTATION,NUMBER)
+def compute_baselines(bottom, top, linelabels, scale, method='bottom'):
+    """Get the coordinates of baselines running along each bottom gradient peak."""
+    seeds = linelabels > 0
+    # smooth bottom+top maps horizontally for centerline estimation
+    bot = filters.gaussian_filter(bottom, (scale*0.25,scale), mode='constant')
+    top = filters.gaussian_filter(top, (scale*0.25,scale), mode='constant')
+    # idea: center is where bottom and top gradient meet in the middle
+    # (but between top and bottom, not between bottom and top)
+    # - calculation via numpy == or isclose is too fragile numerically:
+    #clines = np.isclose(top, bottom, rtol=0.5) & (np.diff(top - bottom, axis=0, append=0) < 0)
+    # - calculation via zero crossing of bop-bottom is more robust,
+    #   but needs post-processing for lines with much larger height than scale
+    if method == 'center':
+        blines = (np.diff(np.sign(top - bottom), axis=0, append=0) < 0) & seeds
+        #DSAVE('centerlines', blines)
+    # - calculation via peak gradient
+    elif method == 'bottom':
+        bot1d = np.diff(bot, axis=0, append=0)
+        bot1d = np.diff(np.sign(bot1d), axis=0, append=0) < 0
+        bot1d &= bot > 0
+        DSAVE('bot1d', bot1d)
+        blines = bot1d
+    baselabels, nbaselabels = morph.label(blines)
+    baseslices = [(slice(0,0),slice(0,0))] + morph.find_objects(baselabels)
+    # if multiple labels per seed, ignore the ones above others
+    # (can happen due to mis-estimation of scale)
+    corrs = morph.correspondences(linelabels, baselabels).T
+    labelmap = {}
+    DSAVE('baselines-raw', baselabels)
+    for line in np.unique(linelabels):
+        if not line: continue # ignore bg line
+        corrinds = corrs[:, 0] == line
+        corrinds[corrs[:, 1] == 0] = False # ignore bg baseline
+        if not np.any(corrinds): continue
+        corrinds = corrinds.nonzero()[0]
+        if len(corrinds) == 1:
+            labelmap.setdefault(line, list()).append(corrs[corrinds[0], 1])
+            continue
+        nonoverlapping = ~np.eye(len(corrinds), dtype=bool)
+        for i, indi in enumerate(corrinds[:-1]):
+            baselabeli = corrs[indi, 1]
+            baseslicei = baseslices[baselabeli]
+            for j, indj in enumerate(corrinds[i + 1:], i + 1):
+                baselabelj = corrs[indj, 1]
+                baseslicej = baseslices[baselabelj]
+                if sl.xoverlaps(baseslicei, baseslicej):
+                    nonoverlapping[i, j] = False
+                    nonoverlapping[j, i] = False
+        # find all maximal cliques in the graph (i.e. all fully connected subgraphs)
+        # and then pick the partition with the largest sum of pixels at its nodes
+        def pathlen(path):
+            return sum(corrs[corrinds[path], 2])
+        corrinds = corrinds[max(nx.find_cliques(nx.Graph(nonoverlapping)), key=pathlen)]
+        labelmap.setdefault(line, list()).extend(corrs[corrinds, 1])
+    basepoints = []
+    for line in np.unique(linelabels):
+        if line not in labelmap: continue
+        linemask = linelabels == line
+        points = []
+        for label in labelmap[line]:
+            points.extend(list(zip(*np.where((baselabels == label) & linemask))))
+        basepoints.append(points)
+    return basepoints
 
 # from ocropus-gpageseg, but
 # - on both foreground and background,
@@ -1290,7 +1580,7 @@ def lines2regions(binary, llabels,
     bincounts = np.bincount(lbinary.flatten())
     
     LOG.debug('combining lines to regions')
-    relabel = np.zeros(np.amax(llabels)+1, np.int)
+    relabel = np.zeros(np.amax(llabels)+1, int)
     num_regions = 0
     def recursive_x_y_cut(box, mask=None, partition_type=None, debug=False):
         """Split lbinary at horizontal or vertical gaps recursively.
@@ -1337,7 +1627,7 @@ def lines2regions(binary, llabels,
                 llab = sl.cut(llabels, box)
                 if isinstance(mask, np.ndarray):
                     llab = np.where(mask, llab, 0)
-                linelabels0 = np.zeros(llabels.max()+1, dtype=np.bool)
+                linelabels0 = np.zeros(llabels.max()+1, dtype=bool)
                 linelabels0[linelabels] = True
                 llab *= linelabels0[llab]
                 newregion = rlab.max()+1
@@ -1388,12 +1678,6 @@ def lines2regions(binary, llabels,
             sepm = sl.cut(sepmask, box)
             if isinstance(mask, np.ndarray):
                 sepm = np.where(mask, sepm, 1)
-            if isinstance(rlabels, np.ndarray):
-                # treat existing regions like separators
-                rlab = sl.cut(rlabels, box)
-                if isinstance(mask, np.ndarray):
-                    rlab = np.where(mask, rlab, 0)
-                sepm = np.where(rlab, 1, sepm)
             # provide `partitions` for next step
             partitions, npartitions = 1-sepm, 1
             new_partition_type = None
@@ -1403,31 +1687,35 @@ def lines2regions(binary, llabels,
                 # try to apply in this cut like another separator
                 partitions, npartitions = morph.label(1-sepm)
                 if npartitions > 1:
-                    # first, delete partitions that have no significant line labels
-                    splitmap = np.zeros(len(objects)+1, dtype=np.int)
-                    for label in range(1, npartitions+1):
-                        linecounts = np.bincount(lbin[partitions==label], minlength=len(objects))
+                    # delete partitions that have no significant line labels,
+                    # merge partitions that share any significant line labels
+                    splitmap = np.zeros((len(objects), npartitions), dtype=bool)
+                    for label in range(npartitions):
+                        linecounts = np.bincount(lbin[partitions==label+1], minlength=len(objects))
                         linecounts[0] = 0 # without bg
                         # get significant line labels for this partition
                         # (but keep insignificant non-empty labels if complete)
                         mincounts = np.minimum(min_line * scale, np.maximum(1, bincounts))
                         linelabels = np.nonzero(linecounts >= mincounts)[0]
                         if linelabels.size:
-                            splitmap[linelabels] = label
-                            if debug: LOG.debug('  sepmask partition %d: %s', label, str(linelabels))
+                            splitmap[linelabels, label] = True
+                            if debug: LOG.debug('  sepmask partition %d: %s', label+1, str(linelabels))
                         else:
-                            partitions[partitions==label] = 0
-                    # second, merge partitions that share any significant line labels
-                    for label1 in range(1, npartitions+1):
-                        if not np.any(splitmap == label1):
+                            partitions[partitions==label+1] = 0
+                    if isinstance(rlabels, np.ndarray):
+                        # keep existing regions in distinct partitions if possible
+                        rlab = sl.cut(rlabels, box)
+                        if isinstance(mask, np.ndarray):
+                            rlab = np.where(mask, rlab, 0)
+                        splitmap[np.unique(lbin[rlab>0])] = False
+                    mergemap = np.arange(npartitions + 1)
+                    for line in splitmap:
+                        if not np.any(line):
                             continue
-                        for label2 in range(label1+1, npartitions+1):
-                            if not np.any(splitmap == label2):
-                                continue
-                            if np.any((splitmap == label1) & (splitmap == label2)):
-                                splitmap[splitmap == label2] = label1
-                                partitions[partitions==label2] = label1
-                    npartitions = len(np.setdiff1d(np.unique(splitmap), [0]))
+                        parts = np.flatnonzero(line)+1
+                        mergemap[parts] = mergemap[parts[0]]
+                    partitions = mergemap[partitions]
+                    npartitions = len(np.setdiff1d(np.unique(mergemap), [0]))
                     new_partition_type = 'splitmask'
                     if debug: LOG.debug('  %d sepmask partitions after filtering and merging', npartitions)
             if partition_type != 'topological':
@@ -1435,10 +1723,16 @@ def lines2regions(binary, llabels,
                 # get current slice's line labels
                 def find_topological():
                     # run only if needed (no other partition/slicing possible)
-                    nonlocal partitions, npartitions, new_partition_type
+                    nonlocal sepm, partitions, npartitions, new_partition_type
                     llab = sl.cut(llabels, box)
                     if isinstance(mask, np.ndarray):
                         llab = np.where(mask, llab, 0)
+                    if isinstance(rlabels, np.ndarray):
+                        # treat existing regions like separators
+                        rlab = sl.cut(rlabels, box)
+                        if isinstance(mask, np.ndarray):
+                            rlab = np.where(mask, rlab, 0)
+                        sepm = np.where(rlab, 1, sepm)
                     obj = [sl.intersect(o, box) for o in objects]
                     # get current slice's foreground
                     bin = sl.cut(binary, box)
@@ -1453,7 +1747,7 @@ def lines2regions(binary, llabels,
                     seplabs, counts = np.unique(seplab * bin, return_counts=True)
                     kept = np.in1d(seplab.ravel(), seplabs[counts > scale * min_line])
                     seplab = seplab * kept.reshape(*seplab.shape)
-                    DSAVE('seplab', seplab)
+                    #DSAVE('seplab', seplab)
                     sepobj = morph.find_objects(seplab)
                     if not len(sepobj):
                         return
@@ -1462,8 +1756,8 @@ def lines2regions(binary, llabels,
                     linelabels = np.setdiff1d(np.unique(lbin), [0])
                     nlines = linelabels.max() + 1
                     # find pairs of lines above each other with a separator next to them
-                    leftseps = np.zeros((nlines, nseps), np.bool)
-                    rghtseps = np.zeros((nlines, nseps), np.bool)
+                    leftseps = np.zeros((nlines, nseps), bool)
+                    rghtseps = np.zeros((nlines, nseps), bool)
                     for line in linelabels:
                         for i, sep in enumerate(sepobj):
                             if sep is None:
@@ -1484,7 +1778,7 @@ def lines2regions(binary, llabels,
                     if not np.any(trueseps):
                         return
                     if debug: LOG.debug("trueseps: %s", str(trueseps))
-                    neighbours = np.zeros((nlines, nlines), np.bool)
+                    neighbours = np.zeros((nlines, nlines), bool)
                     for i in linelabels:
                         for j in linelabels[i+1:]:
                             if sl.yoverlap_rel(obj[i], obj[j]) > 0.5:
@@ -1500,7 +1794,7 @@ def lines2regions(binary, llabels,
                     # group neighbours by adjacency (i.e. put any contiguous pairs
                     # of such line labels into the same group)
                     nlabels = llab.max() + 1
-                    splitmap = np.zeros(nlabels, dtype=np.int)
+                    splitmap = np.zeros(nlabels, dtype=int)
                     for i, j in zip(*neighbours.nonzero()):
                         if splitmap[i] > 0:
                             splitmap[j] = splitmap[i]
@@ -1588,8 +1882,8 @@ def lines2regions(binary, llabels,
                 if not gaps.shape[0]:
                     continue
                 for start, stop, height in sorted(zip(
-                        props['left_ips'].astype(np.int),
-                        props['right_ips'].astype(np.int),
+                        props['left_ips'].astype(int),
+                        props['right_ips'].astype(int),
                         props['peak_heights']), key=lambda x: x[2]):
                     if is_horizontal:
                         llab[box[0].start+int(scale/2):box[0].stop-int(scale/2),box[1].start+start:box[1].start+stop] = -10*np.log(-height+1e-9)
@@ -1741,7 +2035,7 @@ def lines2regions(binary, llabels,
                 npartitions > len(gaps)+1 or
                 # partitions without the cut still score better than after
                 sum(map(sl.height if prefer_vertical else sl.width,
-                        (morph.find_objects(partitions)))) > np.max(
+                        filter(None, morph.find_objects(partitions)))) > np.max(
                             partitionscores, initial=0))):
             # continue on each partition by suppressing the others, respectively
             order = morph.reading_order(partitions,rl,bt)

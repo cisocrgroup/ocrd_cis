@@ -6,31 +6,18 @@ ocrd_cis_init_ws blumenbach_anatomie_1805.ocrd.zip
 # test if there are 3 gt files
 pushd "$tmpws"
 found_files=0
-for file in $(ocrd workspace find -G OCR-D-GT-SEG-LINE); do
-	if [[ ! -f "$file" ]]; then
-		echo "cannot find ground truth file: $file"
-		exit 1
-	fi
+for file in $(ocrd workspace find -G $OCRD_CIS_FILEGRP); do
+	[[ -f "$file" ]] || fail "cannot find ground truth file: $file"
 	found_files=$((found_files + 1))
 done
-if [[ $found_files != 3 ]]; then
-	echo "invalid number of files: $found_files"
-	exit 1
-fi
-popd
+(( $found_files == 3 )) || fail "invalid number of files: $found_files"
 
 # download ocr model
-wget -P "$tmpdir/download" "http://cis.lmu.de/~finkf/fraktur1-00085000.pyrnn.gz"
+ocrd resmgr download ocrd-cis-ocropy-recognize fraktur.pyrnn.gz
 
 # run ocr
-ocrd-cis-ocropy-recognize --log-level DEBUG \
-						  --input-file-grp "OCR-D-GT-SEG-LINE" \
-						  --output-file-grp OCR-D-CIS-OCR \
-						  --mets "$tmpws/mets.xml" \
-						  --parameter <(cat <<EOF
-{
-	"textequiv_level": "word",
-	"model": "$tmpdir/download/fraktur1-00085000.pyrnn.gz"
-}
-EOF
-)
+ocrd-cis-ocropy-binarize -l DEBUG -I $OCRD_CIS_FILEGRP -O OCR-D-CIS-IMG-BIN
+ocrd-cis-ocropy-recognize -l DEBUG -I OCR-D-CIS-IMG-BIN -O OCR-D-CIS-OCR \
+	-P textequiv_level word -P model fraktur.pyrnn.gz
+
+popd

@@ -213,10 +213,8 @@ class OcropyBinarize(Processor):
             file_id += '.IMG-BIN'
             features += ',binarized'
         file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id,
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            bin_image, file_id, self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         page.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
@@ -263,10 +261,8 @@ class OcropyBinarize(Processor):
             file_id += '.IMG-BIN'
             features += ',binarized'
         file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id,
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            bin_image, file_id, self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         region.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
@@ -306,10 +302,8 @@ class OcropyBinarize(Processor):
             file_id += '.IMG-BIN'
             features += ',binarized'
         file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id,
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            bin_image, file_id, self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         line.add_AlternativeImage(AlternativeImageType(
             filename=file_path,

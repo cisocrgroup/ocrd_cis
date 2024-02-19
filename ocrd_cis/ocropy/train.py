@@ -1,25 +1,16 @@
 from __future__ import absolute_import
 
-import sys, os.path, cv2
+import sys
+import os
+import tempfile
+
 from ocrd_modelfactory import page_from_file
 from ocrd import Processor
 from ocrd_utils import getLogger
 from ocrd_cis import get_ocrd_tool
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-
 from .ocropus_rtrain import *
-
-np.seterr(divide='raise',over='raise',invalid='raise',under='ignore')
-
-
-
-
-def bounding_box(coord_points):
-    point_list = [[int(p) for p in pair.split(',')] for pair in coord_points.split(' ')]
-    x_coordinates, y_coordinates = zip(*point_list)
-    return (min(x_coordinates), min(y_coordinates), max(x_coordinates), max(y_coordinates))
+from .binarize import binarize
 
 
 def deletefiles(filelist):
@@ -32,176 +23,120 @@ def deletefiles(filelist):
 def resize_keep_ratio(image, baseheight=48):
     hpercent = (baseheight / float(image.size[1]))
     wsize = int((float(image.size[0] * float(hpercent))))
-    image = image.resize((wsize, baseheight), Image.ANTIALIAS)
+    image = image.resize((wsize, baseheight), Image.LANCZOS)
     return image
-
-
-def binarize(pil_image):
-    # Convert RGB to OpenCV
-    img = cv2.cvtColor(np.asarray(pil_image), cv2.COLOR_RGB2GRAY)
-
-    # global thresholding
-    #ret1,th1 = cv2.threshold(img,127,255,cv2.THRESH_BINARY)
-
-    # Otsu's thresholding
-    #ret2,th2 = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-
-    # Otsu's thresholding after Gaussian filtering
-    blur = cv2.GaussianBlur(img,(5,5),0)
-    ret3,th3 = cv2.threshold(blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-
-    bin_img = Image.fromarray(th3)
-    return bin_img
-
 
 
 class OcropyTrain(Processor):
 
     def __init__(self, *args, **kwargs):
-        self.log = getLogger('OcropyTrain')
+        self.oldcwd = os.getcwd()
         ocrd_tool = get_ocrd_tool()
         kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-ocropy-train']
         kwargs['version'] = ocrd_tool['version']
         super(OcropyTrain, self).__init__(*args, **kwargs)
+        if hasattr(self, 'input_file_grp'):
+            # processing context
+            self.setup()
 
+    def setup(self):
+        self.log = getLogger('processor.OcropyTrain')
+        #print(self.parameter)
+        if 'model' in self.parameter:
+            model = self.parameter['model']
+            try:
+                modelpath = self.resolve_resource(model)
+            except SystemExit:
+                ocropydir = os.path.dirname(os.path.abspath(__file__))
+                modelpath = os.path.join(ocropydir, 'models', model)
+                self.log.info("Failed to resolve model '%s' path, trying '%s'", model, modelpath)
+            if not os.path.isfile(modelpath):
+                self.log.error("Could not find model '%s'. Try 'ocrd resmgr download ocrd-cis-ocropy-recognize %s'",
+                               model, model)
+                sys.exit(1)
+            outputpath = os.path.join(self.oldcwd, 'output', model)
+            if 'outputpath' in self.parameter:
+                outputpath = os.path.join(self.parameter, model)
+        else:
+            modelpath = None
+            outputpath = os.path.join(self.oldcwd, 'output', 'lstm')
+            if 'outputpath' in self.parameter:
+                outputpath = os.path.join(self.parameter, 'lstm')
+        os.makedirs(os.path.dirname(outputpath))
+        self.modelpath = modelpath
+        self.outputpath = outputpath
 
     def process(self):
         """
-        Performs the training
+        Trains a new model on the text lines from the input fileGrp,
+        extracted as temporary image-text file pairs.
         """
-        #print(self.parameter)
-        if self.parameter['textequiv_level'] not in ['line', 'word', 'glyph']:
-            raise Exception("currently only implemented at the line/glyph level")
-
-        filepath = os.path.dirname(os.path.abspath(__file__))
-
-
-
-
-        if 'model' in self.parameter:
-            model = self.parameter['model']
-            modelpath = filepath + '/models/' + model + '.gz'
-            outputpath = filepath + '/output/' + model
-            if 'outputpath' in self.parameter:
-                outputpath = self.parameter + '/' + model
-            if os.path.isfile(modelpath) == False:
-                raise Exception("configured model " + model + " is not in models folder")
-        else:
-            modelpath = None
-            outputpath = filepath + '/output/' + 'lstm'
-            if 'outputpath' in self.parameter:
-                outputpath = self.parameter + '/' +'lstm'
-
-        if 'ntrain' in self.parameter:
-            ntrain = self.parameter['ntrain']
-
-
-
         filelist = []
-
+        filepath = tempfile.mkdtemp(prefix='ocrd-cis-ocropy-train-')
         #self.log.info("Using model %s in %s for recognition", model)
         for (n, input_file) in enumerate(self.input_files):
             #self.log.info("INPUT FILE %i / %s", n, input_file)
             pcgts = page_from_file(self.workspace.download_file(input_file))
-            pil_image = self.workspace.resolve_image_as_pil(pcgts.get_Page().imageFilename)
+            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
+            page = pcgts.get_Page()
+            page_image, page_coords, _ = self.workspace.image_from_page(page, page_id)
 
-
-            self.log.info("page %s", pcgts)
-            for region in pcgts.get_Page().get_TextRegion():
+            self.log.info("Extracting from page '%s'", page_id)
+            for region in page.get_AllRegions(classes=['Text']):
                 textlines = region.get_TextLine()
-                self.log.info("About to extract %i lines in region '%s'", len(textlines), region.id)
+                self.log.info("Extracting %i lines from region '%s'", len(textlines), region.id)
                 for line in textlines:
-
                     if self.parameter['textequiv_level'] == 'line':
-                        self.log.debug("Extracting line '%s'", line.id)
-
-                        #get box from points
-                        box = bounding_box(line.get_Coords().points)
-
-                        #crop word from page
-                        croped_image = pil_image.crop(box=box)
-
-                        #binarize with Otsu's thresholding after Gaussian filtering
-                        bin_image = binarize(croped_image)
-
-                        #resize image to 48 pixel height
-                        final_img = resize_keep_ratio(bin_image)
-
-                        #save temp image
-                        path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id))
-                        imgpath = path + '.png'
-                        final_img.save(imgpath)
-
-                        filelist.append(imgpath)
-
-                        #ground truth
-                        gt = line.get_TextEquiv()[0].Unicode.strip()
-                        gtpath = path + '.gt.txt'
-                        with open(gtpath, "w", encoding='utf-8') as f:
-                            f.write(gt)
-
-
-
-                    if self.parameter['textequiv_level'] == 'word' or 'glyph':
-                        for word in line.get_Word():
-
-                            if self.parameter['textequiv_level'] == 'word':
-                                self.log.debug("Extracting word '%s'", word.id)
-
-                                #get box from points
-                                box = bounding_box(word.get_Coords().points)
-
-                                #crop word from page
-                                croped_image = pil_image.crop(box=box)
-
-                                #binarize with Otsu's thresholding after Gaussian filtering
-                                bin_image = binarize(croped_image)
-
-                                #resize image to 48 pixel height
-                                final_img = resize_keep_ratio(bin_image)
-
-                                #save temp image
-                                path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id) + str(word.id))
-                                imgpath = path + '.png'
-                                final_img.save(imgpath)
-
+                        path = os.path.join(filepath, page_id + region.id + line.id)
+                        imgpath = self.extract_segment(path, line, page_image, page_coords)
+                        if imgpath:
+                            filelist.append(imgpath)
+                        continue
+                    for word in line.get_Word():
+                        if self.parameter['textequiv_level'] == 'word':
+                            path = os.path.join(filepath, page_id + region.id + line.id + word.id)
+                            imgpath = self.extract_segment(path, word, page_image, page_coords)
+                            if imgpath:
+                                filelist.append(imgpath)
+                            continue
+                        for glyph in word.get_Glyph():
+                            path = os.path.join(filepath, page_id + region.id + line.id + glyph.id)
+                            imgpath = self.extract_segment(path, glyph, page_image, page_coords)
+                            if imgpath:
                                 filelist.append(imgpath)
 
-                                #ground truth
-                                gt = word.get_TextEquiv()[0].Unicode.strip()
-                                gtpath = path + '.gt.txt'
-
-                                with open(gtpath, "w", encoding='utf-8') as f:
-                                    f.write(gt)
-
-                            else:
-                                for glyph in word.get_Glyph():
-                                    self.log.debug("Extracting glyph '%s'", glyph.id)
-
-                                    #get box from points
-                                    box = bounding_box(glyph.get_Coords().points)
-
-                                    #crop word from page
-                                    croped_image = pil_image.crop(box=box)
-
-                                    #binarize with Otsu's thresholding after Gaussian filtering
-                                    bin_image = binarize(croped_image)
-
-                                    #resize image to 48 pixel height
-                                    final_img = resize_keep_ratio(bin_image)
-
-                                    #save temp image
-                                    path = os.path.join(filepath, 'temp', str(input_file.ID) + str(region.id) + str(line.id) + str(word.id) + str(glyph.id))
-                                    imgpath = path + '.png'
-                                    final_img.save(imgpath)
-
-                                    filelist.append(imgpath)
-
-                                    #ground truth
-                                    gt = glyph.get_TextEquiv()[0].Unicode.strip()
-                                    with open(gtpath, "w", encoding='utf-8') as f:
-                                        f.write(gt)
-
-
-        rtrain(filelist, modelpath, outputpath, ntrain)
+        self.log.info("Training %s from %s on %i file pairs",
+                      self.outputpath,
+                      self.modelpath or 'scratch',
+                      len(filelist))
+        rtrain(filelist, self.modelpath, self.outputpath, self.parameter['ntrain'])
         deletefiles(filelist)
+
+    def extract_segment(self, path, segment, page_image, page_coords):
+        #ground truth
+        gt = segment.TextEquiv
+        if not gt:
+            return None
+        gt = gt[0].Unicode
+        if not gt or not gt.strip():
+            return None
+        gt = gt.strip()
+        gtpath = path + '.gt.txt'
+        with open(gtpath, "w", encoding='utf-8') as f:
+            f.write(gt)
+
+        self.log.debug("Extracting %s '%s'", segment.__class__.__name__, segment.id)
+        image, coords = self.workspace.image_from_segment(segment, page_image, page_coords)
+
+        if 'binarized' not in coords['features'].split(','):
+            # binarize with nlbin
+            image, _ = binarize(image, maxskew=0)
+
+        # resize image to 48 pixel height
+        image = resize_keep_ratio(image)
+
+        #save temp image
+        imgpath = path + '.png'
+        image.save(imgpath)
+
+        return imgpath

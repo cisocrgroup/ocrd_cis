@@ -127,10 +127,8 @@ class OcropyDenoise(Processor):
                                  maxsize=self.parameter['noise_maxsize']/zoom*300/72) # in pt
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id + '.IMG-DESPECK',
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            bin_image, file_id + '.IMG-DESPECK', self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,

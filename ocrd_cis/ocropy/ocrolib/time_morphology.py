@@ -29,10 +29,10 @@ def cv_contours(bin):
     return zip((contour[:,0,::-1], cv2.contourArea(contour)) for contour in contours)
 
 def rb_opening(bin, size):
-    return filters.uniform_filter(filters.uniform_filter(bin, size, np.float, mode='constant', cval=1) == 1, size, np.float, origin=-1) > 1e-7
+    return filters.uniform_filter(filters.uniform_filter(bin, size, float, mode='constant', cval=1) == 1, size, float, origin=-1) > 1e-7
 
 def rb_closing(bin, size):
-    return filters.uniform_filter(filters.uniform_filter(bin, size, np.float) > 1e-7, size, mode='constant', cval=1, origin=-1) == 1
+    return filters.uniform_filter(filters.uniform_filter(bin, size, float) > 1e-7, size, mode='constant', cval=1, origin=-1) == 1
 
 def r_closing(bin, size):
     return filters.minimum_filter(filters.maximum_filter(bin, size), size, origin=-1)

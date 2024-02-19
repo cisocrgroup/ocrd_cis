@@ -1,13 +1,16 @@
 from __future__ import absolute_import
 
 import os.path
+import itertools
 import numpy as np
+from scipy.sparse.csgraph import minimum_spanning_tree
 from skimage import draw
 from skimage.morphology import convex_hull_image
 import cv2
-from shapely.geometry import Polygon, asPolygon
+from shapely.geometry import Polygon, LineString
 from shapely.prepared import prep
-from shapely.ops import unary_union
+from shapely.ops import unary_union, nearest_points
+from shapely.validation import explain_validity
 
 from ocrd_modelfactory import page_from_file
 from ocrd_models.ocrd_page import (
@@ -19,6 +22,7 @@ from ocrd_models.ocrd_page import (
     AlternativeImageType
 )
 from ocrd_models.ocrd_page_generateds import (
+    BaselineType,
     TableRegionType,
     ImageRegionType,
     RegionRefType,
@@ -55,30 +59,38 @@ from .common import (
 
 TOOL = 'ocrd-cis-ocropy-segment'
 
-def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
+def masks2polygons(bg_labels, baselines, fg_bin, name, min_area=None, simplify=None, open_holes=False, reorder=True):
     """Convert label masks into polygon coordinates.
 
     Given a Numpy array of background labels ``bg_labels``,
+    (optionally) a Numpy array of a scalar field ``baselines``,
     and a Numpy array of the foreground ``fg_bin``,
     iterate through all labels (except zero and those labels
     which do not correspond to any foreground at all) to find
-    their outer contours. Each contour part which is not too
-    small and gives a (simplified) polygon of at least 4 points
-    becomes a polygon. (Thus, labels can be split into multiple
-    polygons.)
+    their outer contours and inner baselines. 
+    Each contour part which is not too small and gives a
+    (simplified) polygon of at least 4 points becomes a polygon.
+    (Thus, labels can be split into multiple polygons.)
 
     Return a tuple:
-    - these polygons as a list of label, polygon tuples, and
+    - these polygons as a list of label, polygon, baseline tuples, and
     - a Numpy array of new background labels for that list.
     """
     LOG = getLogger('processor.OcropySegment')
+    # find sharp baseline
+    if baselines is not None:
+        def getx(xy):
+            return xy[0]
+        baselines = [LineString(sorted([p[::-1] for p in line], key=getx)).simplify(5)
+                     for line in baselines
+                     if len(line) >= 2]
     results = list()
     result_labels = np.zeros_like(bg_labels, dtype=bg_labels.dtype)
     for label in np.unique(bg_labels):
         if not label:
             # ignore if background
             continue
-        bg_mask = np.array(bg_labels == label, np.uint8)
+        bg_mask = np.array(bg_labels == label, bool)
         if not np.count_nonzero(bg_mask * fg_bin):
             # ignore if missing foreground
             LOG.debug('skipping label %d in %s due to empty fg',
@@ -86,27 +98,111 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
             continue
         # simplify to convex hull
         if simplify is not None:
-            hull = convex_hull_image(bg_mask).astype(np.uint8)
-            conflicts = np.setdiff1d((hull>0) * simplify,
-                                     (bg_mask>0) * simplify)
+            hull = convex_hull_image(bg_mask.astype(np.uint8)).astype(bool)
+            conflicts = np.setdiff1d(hull * simplify,
+                                     bg_mask * simplify)
             if conflicts.any():
                 LOG.debug('Cannot simplify %d: convex hull would create additional intersections %s',
                           label, str(conflicts))
             else:
                 bg_mask = hull
-        # find outer contour (parts):
-        contours, _ = cv2.findContours(bg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if open_holes:
+            # def plot_poly(contour, color):
+            #     import matplotlib.pyplot as plt
+            #     from matplotlib.patches import Polygon as PolygonPatch
+            #     plt.figure()
+            #     plt.imshow(fg_bin)
+            #     plt.gca().scatter(*zip(*contour[:,0]))
+            #     plt.gca().add_patch(PolygonPatch(contour[:,0], alpha=0.5, color=color, closed=False))
+            #     plt.show()
+            # find outer contour (parts) plus direct holes (if any)
+            contours = []
+            cont, hier = cv2.findContours(bg_mask.astype(np.uint8), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+            idx = 0
+            while idx >= 0:
+                contour = cont[idx]
+                if len(contour) < 3:
+                    idx = hier[0, idx, 0]
+                    continue
+                #plot_poly(contour, 'red')
+                idx_hole = hier[0, idx, 2]
+                while idx_hole >= 0:
+                    hole = cont[idx_hole]
+                    if len(hole) < 3:
+                        idx_hole = hier[0, idx_hole, 0]
+                        continue
+                    LOG.debug("label %d contour %d [%d pts] has hole %d [%d pts]",
+                              label, idx, len(contour), idx_hole, len(hole))
+                    #plot_poly(hole, 'blue')
+                    # cut child from outside...
+                    # first get nearest point on child
+                    hole_idx = np.argmin([cv2.pointPolygonTest(contour, tuple(pt[0].tolist()), True)
+                                          for pt in hole])
+                    # now get nearest point on parent
+                    # (we cannot use PolygonTest directly, because we must also interpolate
+                    #  to prevent crossing edges; at least each 10px)
+                    contour = np.append(contour, contour[0:1], axis=0)
+                    contour2 = np.diff(contour, axis=0)
+                    contourtics = np.maximum(1, np.linalg.norm(contour2, axis=2).astype(int)[:,0] // 10)
+                    interpol = []
+                    for i, ntics in enumerate(contourtics):
+                        interpol.extend(np.array(contour[i:i+1] +
+                                                 contour2[i:i+1] *
+                                                 np.linspace(0, 1, ntics)[:,np.newaxis,np.newaxis],
+                                                 int))
+                    interpol.append(contour[-1])
+                    interpol = np.array(interpol)
+                    contourtics = np.insert(np.cumsum(contourtics), 0, 0)
+                    assert np.all(contour == interpol[contourtics])
+                    interpol_idx = np.linalg.norm(interpol - hole[hole_idx], axis=2).argmin()
+                    contour_idx = np.searchsorted(contourtics, interpol_idx)
+                    if interpol_idx in contourtics:
+                        contour_idx2 = contour_idx + 1
+                    else:
+                        contour_idx2 = contour_idx
+                    if contour_idx2 >= len(contour):
+                        contour_idx2 = 0
+                    cispoint1 = cispoint2 = interpol[interpol_idx:interpol_idx+1]
+                    if interpol_idx == 0:
+                        diff1 = (interpol[-1:] - cispoint1) // 5
+                    else:
+                        diff1 = (interpol[interpol_idx-1:interpol_idx] - cispoint1) // 5
+                    if interpol_idx + 1 >= len(interpol):
+                        diff2 = (interpol[0:1] - cispoint2) // 5
+                    else:
+                        diff2 = (interpol[interpol_idx+1:interpol_idx+2] - cispoint2) // 5
+                    cispoint1 = cispoint1 + diff1
+                    cispoint2 = cispoint2 + diff2
+                    LOG.debug("stitching at interpolation pos %d hole pos %d", interpol_idx, hole_idx)
+                    # now stitch together outer (up to cision), inner (re-arranged around cision), outer (rest)
+                    # (this works, because inner contours have inverse direction)
+                    contour = np.concatenate([contour[:contour_idx], cispoint1,
+                                              hole[hole_idx:], hole[:hole_idx],
+                                              cispoint2, contour[contour_idx:]])
+                    #plot_poly(contour, 'green')
+                    idx_hole = hier[0, idx_hole, 0]
+                #plot_poly(contour, 'red')
+                LOG.debug("adding label %d contour %d [%d pts]", label, idx, len(contour))
+                contours.append(contour)
+                idx = hier[0, idx, 0]
+        else:
+            # find outer contour (parts):
+            contours, _ = cv2.findContours(bg_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         # determine areas of parts:
         areas = [cv2.contourArea(contour) for contour in contours]
         total_area = sum(areas)
         if not total_area:
             # ignore if too small
             continue
-        # sort contours in reading order
+        # redraw label array
         contour_labels = np.zeros_like(bg_mask, np.uint8)
         for i, contour in enumerate(contours):
-            cv2.drawContours(contour_labels, contours[i:i+1], -1, i+1, cv2.FILLED)
-        order = np.argsort(morph.reading_order(contour_labels)[1:])
+            cv2.drawContours(contour_labels, contours, i, i+1, cv2.FILLED)
+        if reorder:
+            # sort contours in reading order
+            order = np.argsort(morph.reading_order(contour_labels)[1:])
+        else:
+            order = range(len(contours))
         # convert to polygons
         for i in order:
             contour = contours[i]
@@ -121,18 +217,31 @@ def masks2polygons(bg_labels, fg_bin, name, min_area=None, simplify=None):
             polygon = contour[:, 0, ::] # already ordered x,y
             # simplify and validate:
             polygon = Polygon(polygon)
-            for tolerance in range(2, int(area)):
-                polygon = polygon.simplify(tolerance)
-                if polygon.is_valid:
-                    break
-            polygon = polygon.exterior.coords[:-1] # keep open
-            if len(polygon) < 4:
-                LOG.warning('Label %d contour %d has less than 4 points for %s',
-                            label, i, name)
+            if not polygon.is_valid:
+                #LOG.debug(polygon.wkt)
+                LOG.debug(explain_validity(polygon))
+            polygon = make_valid(polygon)
+            if not polygon.is_valid:
+                #LOG.debug(polygon.wkt)
+                LOG.warning(explain_validity(polygon))
+            poly = polygon.exterior.coords[:-1] # keep open
+            if len(poly) < 4:
+                LOG.warning('Label %d contour %d for %s has less than 4 points', label, i, name)
                 continue
-            results.append((label, polygon))
+            # get baseline segments intersecting with this line mask
+            # and concatenate them from left to right
+            if baselines is not None:
+                base = join_baselines([baseline.intersection(polygon)
+                                       for baseline in baselines
+                                       if baseline.intersects(polygon)], name)
+                if base is not None:
+                    base = base.coords
+            else:
+                base = None
+            results.append((label, poly, base))
             result_labels[contour_labels == i+1] = len(results)
     return results, result_labels
+
 
 class OcropySegment(Processor):
 
@@ -170,7 +279,7 @@ class OcropySegment(Processor):
         When ``level-of-operation`` is ``page`` or ``table``, this also entails
         detecting
         - up to ``maximages`` large foreground images,
-        - up to ``maxseps`` foreground h/v-line separators and
+        - up to ``maxseps`` foreground line separators and
         - up to ``maxcolseps`` background column separators
         before text line segmentation itself, as well as aggregating text lines
         to text regions afterwards.
@@ -428,9 +537,9 @@ class OcropySegment(Processor):
             LOG.warning("Skipping '%s' with zero size", element_id)
             return
         element_array = pil2array(image)
-        element_bin = np.array(element_array <= midrange(element_array), np.bool)
-        sep_bin = np.zeros_like(element_bin, np.bool)
-        ignore_labels = np.zeros_like(element_bin, np.int)
+        element_bin = np.array(element_array <= midrange(element_array), bool)
+        sep_bin = np.zeros_like(element_bin, bool)
+        ignore_labels = np.zeros_like(element_bin, int)
         for i, segment in enumerate(ignore):
             LOG.debug('masking foreground of %s "%s" for "%s"',
                       type(segment).__name__[:-4], segment.id, element_id)
@@ -471,7 +580,7 @@ class OcropySegment(Processor):
         try:
             if report:
                 raise Exception(report)
-            line_labels, hlines, vlines, images, colseps, scale = compute_segmentation(
+            line_labels, baselines, seplines, images, colseps, scale = compute_segmentation(
                 # suppress separators and ignored regions for textline estimation
                 # but keep them for h/v-line detection (in fullpage mode):
                 element_bin, seps=(sep_bin+ignore_labels)>0,
@@ -481,8 +590,7 @@ class OcropySegment(Processor):
                 maxcolseps=self.parameter['maxcolseps'],
                 maxseps=self.parameter['maxseps'],
                 maximages=self.parameter['maximages'] if element_name != 'table' else 0,
-                csminheight=self.parameter['csminheight'],
-                hlminwidth=self.parameter['hlminwidth'])
+                csminheight=self.parameter['csminheight'])
         except Exception as err:
             if isinstance(element, TextRegionType):
                 LOG.error('Cannot line-segment region "%s": %s', element_id, err)
@@ -505,8 +613,7 @@ class OcropySegment(Processor):
                 # (these cannot be split or grouped together with other regions)
                 line_labels = np.where(line_labels, line_labels+len(ignore), ignore_labels)
                 # suppress separators/images in fg and try to use for partitioning slices
-                sepmask = np.maximum(np.maximum(hlines, vlines),
-                                     np.maximum(sep_bin, images))
+                sepmask = np.maximum(sep_bin, np.maximum(seplines > 0, images > 0))
                 region_labels = lines2regions(
                     element_bin, line_labels,
                     rlabels=ignore_labels,
@@ -552,7 +659,7 @@ class OcropySegment(Processor):
                         "region label %d has both existing regions and new lines (%s)" % (
                             region_label, str(region_line_labels0))
                     region = ignore[region_line_labels0[0] - 1]
-                    if rogroup and region.parent_object_ == element and not isinstance(region, SeparatorRegionType):
+                    if rogroup and region.parent_object_ is element and not isinstance(region, SeparatorRegionType):
                         index = page_add_to_reading_order(rogroup, region.id, index)
                     LOG.debug('Region label %d is for ignored region "%s"',
                               region_label, region.id)
@@ -567,17 +674,17 @@ class OcropySegment(Processor):
                                                        seps=np.maximum(sepmask, colseps))
                 region_mask |= region_line_labels > 0
                 # find contours for region (can be non-contiguous)
-                regions, _ = masks2polygons(region_mask * region_label, element_bin,
+                regions, _ = masks2polygons(region_mask * region_label, None, element_bin,
                                             '%s "%s"' % (element_name, element_id),
                                             min_area=6000/zoom/zoom,
                                             simplify=ignore_labels * ~(sep_bin))
                 # find contours for lines (can be non-contiguous)
-                lines, _ = masks2polygons(region_line_labels, element_bin,
+                lines, _ = masks2polygons(region_line_labels, baselines, element_bin,
                                           'region "%s"' % element_id,
                                           min_area=640/zoom/zoom)
                 # create new lines in new regions (allocating by intersection)
-                line_polys = [Polygon(polygon) for _, polygon in lines]
-                for _, region_polygon in regions:
+                line_polys = [Polygon(polygon) for _, polygon, _ in lines]
+                for _, region_polygon, _ in regions:
                     region_poly = prep(Polygon(region_polygon))
                     # convert back to absolute (page) coordinates:
                     region_polygon = coordinates_for_segment(region_polygon, image, coords)
@@ -597,7 +704,7 @@ class OcropySegment(Processor):
                     for i, line_poly in enumerate(line_polys):
                         if not region_poly.intersects(line_poly): # .contains
                             continue
-                        line_label, line_polygon = lines[i]
+                        line_label, line_polygon, line_baseline = lines[i]
                         # convert back to absolute (page) coordinates:
                         line_polygon = coordinates_for_segment(line_polygon, image, coords)
                         line_polygon = polygon_for_parent(line_polygon, region)
@@ -609,9 +716,11 @@ class OcropySegment(Processor):
                         line_no += 1
                         line_id = region_id + "_line%04d" % line_no
                         LOG.debug('Line label %d becomes ID "%s"', line_label, line_id)
-                        line = TextLineType(
-                            id=line_id, Coords=CoordsType(
-                            points=points_from_polygon(line_polygon)))
+                        line = TextLineType(id=line_id,
+                                            Coords=CoordsType(points=points_from_polygon(line_polygon)))
+                        if line_baseline:
+                            line_baseline = coordinates_for_segment(line_baseline, image, coords)
+                            line.set_Baseline(BaselineType(points=points_from_polygon(line_baseline)))
                         region.add_TextLine(line)
                     # if the region has received text lines, keep it
                     if region.get_TextLine():
@@ -622,13 +731,11 @@ class OcropySegment(Processor):
                             index = page_add_to_reading_order(rogroup, region.id, index)
             # add additional image/non-text regions from compute_segmentation
             # (e.g. drop-capitals or images) ...
-            image_labels, num_images = morph.label(images)
-            LOG.info('Found %d large non-text/image regions for %s "%s"',
-                     num_images, element_name, element_id)
+            LOG.info('Found %d large image regions for %s "%s"', images.max(), element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            image_polygons, _ = masks2polygons(image_labels, element_bin,
+            image_polygons, _ = masks2polygons(images, None, element_bin,
                                                '%s "%s"' % (element_name, element_id))
-            for image_label, polygon in image_polygons:
+            for image_label, polygon, _ in image_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
                 region_polygon = polygon_for_parent(region_polygon, element)
@@ -641,22 +748,18 @@ class OcropySegment(Processor):
                 element.add_ImageRegion(ImageRegionType(
                     id=region_id, Coords=CoordsType(
                     points=points_from_polygon(region_polygon))))
-            # split rulers into separator regions:
-            hline_labels, num_hlines = morph.label(hlines)
-            vline_labels, num_vlines = morph.label(vlines)
-            LOG.info('Found %d/%d h/v-lines for %s "%s"',
-                     num_hlines, num_vlines, element_name, element_id)
+            # split detected separator labels into separator regions:
+            LOG.info('Found %d separators for %s "%s"', seplines.max(), element_name, element_id)
             # find contours around region labels (can be non-contiguous):
-            hline_polygons, _ = masks2polygons(hline_labels, element_bin,
-                                               '%s "%s"' % (element_name, element_id))
-            vline_polygons, _ = masks2polygons(vline_labels, element_bin,
-                                               '%s "%s"' % (element_name, element_id))
-            for _, polygon in hline_polygons + vline_polygons:
+            sep_polygons, _ = masks2polygons(seplines, None, element_bin,
+                                             '%s "%s"' % (element_name, element_id),
+                                             open_holes=True, reorder=False)
+            for sep_label, polygon, _ in sep_polygons:
                 # convert back to absolute (page) coordinates:
                 region_polygon = coordinates_for_segment(polygon, image, coords)
                 region_polygon = polygon_for_parent(region_polygon, element)
                 if region_polygon is None:
-                    LOG.warning('Ignoring extant region contour for separator')
+                    LOG.warning('Ignoring extant region contour for separator %d', sep_label)
                     continue
                 # annotate result:
                 region_no += 1
@@ -668,26 +771,25 @@ class OcropySegment(Processor):
             element_array[sepmask] = np.amax(element_array) # clip to white/bg
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
-                image_clipped, file_id + '.IMG-CLIP',
-                page_id=page_id,
-                file_grp=self.output_file_grp)
+                image_clipped, file_id + '.IMG-CLIP', self.output_file_grp,
+                page_id=page_id)
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
         else:
             # get mask from region polygon:
             region_polygon = coordinates_of_segment(element, image, coords)
-            region_mask = np.zeros_like(element_bin, np.bool)
+            region_mask = np.zeros_like(element_bin, bool)
             region_mask[draw.polygon(region_polygon[:, 1],
                                      region_polygon[:, 0],
                                      region_mask.shape)] = True
             # ensure the new line labels do not extrude from the region:
             line_labels = line_labels * region_mask
             # find contours around labels (can be non-contiguous):
-            line_polygons, _ = masks2polygons(line_labels, element_bin,
+            line_polygons, _ = masks2polygons(line_labels, baselines, element_bin,
                                               'region "%s"' % element_id,
                                               min_area=640/zoom/zoom)
             line_no = 0
-            for line_label, polygon in line_polygons:
+            for line_label, polygon, baseline in line_polygons:
                 # convert back to absolute (page) coordinates:
                 line_polygon = coordinates_for_segment(polygon, image, coords)
                 line_polygon = polygon_for_parent(line_polygon, element)
@@ -698,18 +800,20 @@ class OcropySegment(Processor):
                 # annotate result:
                 line_no += 1
                 line_id = element_id + "_line%04d" % line_no
-                element.add_TextLine(TextLineType(
-                    id=line_id, Coords=CoordsType(
-                    points=points_from_polygon(line_polygon))))
+                line = TextLineType(id=line_id,
+                                    Coords=CoordsType(points=points_from_polygon(line_polygon)))
+                if baseline:
+                    line_baseline = coordinates_for_segment(baseline, image, coords)
+                    line.set_Baseline(BaselineType(points=points_from_polygon(line_baseline)))
+                element.add_TextLine(line)
             if not sep_bin.any():
                 return # no derived image
             # annotate a text/image-separated image
             element_array[sep_bin] = np.amax(element_array) # clip to white/bg
             image_clipped = array2pil(element_array)
             file_path = self.workspace.save_image_file(
-                image_clipped, file_id + '.IMG-CLIP',
-                page_id=page_id,
-                file_grp=self.output_file_grp)
+                image_clipped, file_id + '.IMG-CLIP', self.output_file_grp,
+                page_id=page_id)
             # update PAGE (reference the image file):
             element.add_AlternativeImage(AlternativeImageType(
                 filename=file_path, comments=coords['features'] + ',clipped'))
@@ -751,33 +855,113 @@ def make_intersection(poly1, poly2):
     # post-process
     if interp.is_empty or interp.area == 0.0:
         return None
-    if interp.type == 'GeometryCollection':
+    if interp.geom_type == 'GeometryCollection':
         # heterogeneous result: filter zero-area shapes (LineString, Point)
         interp = unary_union([geom for geom in interp.geoms if geom.area > 0])
-    if interp.type == 'MultiPolygon':
+    if interp.geom_type == 'MultiPolygon':
         # homogeneous result: construct convex hull to connect
-        # FIXME: construct concave hull / alpha shape
-        interp = interp.convex_hull
+        interp = join_polygons(interp.geoms)
     if interp.minimum_clearance < 1.0:
         # follow-up calculations will necessarily be integer;
         # so anticipate rounding here and then ensure validity
-        interp = asPolygon(np.round(interp.exterior.coords))
+        interp = Polygon(np.round(interp.exterior.coords))
         interp = make_valid(interp)
     return interp
 
 def make_valid(polygon):
-    for split in range(1, len(polygon.exterior.coords)-1):
+    points = list(polygon.exterior.coords)
+    for split in range(1, len(points)):
         if polygon.is_valid or polygon.simplify(polygon.area).is_valid:
             break
         # simplification may not be possible (at all) due to ordering
         # in that case, try another starting point
-        polygon = Polygon(polygon.exterior.coords[-split:]+polygon.exterior.coords[:-split])
-    for tolerance in range(1, int(polygon.area)):
+        polygon = Polygon(points[-split:]+points[:-split])
+    for tolerance in range(int(polygon.area)):
         if polygon.is_valid:
             break
         # simplification may require a larger tolerance
-        polygon = polygon.simplify(tolerance)
+        polygon = polygon.simplify(tolerance + 1)
     return polygon
+
+def diff_polygons(poly1, poly2):
+    poly = poly1.difference(poly2)
+    if poly.geom_type == 'MultiPolygon':
+        poly = poly.convex_hull
+    if poly.minimum_clearance < 1.0:
+        poly = Polygon(np.round(poly.exterior.coords))
+    poly = make_valid(poly)
+    return poly
+
+def join_polygons(polygons, loc='', scale=20):
+    """construct concave hull (alpha shape) from input polygons"""
+    # compoundp = unary_union(polygons)
+    # jointp = compoundp.convex_hull
+    polygons = list(itertools.chain.from_iterable([
+        poly.geoms if poly.geom_type in ['MultiPolygon', 'GeometryCollection']
+        else [poly]
+        for poly in polygons]))
+    npoly = len(polygons)
+    if npoly == 1:
+        return polygons[0]
+    # find min-dist path through all polygons (travelling salesman)
+    pairs = itertools.combinations(range(npoly), 2)
+    dists = np.eye(npoly, dtype=float)
+    for i, j in pairs:
+        dist = polygons[i].distance(polygons[j])
+        if dist == 0:
+            dist = 1e-5 # if pair merely touches, we still need to get an edge
+        dists[i, j] = dist
+        dists[j, i] = dist
+    dists = minimum_spanning_tree(dists, overwrite=True)
+    # add bridge polygons (where necessary)
+    for prevp, nextp in zip(*dists.nonzero()):
+        prevp = polygons[prevp]
+        nextp = polygons[nextp]
+        nearest = nearest_points(prevp, nextp)
+        bridgep = LineString(nearest).buffer(max(1, scale/5), resolution=1)
+        polygons.append(bridgep)
+    jointp = unary_union(polygons)
+    assert jointp.geom_type == 'Polygon', jointp.wkt
+    if jointp.minimum_clearance < 1.0:
+        # follow-up calculations will necessarily be integer;
+        # so anticipate rounding here and then ensure validity
+        jointp = Polygon(np.round(jointp.exterior.coords))
+        jointp = make_valid(jointp)
+    return jointp
+
+def join_baselines(baselines, loc=''):
+    LOG = getLogger('processor.OcropyResegment')
+    result = []
+    def add_baseline(baseline):
+        nonlocal result
+        base_x = [pt[0] for pt in result]
+        base_left = min(base_x, default=0)
+        base_right = max(base_x, default=0)
+        left = baseline.bounds[0]
+        right = baseline.bounds[2]
+        if baseline.coords[0][0] > baseline.coords[-1][0]:
+            baseline.coords = list(baseline.coords[::-1])
+        if left > base_right:
+            result.extend(baseline.coords)
+        elif right < base_left:
+            result = list(baseline.coords) + result
+        else:
+            LOG.warning("baseline part crosses existing x in %s", loc)
+            return
+        assert all(p1[0] < p2[0] for p1, p2 in zip(result[:-1], result[1:])), result
+    for baseline in baselines:
+        if (baseline.is_empty or
+            baseline.geom_type in ['Point', 'MultiPoint']):
+            continue
+        if (baseline.geom_type == 'GeometryCollection' or
+            baseline.geom_type.startswith('Multi')):
+            for geom in baseline.geoms:
+                add_baseline(geom)
+            continue
+        add_baseline(baseline)
+    if len(result) < 2:
+        return None
+    return LineString(result)
 
 def page_get_reading_order(ro, rogroup):
     """Add all elements from the given reading order group to the given dictionary.

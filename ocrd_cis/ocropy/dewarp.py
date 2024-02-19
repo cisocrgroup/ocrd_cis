@@ -168,8 +168,8 @@ class OcropyDewarp(Processor):
                     file_path = self.workspace.save_image_file(
                         dew_image,
                         file_id + '_' + region.id + '_' + line.id + '.IMG-DEWARP',
-                        page_id=input_file.pageId,
-                        file_grp=self.output_file_grp)
+                        self.output_file_grp,
+                        page_id=input_file.pageId)
                     # update PAGE (reference the image file):
                     alternative_image = line.get_AlternativeImage()
                     line.add_AlternativeImage(AlternativeImageType(

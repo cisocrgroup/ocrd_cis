@@ -39,7 +39,7 @@ class OcropyDeskew(Processor):
         super(OcropyDeskew, self).__init__(*args, **kwargs)
 
     def process(self):
-        """Deskew the regions of the workspace.
+        """Deskew the pages or regions of the workspace.
 
         Open and deserialise PAGE input files and their respective images,
         then iterate over the element hierarchy down to the TextRegion level.
@@ -142,10 +142,8 @@ class OcropyDeskew(Processor):
             segment_coords['features'] += ',deskewed'
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
-            segment_image,
-            file_id + '.IMG-DESKEW',
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            segment_image, file_id + '.IMG-DESKEW', self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,

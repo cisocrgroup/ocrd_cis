@@ -257,10 +257,8 @@ class OcropyClip(Processor):
         segment_image = crop_image(segment_image,box=segment_bbox)
         # update METS (add the image file):
         file_path = self.workspace.save_image_file(
-            segment_image,
-            file_id=file_id + '.IMG-CLIP',
-            page_id=page_id,
-            file_grp=self.output_file_grp)
+            segment_image, file_id + '.IMG-CLIP', self.output_file_grp,
+            page_id=page_id)
         # update PAGE (reference the image file):
         segment.add_AlternativeImage(AlternativeImageType(
             filename=file_path,
