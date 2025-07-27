@@ -10,3 +10,6 @@ env-dir/*
 /venv*
 /build
 /dist
+TAGS
+*.log
+download/

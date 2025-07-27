@@ -1,38 +1,21 @@
 from __future__ import absolute_import
+from logging import Logger
+from typing import Optional
 
-import os.path
 import cv2
 import numpy as np
 from PIL import Image
 
-#import kraken.binarization
+from ocrd_utils import getLogger
+from ocrd_models.ocrd_page import AlternativeImageType, OcrdPage
+from ocrd import Processor, OcrdPageResult, OcrdPageResultImage
 
-from ocrd_utils import (
-    getLogger,
-    make_file_id,
-    assert_file_grp_cardinality,
-    MIMETYPE_PAGE
-)
-from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import (
-    to_xml, AlternativeImageType
-)
-from ocrd import Processor
-
-from .. import get_ocrd_tool
 from . import common
-from .common import (
-    pil2array, array2pil,
-    # binarize,
-    remove_noise)
+from .common import array2pil, determine_zoom, pil2array, remove_noise
 
-#sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-TOOL = 'ocrd-cis-ocropy-binarize'
-
-def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False, zoom=1.0):
-    LOG = getLogger('processor.OcropyBinarize')
-    LOG.debug('binarizing %dx%d image with method=%s', pil_image.width, pil_image.height, method)
+def binarize(logger: Logger, pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False, zoom=1.0):
+    logger.debug(f'Binarizing {pil_image.width}x{pil_image.height} image with method={method}')
     if method == 'none':
         # useful if the images are already binary,
         # but lack image attribute `binarized`
@@ -54,42 +37,33 @@ def binarize(pil_image, method='ocropy', maxskew=2, threshold=0.5, nrm=False, zo
 
         if method == 'global':
             # global thresholding
-            _, th = cv2.threshold(img,threshold*255,255,cv2.THRESH_BINARY)
+            _, th = cv2.threshold(img, threshold * 255, 255, cv2.THRESH_BINARY)
         elif method == 'otsu':
             # Otsu's thresholding
-            _, th = cv2.threshold(img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            _, th = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         elif method == 'gauss-otsu':
             # Otsu's thresholding after Gaussian filtering
             blur = cv2.GaussianBlur(img, (5, 5), 0)
-            _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            _, th = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         else:
             raise Exception('unknown binarization method %s' % method)
         return Image.fromarray(th), 0
 
-
 class OcropyBinarize(Processor):
+    @property
+    def executable(self):
+        return 'ocrd-cis-ocropy-binarize'
 
-    def __init__(self, *args, **kwargs):
-        self.ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = self.ocrd_tool['tools'][TOOL]
-        kwargs['version'] = self.ocrd_tool['version']
-        super(OcropyBinarize, self).__init__(*args, **kwargs)
-        if hasattr(self, 'output_file_grp'):
-            # processing context
-            self.setup()
-    
     def setup(self):
-        self.logger = getLogger('processor.OcropyBinarize')
-        if self.parameter['grayscale'] and self.parameter['method'] != 'ocropy':
-            self.logger.critical('requested method %s does not support grayscale normalized output',
-                                 self.parameter['method'])
-            raise Exception('only method=ocropy allows grayscale=true')
+        method = self.parameter['method']
+        if self.parameter['grayscale'] and method != 'ocropy':
+            self.logger.critical(f'Requested method {method} does not support grayscale normalized output')
+            raise ValueError('only method=ocropy allows grayscale=true')
 
-    def process(self):
+    def process_page_pcgts(self, *input_pcgts: Optional[OcrdPage], page_id: Optional[str] = None) -> OcrdPageResult:
         """Binarize (and optionally deskew/despeckle) the pages/regions/lines of the workspace.
 
-        Open and deserialise PAGE input files and their respective images,
-        then iterate over the element hierarchy down to the requested
+        Iterate over the PAGE-XML element hierarchy down to the requested
         ``level-of-operation``.
 
         Next, for each file, crop each segment image according to the layout
@@ -105,80 +79,61 @@ class OcropyBinarize(Processor):
 
         Reference each new image in the AlternativeImage of the element.
 
-        Produce a new output file by serialising the resulting hierarchy.
+        Return a PAGE-XML with new AlternativeImage(s) and the arguments
+        for ``workspace.save_image_file``.
         """
         level = self.parameter['level-of-operation']
-        assert_file_grp_cardinality(self.input_file_grp, 1)
-        assert_file_grp_cardinality(self.output_file_grp, 1)
+        assert self.workspace
+        self.logger.debug(f'Level of operation: "{level}"')
 
-        for (n, input_file) in enumerate(self.input_files):
-            self.logger.info("INPUT FILE %i / %s", n, input_file.pageId or input_file.ID)
-            file_id = make_file_id(input_file, self.output_file_grp)
+        pcgts = input_pcgts[0]
+        assert pcgts
+        page = pcgts.get_Page()
+        assert page
 
-            pcgts = page_from_file(self.workspace.download_file(input_file))
-            self.add_metadata(pcgts)
-            page_id = pcgts.pcGtsId or input_file.pageId or input_file.ID # (PageType has no id)
-            page = pcgts.get_Page()
-                
-            page_image, page_xywh, page_image_info = self.workspace.image_from_page(
-                page, page_id, feature_filter='binarized')
-            if self.parameter['dpi'] > 0:
-                zoom = 300.0/self.parameter['dpi']
-            elif page_image_info.resolution != 1:
-                dpi = page_image_info.resolution
-                if page_image_info.resolutionUnit == 'cm':
-                    dpi *= 2.54
-                self.logger.info('Page "%s" uses %f DPI', page_id, dpi)
-                zoom = 300.0/dpi
-            else:
-                zoom = 1
-            
-            if level == 'page':
-                self.process_page(page, page_image, page_xywh, zoom,
-                                  input_file.pageId, file_id)
-            else:
-                if level == 'table':
-                    regions = page.get_TableRegion()
-                else: # region
-                    regions = page.get_AllRegions(classes=['Text'], order='reading-order')
-                if not regions:
-                    self.logger.warning('Page "%s" contains no text regions', page_id)
-                for region in regions:
-                    region_image, region_xywh = self.workspace.image_from_segment(
-                        region, page_image, page_xywh, feature_filter='binarized')
-                    if level == 'region':
-                        self.process_region(region, region_image, region_xywh, zoom,
-                                            input_file.pageId, file_id + '_' + region.id)
+        page_image, page_xywh, page_image_info = self.workspace.image_from_page(
+            page, page_id, feature_filter='binarized')
+        zoom = determine_zoom(self.logger, page_id, self.parameter['dpi'], page_image_info)
+
+        result = OcrdPageResult(pcgts)
+        if level == 'page':
+            try:
+                result.images.append(self.process_page(page, page_image, page_xywh, zoom, page_id))
+            except ValueError as e:
+                self.logger.error(e)
+        else:
+            if level == 'table':
+                regions = page.get_TableRegion()
+            else: # region
+                regions = page.get_AllRegions(classes=['Text'], order='reading-order')
+            if not regions:
+                self.logger.warning(f"Page '{page_id}' contains no regions")
+            for region in regions:
+                region_image, region_xywh = self.workspace.image_from_segment(
+                    region, page_image, page_xywh, feature_filter='binarized')
+                if level == 'region':
+                    try:
+                        result.images.append(self.process_region(region, region_image, region_xywh, zoom, region.id))
                         continue
-                    lines = region.get_TextLine()
-                    if not lines:
-                        self.logger.warning('Page "%s" region "%s" contains no text lines',
-                                            page_id, region.id)
-                    for line in lines:
-                        line_image, line_xywh = self.workspace.image_from_segment(
-                            line, region_image, region_xywh, feature_filter='binarized')
-                        self.process_line(line, line_image, line_xywh, zoom,
-                                          input_file.pageId, region.id,
-                                          file_id + '_' + region.id + '_' + line.id)
+                    except ValueError as e:
+                        self.logger.error(e)
+                lines = region.get_TextLine()
+                if not lines:
+                    self.logger.warning(f"Page '{page_id}' region '{region.id}' contains no text lines")
+                for line in lines:
+                    line_image, line_xywh = self.workspace.image_from_segment(
+                        line, region_image, region_xywh, feature_filter='binarized')
+                    try:
+                        result.images.append(self.process_line(line, line_image, line_xywh, zoom, page_id, region.id))
+                    except ValueError as e:
+                        self.logger.error(e)
+        return result
 
-            # update METS (add the PAGE file):
-            file_path = os.path.join(self.output_file_grp, file_id + '.xml')
-            pcgts.set_pcGtsId(file_id)
-            out = self.workspace.add_file(
-                ID=file_id,
-                file_grp=self.output_file_grp,
-                pageId=input_file.pageId,
-                local_filename=file_path,
-                mimetype=MIMETYPE_PAGE,
-                content=to_xml(pcgts))
-            self.logger.info('created file ID: %s, file_grp: %s, path: %s',
-                             file_id, self.output_file_grp, out.local_filename)
-
-    def process_page(self, page, page_image, page_xywh, zoom, page_id, file_id):
+    def process_page(self, page, page_image, page_xywh, zoom, page_id) -> OcrdPageResultImage:
         if not page_image.width or not page_image.height:
-            self.logger.warning("Skipping page '%s' with zero size", page_id)
-            return
-        self.logger.info("About to binarize page '%s'", page_id)
+            raise ValueError(f"Skipping page '{page_id}' with zero size")
+        self.logger.info(f"About to binarize page '{page_id}'")
+
         features = page_xywh['features']
         if 'angle' in page_xywh and page_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
@@ -186,67 +141,64 @@ class OcropyBinarize(Processor):
             maxskew = 0
         else:
             maxskew = self.parameter['maxskew']
-        bin_image, angle = binarize(page_image,
-                                    method=self.parameter['method'],
-                                    maxskew=maxskew,
-                                    threshold=self.parameter['threshold'],
-                                    nrm=self.parameter['grayscale'],
-                                    zoom=zoom)
+        bin_image, angle = binarize(
+            self.logger,
+            page_image,
+            method=self.parameter['method'],
+            maxskew=maxskew,
+            threshold=self.parameter['threshold'],
+            nrm=self.parameter['grayscale'],
+            zoom=zoom)
         if angle:
             features += ',deskewed'
         page_xywh['angle'] = angle
         if self.parameter['noise_maxsize']:
-            bin_image = remove_noise(
-                bin_image, maxsize=self.parameter['noise_maxsize'])
+            bin_image = remove_noise(bin_image, maxsize=self.parameter['noise_maxsize'])
             features += ',despeckled'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
         # to do consistent coordinate transforms, and non-consumers
         # to redo the rotation themselves):
         orientation = -page_xywh['angle']
-        orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
+        orientation = 180 - (180 - orientation) % 360  # map to [-179.999,180]
         page.set_orientation(orientation)
-        # update METS (add the image file):
         if self.parameter['grayscale']:
-            file_id += '.IMG-NRM'
+            suffix = '.IMG-NRM'
             features += ',grayscale_normalized'
         else:
-            file_id += '.IMG-BIN'
+            suffix = '.IMG-BIN'
             features += ',binarized'
-        file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id,
-            page_id=page_id,
-            file_grp=self.output_file_grp)
         # update PAGE (reference the image file):
-        page.add_AlternativeImage(AlternativeImageType(
-            filename=file_path,
-            comments=features))
+        alt_image = AlternativeImageType(comments=features)
+        page.add_AlternativeImage(alt_image)
+        return OcrdPageResultImage(bin_image, suffix, alt_image)
 
-    def process_region(self, region, region_image, region_xywh, zoom, page_id, file_id):
+    def process_region(self, region, region_image, region_xywh, zoom, page_id) -> OcrdPageResultImage:
         if not region_image.width or not region_image.height:
-            self.logger.warning("Skipping region '%s' with zero size", region.id)
-            return
-        self.logger.info("About to binarize page '%s' region '%s'", page_id, region.id)
+            raise ValueError(f"Skipping region '{region.id}' with zero size")
+        self.logger.info(f"About to binarize page '{page_id}' region '{region.id}'")
         features = region_xywh['features']
         if 'angle' in region_xywh and region_xywh['angle']:
             # orientation has already been annotated (by previous deskewing),
             # so skip deskewing here:
-            bin_image, _ = binarize(region_image,
-                                    method=self.parameter['method'],
-                                    maxskew=0,
-                                    nrm=self.parameter['grayscale'],
-                                    zoom=zoom)
+            bin_image, _ = binarize(
+                self.logger,
+                region_image,
+                method=self.parameter['method'],
+                maxskew=0,
+                nrm=self.parameter['grayscale'],
+                zoom=zoom)
         else:
-            bin_image, angle = binarize(region_image,
-                                        method=self.parameter['method'],
-                                        maxskew=self.parameter['maxskew'],
-                                        nrm=self.parameter['grayscale'],
-                                        zoom=zoom)
+            bin_image, angle = binarize(
+                self.logger,
+                region_image,
+                method=self.parameter['method'],
+                maxskew=self.parameter['maxskew'],
+                nrm=self.parameter['grayscale'],
+                zoom=zoom)
             if angle:
                 features += ',deskewed'
             region_xywh['angle'] = angle
-        bin_image = remove_noise(bin_image,
-                                 maxsize=self.parameter['noise_maxsize'])
+        bin_image = remove_noise(bin_image, maxsize=self.parameter['noise_maxsize'])
         if self.parameter['noise_maxsize']:
             features += ',despeckled'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
@@ -255,35 +207,30 @@ class OcropyBinarize(Processor):
         orientation = -region_xywh['angle']
         orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
         region.set_orientation(orientation)
-        # update METS (add the image file):
+        suffix = f'{region.id}'
         if self.parameter['grayscale']:
-            file_id += '.IMG-NRM'
+            suffix += '.IMG-NRM'
             features += ',grayscale_normalized'
         else:
-            file_id += '.IMG-BIN'
+            suffix += '.IMG-BIN'
             features += ',binarized'
-        file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id,
-            page_id=page_id,
-            file_grp=self.output_file_grp)
         # update PAGE (reference the image file):
-        region.add_AlternativeImage(AlternativeImageType(
-            filename=file_path,
-            comments=features))
+        alt_image = AlternativeImageType(comments=features)
+        region.add_AlternativeImage(alt_image)
+        return OcrdPageResultImage(bin_image, suffix, alt_image)
 
-    def process_line(self, line, line_image, line_xywh, zoom, page_id, region_id, file_id):
+    def process_line(self, line, line_image, line_xywh, zoom, page_id, region_id) -> OcrdPageResultImage:
         if not line_image.width or not line_image.height:
-            self.logger.warning("Skipping line '%s' with zero size", line.id)
-            return
-        self.logger.info("About to binarize page '%s' region '%s' line '%s'",
-                         page_id, region_id, line.id)
+            raise ValueError(f"Skipping line '{line.id}' with zero size")
+        self.logger.info(f"About to binarize page '{page_id}' region '{region_id}' line '{line.id}'")
         features = line_xywh['features']
-        bin_image, angle = binarize(line_image,
-                                    method=self.parameter['method'],
-                                    maxskew=self.parameter['maxskew'],
-                                    nrm=self.parameter['grayscale'],
-                                    zoom=zoom)
+        bin_image, angle = binarize(
+            self.logger,
+            line_image,
+            method=self.parameter['method'],
+            maxskew=self.parameter['maxskew'],
+            nrm=self.parameter['grayscale'],
+            zoom=zoom)
         if angle:
             features += ',deskewed'
         # annotate angle in PAGE (to allow consumers of the AlternativeImage
@@ -292,25 +239,19 @@ class OcropyBinarize(Processor):
         #orientation = -angle
         #orientation = 180 - (180 - orientation) % 360 # map to [-179.999,180]
         #line.set_orientation(orientation) # does not exist on line level!
-        self.logger.warning("cannot add orientation %.2f to page '%s' region '%s' line '%s'",
-                            -angle, page_id, region_id, line.id)
-        bin_image = remove_noise(bin_image,
-                                 maxsize=self.parameter['noise_maxsize'])
+        self.logger.warning(
+            f"Cannot add orientation %.2f to page '{page_id}' region '{region_id}' line '{line.id}'", -angle)
+        bin_image = remove_noise(bin_image, maxsize=self.parameter['noise_maxsize'])
         if self.parameter['noise_maxsize']:
             features += ',despeckled'
-        # update METS (add the image file):
+        suffix = f'{region_id}_{line.id}'
         if self.parameter['grayscale']:
-            file_id += '.IMG-NRM'
+            suffix += '.IMG-NRM'
             features += ',grayscale_normalized'
         else:
-            file_id += '.IMG-BIN'
+            suffix += '.IMG-BIN'
             features += ',binarized'
-        file_path = self.workspace.save_image_file(
-            bin_image,
-            file_id,
-            page_id=page_id,
-            file_grp=self.output_file_grp)
         # update PAGE (reference the image file):
-        line.add_AlternativeImage(AlternativeImageType(
-            filename=file_path,
-            comments=features))
+        alt_image = AlternativeImageType(comments=features)
+        line.add_AlternativeImage(alt_image)
+        return OcrdPageResultImage(bin_image, suffix, alt_image)

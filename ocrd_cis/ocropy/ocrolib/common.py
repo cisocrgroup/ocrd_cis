@@ -445,6 +445,9 @@ def load_object(fname,zip=0,nofind=0,verbose=0):
         LOG.info("# loading object '%s'", fname)
     if zip==0 and fname.endswith(".gz"):
         zip = 1
+    # most models will have been pickled with ocrolib at top level
+    # we therefore need to add ocrd_cis.ocropy to the search path
+    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
     if zip>0:
         with gzip.GzipFile(fname,"rb") as stream:
         #with os.popen("gunzip < '%s'"%fname,"rb") as stream:

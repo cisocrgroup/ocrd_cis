@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel", "setuptools-ocrd"]
+
+[project]
+name = "ocrd_cis"
+authors = [
+    {name = "Florian Fink", email = "finkf@cis.lmu.de"},
+    {name = "Tobias Englmeier", email = "englmeier@cis.lmu.de"},
+    {name = "Christoph Weber", email = "web_chris@msn.com"},
+    {name = "Robert Sachunsky", email = "sachunsky@informatik.uni-leipzig.de"},
+]
+description = "CIS OCR-D post-correction tools and improved Ocropy1"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+keywords = ["ocr", "ocr-d", "ocropus-ocr", "post-correction"]
+
+dynamic = ["version", "dependencies"]
+
+# https://pypi.org/classifiers/
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Other Audience",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Text Processing",
+]
+
+[project.scripts]
+ocrd-cis-align = "ocrd_cis.align.cli:ocrd_cis_align"
+ocrd-cis-postcorrect = "ocrd_cis.postcorrect.cli:ocrd_cis_postcorrect"
+ocrd-cis-data = "ocrd_cis.data.__main__:main"
+ocrd-cis-ocropy-train = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_train"
+ocrd-cis-ocropy-recognize = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_recognize"
+ocrd-cis-ocropy-segment = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_segment"
+ocrd-cis-ocropy-resegment = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_resegment"
+ocrd-cis-ocropy-clip = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_clip"
+ocrd-cis-ocropy-dewarp = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_dewarp"
+ocrd-cis-ocropy-deskew = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_deskew"
+ocrd-cis-ocropy-denoise = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_denoise"
+ocrd-cis-ocropy-binarize = "ocrd_cis.ocropy.cli:ocrd_cis_ocropy_binarize"
+
+[project.urls]
+Homepage = "https://github.com/cisocrgroup/ocrd_cis"
+Repository = "https://github.com/cisocrgroup/ocrd_cis.git"
+
+[project.optional-dependencies]
+debug = ["matplotlib>3.0.0"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools]
+packages = ["ocrd_cis", "ocrd_cis.postcorrect", "ocrd_cis.aio", "ocrd_cis.data", "ocrd_cis.wer", "ocrd_cis.ocropy", "ocrd_cis.ocropy.ocrolib", "ocrd_cis.div", "ocrd_cis.align"]
+package-data = {"*" = ["*.json", "*.jar", "model.zip", "3gs.csv.gz"]}
+
+[tool.pytest.ini_options]
+minversion = 6.0
+addopts = "--strict-markers"
+markers = [
+    "integration: integration tests",
+]
+
+
+[tool.mypy]
+plugins = ["numpy.typing.mypy_plugin"]
+
+ignore_missing_imports = true
+
+
+strict = true
+
+disallow_subclassing_any = false
+# ❗ error: Class cannot subclass "Processor" (has type "Any")
+disallow_any_generics = false
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+
+[tool.coverage.run]
+branch = true
+source = [
+    "ocrd_cis"
+]
+concurrency = [
+    "thread",
+    "multiprocessing"
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if self\\.debug",
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+ignore_errors = true
+omit = [
+    "ocrd_cis/*/cli"
+]

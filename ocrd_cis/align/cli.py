@@ -1,150 +1,123 @@
 from __future__ import absolute_import
+from __future__ import annotations
+
 import click
 import json
 import os
-import Levenshtein
-from ocrd import Processor
+from typing import Optional, List, Dict, Type
+
+from rapidfuzz.distance import Levenshtein
+
+from ocrd import Processor, OcrdPage, OcrdPageResult
 from ocrd.decorators import ocrd_cli_options
 from ocrd.decorators import ocrd_cli_wrap_processor
-from ocrd_utils import MIMETYPE_PAGE
-from ocrd_utils import getLogger
 from ocrd_utils import getLevelName
-from ocrd_utils import make_file_id
-from ocrd_modelfactory import page_from_file
-from ocrd_models.ocrd_page import to_xml
-from ocrd_models.ocrd_page_generateds import TextEquivType
+from ocrd_models.ocrd_page import TextRegionType, TextEquivType
 from ocrd_cis import JavaAligner
-from ocrd_cis import get_ocrd_tool
+
 
 @click.command()
 @ocrd_cli_options
 def ocrd_cis_align(*args, **kwargs):
-    return ocrd_cli_wrap_processor(Aligner, *args, **kwargs)
+    return ocrd_cli_wrap_processor(CISAligner, *args, **kwargs)
 
-class Aligner(Processor):
-    def __init__(self, *args, **kwargs):
-        ocrd_tool = get_ocrd_tool()
-        kwargs['ocrd_tool'] = ocrd_tool['tools']['ocrd-cis-align']
-        kwargs['version'] = ocrd_tool['version']
-        super(Aligner, self).__init__(*args, **kwargs)
+class CISAligner(Processor):
+    @property
+    def executable(self):
+        return 'ocrd-cis-align'
 
-        if hasattr(self, 'workspace'):
-            self.log = getLogger('cis.Processor.Aligner')
+    def process_page_pcgts(self, *input_pcgts : Optional[OcrdPage], page_id : Optional[str] = None) -> OcrdPageResult:
+        assert len(input_pcgts) >= 2
+        alignments = json.loads(self.run_java_aligner(input_pcgts))
+        pcgts = self.align(alignments, input_pcgts)
+        return OcrdPageResult(pcgts)
 
-    def process(self):
-        ifgs = self.input_file_grp.split(",")  # input file groups
-        if len(ifgs) < 2:
-            raise Exception("need at least two input file groups to align")
-        ifts = self.zip_input_files(ifgs)  # input file tuples
-        for _id, ift in enumerate(ifts):
-            alignments = json.loads(self.run_java_aligner(ift))
-            pcgts = self.align(alignments, ift)
-            # keep the right part after OCR-D-...-filename
-            # and prepend output_file_grp
-            input_file = ift[0].input_file
-            file_id = make_file_id(input_file, self.output_file_grp)
-            pcgts.set_pcGtsId(file_id)
-            out = self.workspace.add_file(
-                ID=file_id,
-                file_grp=self.output_file_grp,
-                pageId=input_file.pageId,
-                local_filename=os.path.join(self.output_file_grp, file_id + '.xml'),
-                mimetype=MIMETYPE_PAGE,
-                content=to_xml(pcgts),
-            )
-            self.log.info('created file %s', out)
-
-    def align(self, alignments, ift):
+    def align(self, alignments: List[Dict], pcgts: List[OcrdPage]) -> OcrdPage:
         """align the alignment objects with the according input file tuples"""
-        for t in ift:
-            self.log.debug("tuple %s", os.path.basename(t.input_file.url))
-        pcgtst = self.open_input_file_tuples(ift)
         i = 0
-        for mi, mr in enumerate(pcgtst[0].get_Page().get_TextRegion()):
+        file_groups = self.input_file_grp.split(',')
+        for mi, mr in enumerate(pcgts[0].get_Page().get_AllRegions(classes=['Text'])):
             for mj, _ in enumerate(mr.get_TextLine()):
-                for iiii, u in enumerate(mr.get_TextLine()[mj].get_TextEquiv()):
-                    self.log.debug("[%d] %s", iiii, u.Unicode)
-                for xx in mr.get_TextLine()[mj].get_Word():
-                    for iiii, u in enumerate(xx.get_TextEquiv()):
-                        self.log.debug("[%d] %s", iiii, u.Unicode)
-
                 lines = []
-                for ii, t in enumerate(ift):
+                for ii, page in enumerate(pcgts):
                     if i >= len(alignments):
                         break
-                    tr = pcgtst[ii].get_Page().get_TextRegion()
+                    tr = page.get_Page().get_AllRegions(classes=['Text'])
                     region = tr[mi].get_TextLine()[mj]
-                    lines.append(Alignment(t, region, alignments[i]))
+                    lines.append(Alignment(file_groups[ii], page, region, alignments[i]))
                 self.align_lines(lines)
                 i += 1
-        return pcgtst[0]
+        return pcgts[0]
 
-    def align_lines(self, lines):
+    def align_lines(self, lines: List[Alignment]) -> None:
         """align the given line alignment with the lines"""
         if not lines:
             return
-        if len(lines[0].region.get_TextEquiv()) > 1:
-            del lines[0].region.get_TextEquiv()[1:]
+        if len(lines[0].region.TextEquiv) > 1:
+            del lines[0].region.TextEquiv[1:]
         for i, line in enumerate(lines):
             if lines[0].region.get_TextEquiv() is None:
                 lines[0].region.TextEquiv = []
-            self.log.debug('line alignment: %s [%s - %s]',
-                          get_textequiv_unicode(line.region),
-                          line.region.get_id(),
-                          line.input_file.input_file_group)
-            ddt = line.input_file.input_file_group + "/" + line.region.get_id()
-            if i != 0:
+            self.logger.debug(
+                'line alignment: %s [%s - %s]',
+                get_textequiv_unicode(line.region),
+                line.region.get_id(),
+                line.file_grp
+            )
+            ddt = line.file_grp + "/" + line.region.get_id()
+            if i > 0:
                 te = TextEquivType(
                     Unicode=get_textequiv_unicode(line.region),
                     conf=get_textequiv_conf(line.region),
                     dataType="other",
-                    dataTypeDetails="ocrd-cis-line-alignment:" + ddt)
+                    dataTypeDetails=f"ocrd-cis-line-alignment:{ddt}")
                 lines[0].region.add_TextEquiv(te)
             else:
-                self.log.debug("len: %i, i: %i", len(lines[0].region.get_TextEquiv()), i)
-                lines[0].region.get_TextEquiv()[i].set_dataType("other")
-                lines[0].region.get_TextEquiv()[i].set_dataTypeDetails(
+                self.logger.debug("len: %i, i: %i", len(lines[0].region.TextEquiv), i)
+                lines[0].region.TextEquiv[i].set_dataType("other")
+                lines[0].region.TextEquiv[i].set_dataTypeDetails(
                     "ocrd-cis-line-alignment-master-ocr:" + ddt)
-            lines[0].region.get_TextEquiv()[i].set_index(i+1)
+            lines[0].region.TextEquiv[i].set_index(i+1)
         self.align_words(lines)
 
-    def align_words(self, lines):
-        # self.log.info(json.dumps(lines[0].alignment))
+    def align_words(self, lines: List[Alignment]) -> None:
+        # self.logger.info(json.dumps(lines[0].alignment))
         mregion = lines[0].region.get_Word()
         oregion = [lines[i].region.get_Word() for i in range(1, len(lines))]
         for word in lines[0].alignment['wordAlignments']:
-            self.log.debug("aligning word %s", word['master'])
+            self.logger.debug("aligning word %s", word['master'])
             master, rest = self.find_word([word['master']], mregion, "master")
             mregion = rest
             if master is None or len(master) != 1:
-                self.log.warn("cannot find {}; giving up".format(word['master']))
+                self.logger.warn("cannot find {}; giving up".format(word['master']))
                 # raise Exception("cannot find {}; giving up".format(word['master']))
                 return
             others = list()
             for i, other in enumerate(word['alignments']):
                 match, rest = self.find_word(other, oregion[i])
                 if match is None:
-                    self.log.warn("cannot find {}; giving up".format(other))
+                    self.logger.warn(f"cannot find {other}; giving up")
                     return
                 others.append(match)
                 oregion[i] = rest
             words = list()
             words.append(
-                Alignment(lines[0].input_file, master, lines[0].alignment))
+                Alignment(lines[0].file_grp, lines[0].pcgts, master, lines[0].alignment))
             for i, other in enumerate(others):
                 words.append(Alignment(
-                    lines[i+1].input_file,
+                    lines[i+1].file_grp,
+                    lines[i+1].pcgts,
                     other,
                     lines[i+1].alignment))
             self.align_word_regions(words)
 
-    def align_word_regions(self, words):
+    def align_word_regions(self, words: List[Alignment]) -> None:
         def te0(x):
-            return x.get_TextEquiv()[0]
+            return x.TextEquiv[0]
         for i, word in enumerate(words):
             if not word.region:
-                ifg = word.input_file.input_file_group
-                self.log.debug("(empty) word alignment: [%s]", ifg)
+                ifg = word.file_grp
+                self.logger.debug("(empty) word alignment: [%s]", ifg)
                 te = TextEquivType(
                     dataType="other",
                     dataTypeDetails="ocrd-cis-empty-word-alignment:" + ifg)
@@ -153,50 +126,42 @@ class Aligner(Processor):
                 continue
             _str = " ".join([te0(x).Unicode for x in word.region])
             _id = ",".join([x.get_id() for x in word.region])
-            ifg = word.input_file.input_file_group
-            ddt = word.input_file.input_file_group + "/" + _id
+            ifg = word.file_grp
+            ddt = word.file_grp + "/" + _id
             # if conf is none it is most likely ground truth data
             conf = min([float(te0(x).get_conf() or "1.0") for x in word.region])
-            self.log.debug("word alignment: %s [%s - %s]", _str, _id, ifg)
+            self.logger.debug(f"word alignment: {_str} [{_id} - {ifg}]")
             if i != 0:
                 te = TextEquivType(
-                    Unicode=_str,
-                    conf=conf,
-                    dataType="other",
-                    dataTypeDetails="ocrd-cis-word-alignment:" + ddt)
+                    Unicode=_str, conf=conf, dataType="other", dataTypeDetails=f"ocrd-cis-word-alignment:{ddt}")
                 words[0].region[0].add_TextEquiv(te)
             else:
                 words[0].region[0].get_TextEquiv()[i].set_dataType("other")
-                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(
-                    "ocrd-cis-word-alignment-master-ocr:" + ddt)
+                words[0].region[0].get_TextEquiv()[i].set_dataTypeDetails(f"ocrd-cis-word-alignment-master-ocr:{ddt}")
             words[0].region[0].get_TextEquiv()[i].set_index(i+1)
 
     def find_word(self, tokens, regions, t="other"):
-        self.log.debug("tokens = %s [%s]", tokens, t)
+        tokens_str = f"tokens = {tokens} [{t}]"
+        self.logger.debug(tokens_str)
         for i, _ in enumerate(regions):
             n = self.match_tokens(tokens, regions, i)
             if n == 0:
                 continue
             return tuple([regions[i:n], regions[i:]])
         # not found try again with levenshtein
-        self.log.warn(
-            "could not find tokens = %s [%s]; trying again",
-            tokens, t)
+        self.logger.warn(f"could not find {tokens_str}; trying again")
         for i, _ in enumerate(regions):
             n = self.match_tokens_lev(tokens, regions, i)
             if n == 0:
                 continue
             return tuple([regions[i:n], regions[i:]])
         # not found try again to match token within another one
-        self.log.warn(
-            "could not find tokens = %s [%s]; trying again",
-            tokens, t)
+        self.logger.warn(f"could not find {tokens_str}; trying again")
         for i, _ in enumerate(regions):
             n = self.match_tokens_within(tokens, regions, i)
             if n == 0:
                 continue
             return tuple([regions[i:n], regions[i:]])
-
         # nothing could be found
         return tuple([None, regions])
 
@@ -212,7 +177,7 @@ class Aligner(Processor):
         def f(a, b):
             k = 3  # int(len(a)/3)
             d = Levenshtein.distance(a, b)
-            self.log.debug("lev %s <=> %s: %d (%d)", a, b, d, d)
+            self.logger.debug(f"lev {a} <=> {b}: {d} ({d})")
             return d <= 1 or d <= k
         return self.match_tokens_lambda(tokens, regions, i, f)
 
@@ -227,14 +192,15 @@ class Aligner(Processor):
         Returns 0 if nothing could be matched.
         """
         for j, token in enumerate(tokens):
-            if j + i >= len(regions):
+            sum_i_j = j + i
+            if sum_i_j >= len(regions):
                 return 0
-            if not regions[i+j].get_TextEquiv()[0].Unicode:
-                self.log.warn("cannot find %s", token)
+            unicode = regions[sum_i_j].TextEquiv[0].Unicode
+            if not unicode:
+                self.logger.warn(f"cannot find {token}")
                 return 0
-            self.log.debug('checking %s with %s', token,
-                           regions[i+j].get_TextEquiv()[0].Unicode)
-            if f(token, regions[i+j].get_TextEquiv()[0].Unicode):
+            self.logger.debug(f'checking {token} with {unicode}')
+            if f(token, unicode):
                 continue
             if j == 0:
                 return 0
@@ -244,69 +210,29 @@ class Aligner(Processor):
             i += 1
         return i + len(tokens)
 
-    def open_input_file_tuples(self, ift):
-        """
-        opens all xml files of the given input file tuple
-        and returns them as tuples
-        """
-        res = list()
-        for ifile in ift:
-            pcgts = ifile.open()
-            res.append(pcgts)
-        return tuple(res)
-
-    def zip_input_files(self, ifgs):
-        """Zip files of the given input file groups"""
-        files = list()
-        for ifg in ifgs:
-            self.log.info("input file group: %s", ifg)
-            ifiles = sorted(
-                self.workspace.mets.find_files(fileGrp=ifg),
-                key=lambda ifile: ifile.url)
-            for i in ifiles:
-                self.log.debug("sorted file: %s %s",
-                              os.path.basename(i.url), i.ID)
-            ifiles = [FileAlignment(self.workspace, x, ifg) for x in ifiles]
-            files.append(ifiles)
-        return zip(*files)
-
-    def read_lines_from_input_file(self, ifile):
-        self.log.info("reading input file: %s", ifile)
+    def run_java_aligner(self, input_pcgts: List[OcrdPage]) -> str:
         lines = list()
-        pcgts = ifile.open()
-        for region in pcgts.get_Page().get_TextRegion():
-            for line in region.get_TextLine():
-                lines.append(get_textequiv_unicode(line))
-        return lines
-
-    def run_java_aligner(self, ifs):
-        lines = list()
-        for ifile in ifs:
-            lines.append(self.read_lines_from_input_file(ifile))
+        for pcgts in input_pcgts:
+            lines.append([get_textequiv_unicode(line)
+                          for line in pcgts.get_Page().get_AllTextLines()])
+        # JavaAligner expects a strange input format
         lines = zip(*lines)
         _input = [x.strip() for t in lines for x in t]
         for i in _input:
-            self.log.debug("input line: %s", i)
-        n = len(ifs)
-        self.log.debug("starting java client")
-        p = JavaAligner(n, getLevelName(self.log.getEffectiveLevel()))
+            self.logger.debug("input line: %s", i)
+        n = len(input_pcgts)
+        self.logger.debug("starting java client")
+        p = JavaAligner(n, getLevelName(self.logger.getEffectiveLevel()))
         return p.run("\n".join(_input))
 
-class FileAlignment:
-    def __init__(self, workspace, ifile, ifg):
-        self.workspace = workspace
-        self.input_file = ifile
-        self.input_file_group = ifg
-        self.log = getLogger('cis.FileAlignment')
-
-    def open(self):
-        self.log.info("opening: %s", os.path.basename(self.input_file.url))
-        return page_from_file(self.workspace.download_file(self.input_file))
-
-
 class Alignment:
-    def __init__(self, ifile, region, alignment):
-        self.input_file = ifile
+    file_grp: str
+    pcgts: OcrdPage
+    region: TextRegionType
+    alignment: dict
+    def __init__(self, file_grp: str, pcgts: OcrdPage, region: TextRegionType, alignment: dict):
+        self.file_grp = file_grp
+        self.pcgts = pcgts
         self.region = region
         self.alignment = alignment
 

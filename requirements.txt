@@ -1,0 +1,10 @@
+ocrd>=3.0.2
+click
+scipy
+numpy>=1.17.0
+pillow>=7.1.2
+shapely>=2.0.0
+scikit-image
+networkx
+opencv-python-headless
+rapidfuzz

@@ -1,6 +1,7 @@
 {
 	"git_url": "https://github.com/cisocrgroup/ocrd_cis",
-	"version": "0.1.5",
+	"version": "0.2.0",
+	"dockerhub": "ocrd/cis",
 	"tools": {
 		"ocrd-cis-ocropy-binarize": {
 			"executable": "ocrd-cis-ocropy-binarize",
@@ -12,17 +13,9 @@
 				"preprocessing/optimization/grayscale_normalization",
 				"preprocessing/optimization/deskewing"
 			],
-			"input_file_grp": [
-				"OCR-D-IMG",
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"output_file_grp": [
-				"OCR-D-IMG-BIN",
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"description": "Binarize (and optionally deskew/despeckle) pages / regions / lines with ocropy",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
+			"description": "Binarize (and optionally deskew/despeckle) pages / regions / lines with Ocropy v1",
 			"parameters": {
 				"method": {
 					"type": "string",
@@ -75,15 +68,9 @@
 			"steps": [
 				"preprocessing/optimization/deskewing"
 			],
-			"input_file_grp": [
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"output_file_grp": [
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"description": "Deskew regions with ocropy (by annotating orientation angle and adding AlternativeImage)",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
+			"description": "Deskew regions with Ocropy v1 (by annotating orientation angle and adding AlternativeImage)",
 			"parameters": {
 				"maxskew": {
 					"type": "number",
@@ -106,17 +93,9 @@
 			"steps": [
 				"preprocessing/optimization/despeckling"
 			],
-			"input_file_grp": [
-				"OCR-D-IMG",
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"output_file_grp": [
-				"OCR-D-IMG-DESPECK",
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"description": "Despeckle pages / regions / lines with ocropy",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
+			"description": "Despeckle pages / regions / lines with Ocropy v1",
 			"parameters": {
 				"noise_maxsize": {
 					"type": "number",
@@ -147,14 +126,8 @@
 				"layout/segmentation/region",
 				"layout/segmentation/line"
 			],
-			"input_file_grp": [
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
-			"output_file_grp": [
-				"OCR-D-SEG-BLOCK",
-				"OCR-D-SEG-LINE"
-			],
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
 			"description": "Clip text regions / lines at intersections with neighbours",
 			"parameters": {
 				"level-of-operation": {
@@ -185,13 +158,9 @@
 			"steps": [
 				"layout/segmentation/line"
 			],
-			"input_file_grp": [
-				"OCR-D-SEG-LINE"
-			],
-			"output_file_grp": [
-				"OCR-D-SEG-LINE"
-			],
-			"description": "Resegment text lines",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
+			"description": "Improve coordinates of text lines",
 			"parameters": {
 				"level-of-operation": {
 					"type": "string",
@@ -205,6 +174,11 @@
 					"description": "source for new line polygon candidates ('lineest' for line estimation, i.e. how Ocropy would have segmented text lines; 'baseline' tries to re-polygonize from the baseline annotation; 'ccomps' avoids crossing connected components by majority rule)",
 					"default": "lineest"
 				},
+				"baseline_only": {
+					"type": "boolean",
+					"description": "ignore existing textline coords completely and use baseline as input if possible",
+					"default": false
+				},
 				"dpi": {
 					"type": "number",
 					"format": "float",
@@ -217,10 +191,16 @@
 					"description": "share of foreground pixels that must be retained by the output polygons",
 					"default": 0.75
 				},
+				"spread": {
+					"type": "number",
+					"format": "float",
+					"description": "distance in points (pt) from the foreground to project textline labels into the background for polygonal contours; if zero, project half a scale/capheight",
+					"default": 2.4
+				},
 				"extend_margins": {
 					"type": "number",
 					"format": "integer",
-					"description": "number of pixels to extend the input polygons in all directions",
+					"description": "(ignored)",
 					"default": 3
 				}
 			}
@@ -234,12 +214,8 @@
 				"preprocessing/optimization/dewarping"
 			],
 			"description": "Dewarp line images with ocropy",
-			"input_file_grp": [
-				"OCR-D-SEG-LINE"
-			],
-			"output_file_grp": [
-				"OCR-D-SEG-LINE"
-			],
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
 			"parameters": {
 				"dpi": {
 					"type": "number",
@@ -275,15 +251,9 @@
 			"steps": [
 				"recognition/text-recognition"
 			],
-			"description": "Recognize text in (binarized+deskewed+dewarped) lines with ocropy",
-			"input_file_grp": [
-				"OCR-D-SEG-LINE",
-				"OCR-D-SEG-WORD",
-				"OCR-D-SEG-GLYPH"
-			],
-			"output_file_grp": [
-				"OCR-D-OCR-OCRO"
-			],
+			"description": "Recognize text in (binarized+deskewed+dewarped) lines with Ocropy v1",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
@@ -293,29 +263,37 @@
 				},
 				"model": {
 					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "ocropy model to apply (e.g. fraktur.pyrnn.gz)"
 				}
-			}
-		},
-		"ocrd-cis-ocropy-rec": {
-			"executable": "ocrd-cis-ocropy-rec",
-			"categories": [
-				"Text recognition and optimization"
-			],
-			"steps": [
-				"recognition/text-recognition"
-			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"description": "Recognize text snippets",
-			"parameters": {
-				"model": {
-					"type": "string",
-					"description": "ocropy model to apply (e.g. fraktur.pyrnn)"
+			},
+			"resources": [
+				{
+					"url": "https://github.com/zuphilip/ocropy-models/raw/master/en-default.pyrnn.gz",
+					"name": "en-default.pyrnn.gz",
+					"description": "Default ocropy model for English",
+					"size": 83826134
+				},
+				{
+					"url": "https://github.com/zuphilip/ocropy-models/raw/master/fraktur.pyrnn.gz",
+					"name": "fraktur.pyrnn.gz",
+					"description": "Default ocropy fraktur model",
+					"size": 43882365
+				},
+				{
+					"url": "https://github.com/jze/ocropus-model_fraktur/raw/master/fraktur.pyrnn.gz",
+					"name": "fraktur-jze.pyrnn.gz",
+					"description": "ocropy fraktur model by github.com/jze",
+					"size": 2961298
+				},
+				{
+					"url": "https://github.com/chreul/OCR_Testdata_EarlyPrintedBooks/raw/master/LatinHist-98000.pyrnn.gz",
+					"name": "LatinHist.pyrnn.gz",
+					"description": "ocropy historical latin model by github.com/chreul",
+					"size": 16989864
 				}
-			}
+			]
 		},
 		"ocrd-cis-ocropy-segment": {
 			"executable": "ocrd-cis-ocropy-segment",
@@ -326,14 +304,9 @@
 				"layout/segmentation/region",
 				"layout/segmentation/line"
 			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"output_file_grp": [
-				"OCR-D-SEG-LINE"
-			],
-			"description": "Segment pages into regions and lines, tables into cells and lines, or regions into lines with ocropy",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
+			"description": "Segment pages into regions and lines, tables into cells and lines, or regions into lines with Ocropy v1",
 			"parameters": {
 				"dpi": {
 					"type": "number",
@@ -425,21 +398,21 @@
 			"steps": [
 				"recognition/text-recognition"
 			],
-			"input_file_grp": [
-				"OCR-D-GT-SEG-BLOCK",
-				"OCR-D-SEG-BLOCK"
-			],
-			"description": "train model with ground truth from mets data",
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
+			"description": "train Ocropy v1 text recognition model with PAGE ground truth from the input fileGrp extracted as file pairs into the output fileGrp",
 			"parameters": {
 				"textequiv_level": {
 					"type": "string",
-					"description": "PAGE XML hierarchy level granularity",
+					"description": "hierarchy level to extract GT pairs from",
 					"enum": ["line", "word", "glyph"],
 					"default": "line"
 				},
 				"model": {
 					"type": "string",
-					"description": "load model or crate new one (e.g. fraktur.pyrnn)"
+					"format": "uri",
+					"content-type": "application/gzip",
+					"description": "load model (e.g. 'fraktur.pyrnn.gz') to init weights, or none to train from scratch"
 				},
 				"ntrain": {
 					"type": "number",
@@ -449,7 +422,8 @@
 				},
 				"outputpath": {
 					"type": "string",
-					"description": "(existing) path for the trained model"
+					"default": "output",
+					"description": "directory path for the trained model"
 				}
 			}
 		},
@@ -461,15 +435,9 @@
 			"steps": [
 				"recognition/post-correction"
 			],
-			"input_file_grp": [
-				"OCR-D-OCR-1",
-				"OCR-D-OCR-2",
-				"OCR-D-OCR-N"
-			],
-			"output_file_grp": [
-				"OCR-D-ALIGNED"
-			],
-			"description": "Align multiple OCRs and/or GTs"
+			"input_file_grp_cardinality": [2, -1],
+			"output_file_grp_cardinality": 1,
+			"description": "Align multiple OCRs and/or GTs textually on line/word level"
 		},
 		"ocrd-cis-postcorrect": {
 			"executable": "ocrd-cis-postcorrect",
@@ -480,12 +448,8 @@
 				"recognition/post-correction"
 			],
 			"description": "Post correct OCR results",
-			"input_file_grp": [
-				"OCR-D-LINE-ALIGNED"
-			],
-			"output_file_grp": [
-				"OCR-D-POST-CORRECTED"
-			],
+			"input_file_grp_cardinality": 1,
+			"output_file_grp_cardinality": 1,
 			"parameters": {
 				"maxCandidates": {
 					"description": "Maximum number of considered correction candidates per suspicious token",

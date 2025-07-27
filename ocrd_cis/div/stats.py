@@ -4,7 +4,7 @@ from ocrd_utils import getLogger
 from ocrd import Processor
 from ocrd_cis import get_ocrd_tool
 from ocrd_models.ocrd_page_generateds import parse
-from Levenshtein import distance
+from rapidfuzz.distance import Levenshtein
 
 
 class Stats(Processor):
@@ -81,7 +81,7 @@ class Stats(Processor):
                         # print(line.get_TextEquiv()[2].dataType)
                         unicodeline = line.get_TextEquiv()[i].Unicode
 
-                        d[i] += distance(gtline, unicodeline)
+                        d[i] += Levenshtein.distance(gtline, unicodeline)
 
                         # words = line.get_Word()
                         # for word in words:

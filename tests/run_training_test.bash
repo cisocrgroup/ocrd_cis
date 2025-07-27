@@ -6,24 +6,21 @@ ocrd_cis_init_ws blumenbach_anatomie_1805.ocrd.zip
 # test if there are 3 gt files
 pushd "$tmpws"
 found_files=0
-for file in $(ocrd workspace find -G OCR-D-GT-SEG-LINE); do
-	if [[ ! -f "$file" ]]; then
-		echo "cannot find ground truth file: $file"
-		exit 1
-	fi
+for file in $(ocrd ${OCRD_LOG_ARGS[*]} workspace ${OCRD_WS_ARGS[*]} find -G $OCRD_CIS_FILEGRP); do
+	[[ -f "$file" ]] || fail "cannot find ground truth file: $file"
 	found_files=$((found_files + 1))
 done
-if [[ $found_files != 3 ]]; then
-	echo "invalid number of files: $found_files"
-	exit 1
-fi
+(( found_files == 3 )) || fail "invalid number of files: $found_files"
 popd
 
 ocrd_cis_align
 
+stopserver
+OCRD_MAX_PARALLEL_PAGES=1
+
 # fix ocr for some entries (otherwise the training will fail)
 pushd $tmpws
-for f in $(ocrd workspace find -G OCR-D-CIS-ALIGN); do
+for f in $(ocrd ${OCRD_LOG_ARGS[*]} workspace find -G OCR-D-CIS-ALIGN); do
 	sed -i -e 's#<pc:Unicode>e.</pc:Unicode>#<pc:Unicode>Säugethiere.</pc:Unicode>#' $f
 	sed -i -e 's#<pc:Unicode>E</pc:Unicode>#<pc:Unicode>Säugethieren</pc:Unicode>#' $f
 done
@@ -57,7 +54,4 @@ cat $(ocrd-cis-data -config) \
 	| sed -e "s#/path/to/train.dir#$tmpdir/train#"
 )
 
-if [[ ! -f $tmpdir/train/model.zip ]]; then
-	echo $tmpdir/train/model.zip not found
-	exit 1
-fi
+[[ -f "$tmpdir/train/model.zip" ]] || fail "$tmpdir/train/model.zip not found"

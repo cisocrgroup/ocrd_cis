@@ -1,6 +1,6 @@
 import os
 from PIL import Image
-from Levenshtein import distance
+from rapidfuzz.distance.Levenshtein import distance
 
 
 path = '/mnt/c/Users/chris/Documents/projects/OCR-D/daten/gt/lines/'
